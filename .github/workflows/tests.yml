@@ -42,11 +42,11 @@ jobs:
         run: |
           make unit-tests
           
-      - name: Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: yaitoo/htmx
           files: ./coverage.txt
           flags: Unit-Tests
           verbose: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
