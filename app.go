@@ -40,7 +40,7 @@ func New(opts ...Option) *App {
 		viewer:  &JsonViewer{},
 		viewEngines: []ViewEngine{
 			&StaticViewEngine{},
-			&HtmlViewEngine{},
+			// &HtmlViewEngine{},
 		},
 	}
 

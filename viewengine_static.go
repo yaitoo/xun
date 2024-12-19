@@ -36,11 +36,13 @@ func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Eve
 
 func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 
-	pattern := strings.ToLower(strings.TrimPrefix(path, "public/"))
+	pattern := strings.ToLower(path)
 
 	if strings.HasSuffix(pattern, "/index.html") {
 		pattern = pattern[:len(pattern)-10]
 	}
+
+	pattern = strings.TrimPrefix(pattern, "public/")
 
 	app.HandleFile(pattern, &FileViewer{
 		fsys: fsys,

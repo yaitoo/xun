@@ -134,6 +134,18 @@ func TestStaticViewer(t *testing.T) {
 	</body>
 </html>`),
 		},
+		"public/admin/index.html": &fstest.MapFile{
+			Data: []byte(`<!DOCTYPE html>
+<html>	
+	<head>
+		<meta charset="utf-8">
+		<title>admin/index</title>
+	</head>
+	<body>
+		<div hx-get="/admin" hx-swap="innerHTML"></div>
+	</body>
+</html>`),
+		},
 		"public/assets/skin.css": &fstest.MapFile{
 			Data: []byte(`body {
 			background: red;

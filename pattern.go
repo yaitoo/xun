@@ -28,7 +28,7 @@ func splitPattern(s string) (string, string, string) {
 // host, path, pattern
 func splitFile(s string) (string, string, string) {
 	if len(s) == 0 {
-		return "", "", ""
+		return "", "", "/"
 	}
 
 	i := strings.IndexByte(s, '@')
