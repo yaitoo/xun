@@ -1,6 +1,7 @@
 package htmx
 
 import (
+	"errors"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -74,6 +75,13 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 }
 
 func (ve *HtmlViewEngine) loadComponents() error {
+	_, err := fs.Stat(ve.fsys, "components")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
 
 	return fs.WalkDir(ve.fsys, "components", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -111,6 +119,14 @@ func (ve *HtmlViewEngine) loadTemplate(path string) (*HtmlTemplate, error) {
 }
 
 func (ve *HtmlViewEngine) loadLayouts() error {
+	_, err := fs.Stat(ve.fsys, "layouts")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+
 	return fs.WalkDir(ve.fsys, "layouts", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -129,6 +145,14 @@ func (ve *HtmlViewEngine) loadLayouts() error {
 }
 
 func (ve *HtmlViewEngine) loadPages() error {
+	_, err := fs.Stat(ve.fsys, "pages")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+
 	return fs.WalkDir(ve.fsys, "pages", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -169,6 +193,14 @@ func (ve *HtmlViewEngine) loadPage(path string) error {
 }
 
 func (ve *HtmlViewEngine) loadViews() error {
+	_, err := fs.Stat(ve.fsys, "views")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+
 	return fs.WalkDir(ve.fsys, "views", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
