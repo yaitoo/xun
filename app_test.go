@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -157,6 +158,43 @@ func TestStaticViewer(t *testing.T) {
 		"public/assets/nil.js": &fstest.MapFile{
 			Data: nil,
 		},
+		// test pattern with host condition
+		"public/@abc.com/index.html": &fstest.MapFile{
+			Data: []byte(`<!DOCTYPE html>
+<html>	
+	<head>
+		<meta charset="utf-8">
+		<title>abc.com/Index</title>
+	</head>
+	<body>
+		<div hx-get="/" hx-swap="innerHTML"></div>
+	</body>
+</html>`),
+		},
+		"public/@abc.com/home.html": &fstest.MapFile{
+			Data: []byte(`<!DOCTYPE html>
+<html>	
+	<head>
+		<meta charset="utf-8">
+		<title>abc.com/home</title>
+	</head>
+	<body>
+		<div hx-get="/" hx-swap="innerHTML"></div>
+	</body>
+</html>`),
+		},
+		"public/@abc.com/admin/index.html": &fstest.MapFile{
+			Data: []byte(`<!DOCTYPE html>
+<html>	
+	<head>
+		<meta charset="utf-8">
+		<title>abc.com/admin</title>
+	</head>
+	<body>
+		<div hx-get="/" hx-swap="innerHTML"></div>
+	</body>
+</html>`),
+		},
 	}
 
 	mux := http.NewServeMux()
@@ -225,6 +263,56 @@ func TestStaticViewer(t *testing.T) {
 
 	require.Equal(t, 0, len(buf))
 
+	host := strings.ReplaceAll(srv.URL, "127.0.0.1", "abc.com")
+
+	req, err = http.NewRequest("GET", host+"/", nil)
+	req.RemoteAddr = "127.0.0.1"
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["public/@abc.com/index.html"].Data, buf)
+
+	req, err = http.NewRequest("GET", host+"/home.html", nil)
+	req.RemoteAddr = "127.0.0.1"
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["public/@abc.com/home.html"].Data, buf)
+
+	req, err = http.NewRequest("GET", host+"/admin", nil)
+	req.RemoteAddr = "127.0.0.1"
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["public/@abc.com/admin/index.html"].Data, buf)
+
+	req, err = http.NewRequest("GET", host+"/admin/", nil)
+	req.RemoteAddr = "127.0.0.1"
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["public/@abc.com/admin/index.html"].Data, buf)
+
 }
 
 func TestJsonStatus(t *testing.T) {
@@ -232,7 +320,7 @@ func TestJsonStatus(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithMux(mux))
+	app := New(WithMux(mux), WithViewer(&JsonViewer{}))
 
 	app.Start()
 	defer app.Close()
