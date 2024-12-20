@@ -227,6 +227,80 @@ func TestStaticViewer(t *testing.T) {
 
 }
 
+func TestJsonStatus(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux))
+
+	app.Start()
+	defer app.Close()
+
+	app.Get("/400", func(c *Context) error {
+		c.WriteStatus(http.StatusBadRequest)
+		return ErrHandleCancelled
+	})
+
+	app.Get("/401", func(c *Context) error {
+		c.WriteStatus(http.StatusUnauthorized)
+		return nil
+	})
+	app.Get("/403", func(c *Context) error {
+		c.WriteStatus(http.StatusForbidden)
+		return nil
+
+	})
+
+	app.Get("/404", func(c *Context) error {
+		c.WriteStatus(http.StatusNotFound)
+		return nil
+	})
+
+	app.Get("/500", func(c *Context) error {
+		c.WriteStatus(http.StatusInternalServerError)
+		return nil
+	})
+
+	client := http.Client{}
+
+	req, err := http.NewRequest("GET", srv.URL+"/400", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/401", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/403", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/404", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/500", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	resp.Body.Close()
+
+}
+
 func TestApp(t *testing.T) {
 	app := New(WithMux(http.NewServeMux()),
 		WithFsys(os.DirFS(".")))
