@@ -11,7 +11,7 @@ func init() {
 }
 
 type HtmlViewer struct {
-	template *Template
+	template *HtmlTemplate
 }
 
 func (*HtmlViewer) MimeType() string {

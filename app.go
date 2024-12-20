@@ -38,22 +38,24 @@ func New(opts ...Option) *App {
 		routes:  make(map[string]*Routing),
 		viewers: make(map[string]Viewer),
 		viewer:  &JsonViewer{},
-		viewEngines: []ViewEngine{
-			&StaticViewEngine{},
-			// &HtmlViewEngine{},
-		},
 	}
 
 	for _, o := range opts {
 		o(app)
 	}
-
 	if app.logger == nil {
 		app.logger = slog.Default()
 	}
 
 	if app.mux == nil {
 		app.mux = http.DefaultServeMux
+	}
+
+	if app.viewEngines == nil {
+		app.viewEngines = []ViewEngine{
+			&StaticViewEngine{},
+			&HtmlViewEngine{},
+		}
 	}
 
 	if app.fsys != nil {

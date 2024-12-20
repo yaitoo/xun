@@ -1,10 +1,6 @@
 package htmx
 
 import (
-	"bufio"
-	"bytes"
-	"html/template"
-	"io"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -12,129 +8,16 @@ import (
 	"github.com/yaitoo/htmx/fsnotify"
 )
 
-type Template struct {
-	template *template.Template
-
-	name   string
-	path   string
-	layout string
-
-	dependencies map[string]struct{}
-	dependents   map[string]*Template
-}
-
-func NewHtmlTemplate(name, path string) *Template {
-	return &Template{
-		name:         name,
-		path:         path,
-		dependencies: make(map[string]struct{}),
-		dependents:   make(map[string]*Template),
-	}
-}
-
-func (t *Template) Load(fsys fs.FS, templates map[string]*Template) error {
-	buf, err := fs.ReadFile(fsys, t.path)
-	if err != nil {
-		return err
-	}
-
-	nt, err := template.New(t.name).Parse(string(buf))
-	if err != nil {
-		return err
-	}
-
-	dependencies := make(map[string]struct{})
-
-	for _, it := range nt.Templates() {
-		tn := it.Name()
-		if strings.EqualFold(tn, t.name) {
-			continue
-		}
-
-		dependencies[tn] = struct{}{}
-	}
-
-	r := bufio.NewReader(bytes.NewReader(buf))
-	layoutName, err := r.ReadString('\n')
-	if err != nil {
-		return err
-	}
-
-	layoutName = strings.ReplaceAll(layoutName, " ", "")
-	//<!--layout:home-->\n
-	if layoutName != "" && strings.HasSuffix(layoutName, "-->\n") && strings.HasPrefix(layoutName, "<!--layout:") {
-		layoutName = "layouts/" + layoutName[11:len(layoutName)-4]
-
-		layout, ok := templates[layoutName]
-		if ok {
-			_, err = nt.AddParseTree(layoutName, layout.template.Tree)
-			if err != nil {
-				return err
-			}
-
-			layout.dependents[t.name] = t
-
-			for tn := range layout.dependencies {
-				dependencies[tn] = struct{}{}
-			}
-
-		}
-
-		for tn := range t.dependencies {
-			it, ok := templates[tn]
-			if ok {
-				_, err = nt.AddParseTree(tn, it.template.Tree)
-				if err != nil {
-					return err
-				}
-
-				it.dependents[t.name] = t
-			}
-		}
-
-		t.layout = layoutName
-	} else {
-		t.layout = ""
-	}
-
-	t.template = nt
-	t.dependencies = dependencies
-
-	return nil
-}
-
-func (t *Template) Reload(fsys fs.FS, templates map[string]*Template) error {
-	err := t.Load(fsys, templates)
-	if err != nil {
-		return err
-	}
-
-	for _, it := range t.dependents {
-		err := it.Reload(fsys, templates)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (t *Template) Execute(wr io.Writer, data any) error {
-	if t.layout != "" {
-		return t.template.ExecuteTemplate(wr, t.layout, data)
-	}
-	return t.template.Execute(wr, data)
-}
-
 type HtmlViewEngine struct {
 	fsys fs.FS
 	app  *App
 
-	templates map[string]*Template
+	templates map[string]*HtmlTemplate
 }
 
 func (ve *HtmlViewEngine) Load(fsys fs.FS, app *App) error {
 	if ve.templates == nil {
-		ve.templates = map[string]*Template{}
+		ve.templates = map[string]*HtmlTemplate{}
 	}
 
 	ve.fsys = fsys
@@ -206,7 +89,7 @@ func (ve *HtmlViewEngine) loadComponents() error {
 
 }
 
-func (ve *HtmlViewEngine) loadTemplate(path string) (*Template, error) {
+func (ve *HtmlViewEngine) loadTemplate(path string) (*HtmlTemplate, error) {
 	name := path[:len(path)-5]
 
 	t := NewHtmlTemplate(name, path)

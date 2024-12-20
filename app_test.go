@@ -151,6 +151,12 @@ func TestStaticViewer(t *testing.T) {
 			background: red;
 		}`),
 		},
+		"public/assets/empty.js": &fstest.MapFile{
+			Data: []byte(``),
+		},
+		"public/assets/nil.js": &fstest.MapFile{
+			Data: nil,
+		},
 	}
 
 	mux := http.NewServeMux()
@@ -196,6 +202,28 @@ func TestStaticViewer(t *testing.T) {
 	resp.Body.Close()
 
 	require.Equal(t, fsys["public/assets/skin.css"].Data, buf)
+
+	req, err = http.NewRequest("GET", srv.URL+"/assets/empty.js", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, 0, len(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/assets/nil.js", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, 0, len(buf))
 
 }
 
