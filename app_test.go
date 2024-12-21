@@ -1,7 +1,10 @@
 package htmx
 
 import (
+	"context"
+	"crypto/tls"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +14,25 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+var (
+	client http.Client
+)
+
+func TestMain(m *testing.M) {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if strings.HasPrefix(addr, "abc.com") {
+			return net.Dial("tcp", strings.TrimPrefix(addr, "abc.com"))
+		}
+		return net.Dial("tcp", addr)
+	}
+	client = http.Client{
+		Transport: tr,
+	}
+	os.Exit(m.Run())
+}
 
 func TestJsonViewer(t *testing.T) {
 
@@ -47,8 +69,6 @@ func TestJsonViewer(t *testing.T) {
 		Method string `json:"method"`
 		Num    int    `json:"num"`
 	}{}
-
-	client := http.Client{}
 
 	req, err := http.NewRequest("GET", srv.URL+"/", nil)
 	req.Header.Set("Accept", "application/json")
@@ -206,8 +226,6 @@ func TestStaticViewer(t *testing.T) {
 	app.Start()
 	defer app.Close()
 
-	client := http.Client{}
-
 	req, err := http.NewRequest("GET", srv.URL+"/", nil)
 	require.NoError(t, err)
 	resp, err := client.Do(req)
@@ -266,7 +284,6 @@ func TestStaticViewer(t *testing.T) {
 	host := strings.ReplaceAll(srv.URL, "127.0.0.1", "abc.com")
 
 	req, err = http.NewRequest("GET", host+"/", nil)
-	req.RemoteAddr = "127.0.0.1"
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -278,7 +295,6 @@ func TestStaticViewer(t *testing.T) {
 	require.Equal(t, fsys["public/@abc.com/index.html"].Data, buf)
 
 	req, err = http.NewRequest("GET", host+"/home.html", nil)
-	req.RemoteAddr = "127.0.0.1"
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -290,7 +306,6 @@ func TestStaticViewer(t *testing.T) {
 	require.Equal(t, fsys["public/@abc.com/home.html"].Data, buf)
 
 	req, err = http.NewRequest("GET", host+"/admin", nil)
-	req.RemoteAddr = "127.0.0.1"
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -302,7 +317,6 @@ func TestStaticViewer(t *testing.T) {
 	require.Equal(t, fsys["public/@abc.com/admin/index.html"].Data, buf)
 
 	req, err = http.NewRequest("GET", host+"/admin/", nil)
-	req.RemoteAddr = "127.0.0.1"
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -349,8 +363,6 @@ func TestJsonStatus(t *testing.T) {
 		c.WriteStatus(http.StatusInternalServerError)
 		return nil
 	})
-
-	client := http.Client{}
 
 	req, err := http.NewRequest("GET", srv.URL+"/400", nil)
 	require.NoError(t, err)
