@@ -777,7 +777,8 @@ func TestDataBindOnHtml(t *testing.T) {
 
 func TestWatchOnStatic(t *testing.T) {
 	fsys := fstest.MapFS{
-		"public/home.html": {Data: []byte("home"), Mode: os.ModePerm, ModTime: time.Now()},
+		"public/home.html":  {Data: []byte("home"), Mode: os.ModePerm, ModTime: time.Now()},
+		"public/admin.html": {Data: []byte("admin"), Mode: os.ModePerm, ModTime: time.Now()},
 	}
 
 	mux := http.NewServeMux()
@@ -807,14 +808,32 @@ func TestWatchOnStatic(t *testing.T) {
 
 	require.Equal(t, "home", string(buf))
 
+	req, err = http.NewRequest("GET", srv.URL+"/admin.html", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "admin", string(buf))
+
 	// fixed data race issue on fstest.MapFile
 	app.watcher.Stop()
 	fsys["public/index.html"] = &fstest.MapFile{Data: []byte("index added"), ModTime: time.Now()}
 	fsys["public/home.html"] = &fstest.MapFile{Data: []byte("home updated"), ModTime: time.Now()}
+	delete(fsys, "public/admin.html")
 
+	checkInterval := fsnotify.CheckInterval
+	defer func() {
+		fsnotify.CheckInterval = checkInterval
+	}()
+
+	fsnotify.CheckInterval = 100 * time.Millisecond
 	go app.watcher.Start()
 
-	time.Sleep(1*time.Second + fsnotify.CheckInterval)
+	time.Sleep(1 * time.Second)
 
 	req, err = http.NewRequest("GET", srv.URL+"/", nil)
 	require.NoError(t, err)
@@ -837,6 +856,13 @@ func TestWatchOnStatic(t *testing.T) {
 	resp.Body.Close()
 
 	require.Equal(t, "home updated", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/admin.html", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
 
 }
 

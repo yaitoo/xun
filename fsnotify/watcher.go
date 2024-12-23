@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const (
+var (
 	CheckInterval = 3 * time.Second
 )
 
