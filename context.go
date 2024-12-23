@@ -119,7 +119,3 @@ func (c *Context) Accept() (types []string) {
 	}
 	return
 }
-
-func (c *Context) getViewer(name string) Viewer {
-	return c.app.viewers[name]
-}
