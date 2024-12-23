@@ -341,7 +341,7 @@ func TestJsonStatus(t *testing.T) {
 
 	app.Get("/400", func(c *Context) error {
 		c.WriteStatus(http.StatusBadRequest)
-		return ErrHandleCancelled
+		return ErrCancelled
 	})
 
 	app.Get("/401", func(c *Context) error {
@@ -538,6 +538,106 @@ func TestHtmlViewEngine(t *testing.T) {
 
 }
 
+func TestMixedViewers(t *testing.T) {
+	fsys := fstest.MapFS{
+		"views/user.html":  {Data: []byte(`user`)},
+		"pages/index.html": {Data: []byte(`index`)},
+		"pages/list.html":  {Data: []byte(`list`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+
+	app.Get("/", func(c *Context) error {
+		if c.Request().URL.Path == "/" {
+			return c.View(nil, "index")
+		}
+
+		c.WriteStatus(http.StatusNotFound)
+		return ErrCancelled
+	})
+
+	app.Get("/list", func(c *Context) error {
+		return c.View(map[string]any{
+			"name": "list",
+			"num":  2,
+		})
+	})
+
+	app.Start()
+	defer app.Close()
+
+	req, err := http.NewRequest("GET", srv.URL+"/", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["pages/index.html"].Data, buf)
+
+	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["pages/index.html"].Data, buf)
+
+	req, err = http.NewRequest("GET", srv.URL+"/404", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/list", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["pages/list.html"].Data, buf)
+
+	req, err = http.NewRequest("GET", srv.URL+"/list", nil)
+	req.Header.Set("Accept", "application/json")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	data := &struct {
+		Name string `json:"name"`
+		Num  int    `json:"num"`
+	}{}
+
+	err = json.Unmarshal(buf, data)
+
+	require.NoError(t, err)
+
+	require.Equal(t, data.Name, "list")
+	require.Equal(t, data.Num, 2)
+
+}
+
 func TestApp(t *testing.T) {
 	app := New(WithMux(http.NewServeMux()),
 		WithFsys(os.DirFS(".")))
@@ -554,7 +654,7 @@ func TestApp(t *testing.T) {
 		return func(c *Context) error {
 			if c.routing.Options.String(NavigationAccess) != "admin:*" {
 				c.WriteStatus(http.StatusForbidden)
-				return ErrHandleCancelled
+				return ErrCancelled
 			}
 
 			return next(c)
@@ -572,7 +672,7 @@ func TestApp(t *testing.T) {
 
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
-			return ErrHandleCancelled
+			return ErrCancelled
 		}
 
 		if !data.Validate(c.AcceptLanguage()...) {
@@ -588,7 +688,7 @@ func TestApp(t *testing.T) {
 
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
-			return ErrHandleCancelled
+			return ErrCancelled
 		}
 
 		if !data.Validate(c.AcceptLanguage()...) {
@@ -604,7 +704,7 @@ func TestApp(t *testing.T) {
 
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
-			return ErrHandleCancelled
+			return ErrCancelled
 		}
 
 		if !data.Validate(c.AcceptLanguage()...) {

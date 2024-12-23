@@ -77,14 +77,14 @@ func (g *group) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 
 			err := next(ctx)
 
-			if err != nil {
-				if !errors.Is(err, ErrHandleCancelled) {
-					logID := nextLogID()
-					ctx.Header("X-Log-Id", logID)
-					ctx.WriteStatus(http.StatusInternalServerError)
-					g.app.logger.Error("htmx: handle", slog.Any("err", err), slog.String("logid", logID))
-				}
+			if err == nil || errors.Is(err, ErrCancelled) {
+				return
 			}
+
+			logID := nextLogID()
+			ctx.Header("X-Log-Id", logID)
+			ctx.WriteStatus(http.StatusInternalServerError)
+			g.app.logger.Error("htmx: handle", slog.Any("err", err), slog.String("logid", logID))
 
 		})
 	}

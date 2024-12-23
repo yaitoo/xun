@@ -61,7 +61,7 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 
 	layoutName := ""
 	//<!--layout:home-->   xxxxx  \n
-	if string(buf[0:11]) == "<!--layout:" {
+	if len(buf) > 11 && string(buf[0:11]) == "<!--layout:" {
 		n := len(buf) - 2
 		for i := 11; i < n; i++ {
 			if buf[i] == '-' && buf[i+1] == '-' && buf[i+2] == '>' {
