@@ -62,7 +62,7 @@ func New(opts ...Option) *App {
 		for _, ve := range app.viewEngines {
 			err := ve.Load(app.fsys, app)
 			if err != nil {
-				app.logger.Error("htmx: viewengine load", slog.Any("err", err))
+				app.logger.Error("htmx: view engine load", slog.Any("err", err))
 			}
 		}
 

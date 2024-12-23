@@ -12,8 +12,10 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/yaitoo/htmx/fsnotify"
 )
 
 var (
@@ -770,6 +772,66 @@ func TestDataBindOnHtml(t *testing.T) {
 	require.Equal(t, `<html><body>
 <div>user1: 1</div>
 </body></html>`, string(buf))
+
+}
+
+func TestWatchOnStatic(t *testing.T) {
+	fsys := fstest.MapFS{
+		"public/home.html": {Data: []byte("home"), Mode: os.ModePerm, ModTime: time.Now()},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithWatch())
+
+	app.Start()
+	defer app.Close()
+
+	req, err := http.NewRequest("GET", srv.URL+"/", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/home.html", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "home", string(buf))
+
+	fsys["public/index.html"] = &fstest.MapFile{Data: []byte("index added"), ModTime: time.Now()}
+	fsys["public/home.html"] = &fstest.MapFile{Data: []byte("home updated"), ModTime: time.Now()}
+	time.Sleep(1*time.Second + fsnotify.CheckInterval)
+
+	req, err = http.NewRequest("GET", srv.URL+"/", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "index added", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/home.html", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "home updated", string(buf))
 
 }
 

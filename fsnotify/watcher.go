@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+const (
+	CheckInterval = 3 * time.Second
+)
+
 type Watcher struct {
 	mu         sync.Mutex
 	fsys       fs.FS
@@ -56,7 +60,7 @@ func (w *Watcher) Add(path string) error {
 }
 
 func (w *Watcher) Start() {
-	t := time.NewTicker(3 * time.Second)
+	t := time.NewTicker(CheckInterval)
 	defer t.Stop()
 
 	for {

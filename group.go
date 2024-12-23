@@ -95,7 +95,7 @@ func (g *group) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 
 	viewName := path
 	if host != "" {
-		viewName = "@" + host + path
+		viewName = "@" + host + "/" + path
 	}
 
 	// try to find html viewer
