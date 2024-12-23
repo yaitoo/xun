@@ -12,15 +12,8 @@ type StaticViewEngine struct {
 }
 
 func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
-	_, err := fs.Stat(fsys, "public")
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
 
-	return fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -31,6 +24,12 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
 
 		return nil
 	})
+
+	if err != nil && errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+
+	return err
 }
 
 func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
