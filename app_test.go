@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -635,6 +636,140 @@ func TestMixedViewers(t *testing.T) {
 
 	require.Equal(t, data.Name, "list")
 	require.Equal(t, data.Num, 2)
+}
+
+func TestDataBindOnHtml(t *testing.T) {
+	fsys := fstest.MapFS{
+		"pages/users.html": {Data: []byte(`<html><body>
+<table>
+<tbody>
+<tr><th>Name</th><th>ID</th></tr>
+</tbody>
+{{range .}}<tr><td>{{.Name}}</td><td>{{.ID}}</td></tr>{{end}}
+</tbody>
+</table>
+</body></html>`)},
+		"pages/user/{id}.html": {Data: []byte(`<html><body>
+<div>{{.Name}}: {{.ID}}</div>
+</body></html>`)},
+	}
+
+	type User struct {
+		Name string
+		ID   int
+	}
+
+	users := []User{
+		{
+			Name: "user1",
+			ID:   1,
+		},
+		{
+			Name: "user2",
+			ID:   2,
+		},
+		{
+			Name: "user3",
+			ID:   3,
+		},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+
+	app.Get("/users", func(c *Context) error {
+		return c.View(users)
+	})
+
+	app.Get("/user/{id}", func(c *Context) error {
+		id := c.Request().PathValue("id")
+		for _, user := range users {
+			if strconv.Itoa(user.ID) == id {
+				return c.View(user)
+			}
+		}
+
+		c.WriteStatus(http.StatusNotFound)
+		return ErrCancelled
+	})
+
+	app.Start()
+	defer app.Close()
+
+	req, err := http.NewRequest("GET", srv.URL+"/users", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `<html><body>
+<table>
+<tbody>
+<tr><th>Name</th><th>ID</th></tr>
+</tbody>
+<tr><td>user1</td><td>1</td></tr><tr><td>user2</td><td>2</td></tr><tr><td>user3</td><td>3</td></tr>
+</tbody>
+</table>
+</body></html>`, string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/users", nil)
+	req.Header.Set("Accept", "application/json")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	var list []User
+	err = json.Unmarshal(buf, &list)
+	require.NoError(t, err)
+
+	require.Equal(t, len(list), 3)
+	require.Equal(t, list[0].Name, "user1")
+	require.Equal(t, list[0].ID, 1)
+	require.Equal(t, list[1].Name, "user2")
+	require.Equal(t, list[1].ID, 2)
+	require.Equal(t, list[2].Name, "user3")
+	require.Equal(t, list[2].ID, 3)
+
+	req, err = http.NewRequest("GET", srv.URL+"/user/4", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/user/4", nil)
+	req.Header.Set("Accept", "application/json")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/user/1", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `<html><body>
+<div>user1: 1</div>
+</body></html>`, string(buf))
 
 }
 
