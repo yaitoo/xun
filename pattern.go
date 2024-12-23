@@ -28,16 +28,16 @@ func splitPattern(s string) (string, string, string) {
 // host, path, pattern
 func splitFile(s string) (string, string, string) {
 	if len(s) == 0 {
-		return "", "", "/"
+		return "", "", "GET /"
 	}
 
 	i := strings.IndexByte(s, '@')
 
 	if i < 0 { //no host
-		return "", "/" + s, "/" + s
+		return "", "/" + s, "GET /" + s
 	}
 
 	e := strings.IndexByte(s, '/')
 	//has host
-	return s[i+1 : e], "/" + s[e+1:], s[i+1:]
+	return s[i+1 : e], s[e+1:], "GET " + s[i+1:]
 }

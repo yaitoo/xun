@@ -179,13 +179,9 @@ func (ve *HtmlViewEngine) loadPage(path string) error {
 	//.html
 	ve.templates[path[:len(path)-5]] = t
 
-	if strings.HasSuffix(pattern, "/index.html") {
-		pattern = pattern[:len(pattern)-10]
-	}
-
 	pattern = strings.TrimSuffix(pattern, ".html")
 
-	ve.app.HandleView(pattern, &HtmlViewer{
+	ve.app.HandlePage(pattern, &HtmlViewer{
 		template: t,
 	})
 

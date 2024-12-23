@@ -129,7 +129,7 @@ func TestJsonViewer(t *testing.T) {
 
 }
 
-func TestStaticViewer(t *testing.T) {
+func TestStaticViewEngine(t *testing.T) {
 	fsys := fstest.MapFS{
 		"public/index.html": &fstest.MapFile{
 			Data: []byte(`<!DOCTYPE html>
@@ -398,6 +398,143 @@ func TestJsonStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	resp.Body.Close()
+
+}
+
+func TestHtmlViewEngine(t *testing.T) {
+
+	fsys := fstest.MapFS{
+		"components/footer.html": {Data: []byte("<div>footer</div>")},
+		"components/header.html": {Data: []byte("<div>header</div>")},
+		"layouts/main.html": {Data: []byte(`<html><body>{{ block "components/header" . }} {{end}}
+<h1>main</h1>
+{{ block "content" . }} {{end}}
+{{ block "components/footer" . }} {{end}}
+</body></html>`)},
+		"layouts/admin.html": {Data: []byte(`<html><body>{{ block "components/header" . }} {{end}}
+<h1>admin</h1>
+{{ block "content" . }} {{end}}
+{{ block "components/footer" . }} {{end}}
+</body></html>`)},
+		"views/user.html": {Data: []byte(`<html><body>{{ block "components/header" . }} {{end}}
+<h1>user</h1>
+{{ block "components/footer" . }} {{end}}
+</body></html>`)},
+
+		"pages/index.html": {Data: []byte(`<!--layout:main-->
+{{ define "content" }}<div>index</div>{{ end }}`)},
+		"pages/admin/index.html": {Data: []byte(`<!--layout:admin-->
+{{ define "content" }}<div>admin/index</div>{{ end }}`)},
+
+		"pages/about.html": {Data: []byte(`<html><body>{{ block "components/header" . }} {{end}}
+<h1>about</h1>
+{{ block "components/footer" . }} {{end}}
+</body></html>`)},
+
+		"pages/@abc.com/index.html": {Data: []byte(`<!--layout:main-->
+{{ define "content" }}<div>abc.com/index</div>{{ end }}`)},
+		"pages/@abc.com/admin/index.html": {Data: []byte(`<!--layout:admin-->
+{{ define "content" }}<div>abc.com/admin/index</div>{{ end }}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+
+	app.Start()
+	defer app.Close()
+
+	req, err := http.NewRequest("GET", srv.URL+"/index", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `<html><body><div>header</div>
+<h1>main</h1>
+<div>index</div>
+<div>footer</div>
+</body></html>`, string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/admin/index", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `<html><body><div>header</div>
+<h1>admin</h1>
+<div>admin/index</div>
+<div>footer</div>
+</body></html>`, string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/about", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `<html><body><div>header</div>
+<h1>about</h1>
+<div>footer</div>
+</body></html>`, string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/user", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	host := strings.ReplaceAll(srv.URL, "127.0.0.1", "abc.com")
+
+	req, err = http.NewRequest("GET", host+"/index", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `<html><body><div>header</div>
+<h1>main</h1>
+<div>abc.com/index</div>
+<div>footer</div>
+</body></html>`, string(buf))
+
+	req, err = http.NewRequest("GET", host+"/admin/index", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `<html><body><div>header</div>
+<h1>admin</h1>
+<div>abc.com/admin/index</div>
+<div>footer</div>
+</body></html>`, string(buf))
 
 }
 

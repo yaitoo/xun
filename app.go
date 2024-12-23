@@ -216,7 +216,7 @@ func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 
 	viewName := path
 	if host != "" {
-		viewName = "@" + host + path
+		viewName = "@" + host + "/" + path
 	}
 
 	// try to find html viewer
@@ -226,7 +226,7 @@ func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 
 }
 
-func (app *App) HandleView(pattern string, v Viewer) {
+func (app *App) HandlePage(pattern string, v Viewer) {
 	ro := &RoutingOptions{}
 
 	r, ok := app.routes[pattern]
@@ -238,7 +238,11 @@ func (app *App) HandleView(pattern string, v Viewer) {
 	_, host, path := splitPattern(pattern)
 
 	ro.viewer = v
-	app.viewers[pattern] = v
+	if host == "" {
+		app.viewers[path] = v
+	} else {
+		app.viewers["@"+host+"/"+path] = v
+	}
 
 	hf := func(c *Context) error {
 		return v.Render(c.rw, c.req, nil)
@@ -285,10 +289,10 @@ func (app *App) HandleView(pattern string, v Viewer) {
 
 }
 
-func (app *App) HandleFile(pattern string, v *FileViewer) {
+func (app *App) HandleFile(name string, v *FileViewer) {
 	ro := &RoutingOptions{}
 
-	host, path, pat := splitFile(pattern)
+	host, path, pat := splitFile(name)
 
 	r, ok := app.routes[pat]
 
@@ -297,7 +301,7 @@ func (app *App) HandleFile(pattern string, v *FileViewer) {
 	}
 
 	ro.viewer = v
-	app.viewers[pattern] = v
+	app.viewers[name] = v
 
 	hf := func(c *Context) error {
 		return v.Render(c.rw, c.req, nil)

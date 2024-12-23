@@ -60,7 +60,12 @@ func (c *Context) View(data any, name ...string) error {
 	if name != nil && name[0] != "" {
 		v, ok = c.app.viewers[name[0]]
 	} else {
-		v, ok = c.routing.Viewers[c.req.Header.Get("Accept")]
+		for _, accept := range c.Accept() {
+			v, ok = c.routing.Viewers[accept]
+			if ok {
+				break
+			}
+		}
 	}
 
 	if !ok {
@@ -113,4 +118,8 @@ func (c *Context) Accept() (types []string) {
 		types[i] = strings.Trim(items[0], " ")
 	}
 	return
+}
+
+func (c *Context) getViewer(name string) Viewer {
+	return c.app.viewers[name]
 }

@@ -1,8 +1,6 @@
 package htmx
 
 import (
-	"bufio"
-	"bytes"
 	"io"
 	"io/fs"
 	"strings"
@@ -61,47 +59,54 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 		dependencies[tn] = struct{}{}
 	}
 
-	r := bufio.NewReader(bytes.NewReader(buf))
-	layoutName, err := r.ReadString('\n')
-	if err != nil {
-		return err
-	}
-
-	layoutName = strings.ReplaceAll(layoutName, " ", "")
-	//<!--layout:home-->\n
-	if layoutName != "" && strings.HasSuffix(layoutName, "-->\n") && strings.HasPrefix(layoutName, "<!--layout:") {
-		layoutName = "layouts/" + layoutName[11:len(layoutName)-4]
-
-		layout, ok := templates[layoutName]
-		if ok {
-			_, err = nt.AddParseTree(layoutName, layout.template.Tree)
-			if err != nil {
-				return err
+	layoutName := ""
+	//<!--layout:home-->   xxxxx  \n
+	if string(buf[0:11]) == "<!--layout:" {
+		n := len(buf) - 2
+		for i := 11; i < n; i++ {
+			if buf[i] == '-' && buf[i+1] == '-' && buf[i+2] == '>' {
+				layoutName = strings.TrimSpace(string(buf[11:i]))
+				break
 			}
 
-			layout.dependents[t.name] = t
-
-			for tn := range layout.dependencies {
-				dependencies[tn] = struct{}{}
+			if buf[i] == '\n' {
+				break
 			}
-
 		}
 
-		for tn := range t.dependencies {
-			it, ok := templates[tn]
+		if layoutName != "" {
+			layoutName = "layouts/" + layoutName
+
+			layout, ok := templates[layoutName]
 			if ok {
-				_, err = nt.AddParseTree(tn, it.template.Tree)
+				_, err = nt.AddParseTree(layoutName, layout.template.Tree)
 				if err != nil {
 					return err
 				}
 
-				it.dependents[t.name] = t
-			}
-		}
+				layout.dependents[t.name] = t
 
-		t.layout = layoutName
-	} else {
-		t.layout = ""
+				for tn := range layout.dependencies {
+					dependencies[tn] = struct{}{}
+				}
+			}
+
+			t.layout = layoutName
+		} else {
+			t.layout = ""
+		}
+	}
+
+	for tn := range dependencies {
+		it, ok := templates[tn]
+		if ok {
+			_, err = nt.AddParseTree(tn, it.template.Tree)
+			if err != nil {
+				return err
+			}
+
+			it.dependents[t.name] = t
+		}
 	}
 
 	return nil
