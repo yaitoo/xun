@@ -27,6 +27,7 @@ func NewWatcher(fsys fs.FS) *Watcher {
 		files:  make(map[string]*File),
 		Events: make(chan Event),
 		Errors: make(chan error),
+		done:   make(chan struct{}),
 	}
 }
 

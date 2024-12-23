@@ -807,8 +807,13 @@ func TestWatchOnStatic(t *testing.T) {
 
 	require.Equal(t, "home", string(buf))
 
+	// fixed data race issue on fstest.MapFile
+	app.watcher.Stop()
 	fsys["public/index.html"] = &fstest.MapFile{Data: []byte("index added"), ModTime: time.Now()}
 	fsys["public/home.html"] = &fstest.MapFile{Data: []byte("home updated"), ModTime: time.Now()}
+
+	go app.watcher.Start()
+
 	time.Sleep(1*time.Second + fsnotify.CheckInterval)
 
 	req, err = http.NewRequest("GET", srv.URL+"/", nil)
