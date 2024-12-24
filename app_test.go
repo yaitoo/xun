@@ -34,6 +34,9 @@ func TestMain(m *testing.M) {
 	}
 	client = http.Client{
 		Transport: tr,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 	os.Exit(m.Run())
 }
@@ -133,7 +136,7 @@ func TestJsonViewer(t *testing.T) {
 
 }
 
-func TestJsonStatus(t *testing.T) {
+func TestStatus(t *testing.T) {
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -165,6 +168,11 @@ func TestJsonStatus(t *testing.T) {
 
 	app.Get("/500", func(c *Context) error {
 		c.WriteStatus(http.StatusInternalServerError)
+		return nil
+	})
+
+	app.Get("/302", func(c *Context) error {
+		c.Redirect(http.StatusMovedPermanently, "http://127.0.0.1/redirect")
 		return nil
 	})
 
@@ -201,6 +209,14 @@ func TestJsonStatus(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/302", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+	require.Equal(t, "http://127.0.0.1/redirect", resp.Header.Get("Location"))
 	resp.Body.Close()
 
 }

@@ -90,9 +90,8 @@ func (c *Context) View(items ...any) error {
 // It sets the 'Location' header to the provided URL and writes the status code to the response writer.
 // This function is an exported API of the Context struct, used for controlling the HTTP response flow.
 func (c *Context) Redirect(statusCode int, url string) {
-	c.rw.WriteHeader(statusCode)
-	c.writtenStatus = true
-	c.rw.Header().Set("Location", url)
+	c.Header("Location", url)
+	c.WriteStatus(statusCode)
 }
 
 func (c *Context) AcceptLanguage() (languages []string) {
