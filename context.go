@@ -49,16 +49,23 @@ func (c *Context) Header(key string, value string) {
 	c.rw.Header().Set(key, value)
 }
 
-// View calls the Render method on the current context's Viewer, passing the
-// ResponseWriter, Request, and provided data. It logs an error using the
-// application's logger if the Render method returns an error.
-func (c *Context) View(data any, name ...string) error {
+func (c *Context) View(items ...any) error {
 
 	var v Viewer
 	var ok bool
 
-	if name != nil && name[0] != "" {
-		v, ok = c.app.viewers[name[0]]
+	var data any
+	var name string
+	if len(items) > 0 {
+		data = items[0]
+	}
+
+	if len(items) > 1 {
+		name, _ = items[1].(string)
+	}
+
+	if name != "" {
+		v, ok = c.app.viewers[name]
 	} else {
 		for _, accept := range c.Accept() {
 			v, ok = c.routing.Viewers[accept]

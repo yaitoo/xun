@@ -11,7 +11,7 @@ type FileViewer struct {
 }
 
 func (*FileViewer) MimeType() string {
-	return "*"
+	return "*/*"
 }
 
 func (v *FileViewer) Render(w http.ResponseWriter, r *http.Request, data any) error {

@@ -192,8 +192,9 @@ func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 			}
 
 			next := r.Handle
-			for _, m := range app.middlewares {
-				next = m(next)
+
+			for i := len(app.middlewares); i > 0; i-- {
+				next = app.middlewares[i-1](next)
 			}
 
 			err := next(ctx)

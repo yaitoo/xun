@@ -71,8 +71,8 @@ func (g *group) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 			}
 
 			next := r.Handle
-			for _, m := range g.middlewares {
-				next = m(next)
+			for i := len(g.middlewares); i > 0; i-- {
+				next = g.middlewares[i-1](next)
 			}
 
 			err := next(ctx)
