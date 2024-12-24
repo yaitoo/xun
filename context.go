@@ -66,6 +66,17 @@ func (c *Context) View(items ...any) error {
 
 	if name != "" {
 		v, ok = c.app.viewers[name]
+		if ok {
+			mime := v.MimeType()
+			ok = false
+			for _, accept := range c.Accept() {
+				if mime == accept {
+					ok = true
+					break
+				}
+			}
+		}
+
 	} else {
 		for _, accept := range c.Accept() {
 			v, ok = c.routing.Viewers[accept]

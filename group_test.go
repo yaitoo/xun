@@ -1,88 +1,142 @@
 package htmx
 
 import (
+	"io"
 	"net/http"
-	"os"
+	"net/http/httptest"
 	"testing"
+	"testing/fstest"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGroup(t *testing.T) {
-	app := New(WithMux(http.NewServeMux()),
-		WithFsys(os.DirFS(".")))
 
-	app.Get("/hello", func(c *Context) error {
-		//c.View(map[string]string{"name": "World"})
+	fsys := &fstest.MapFS{
+		"pages/admin/index.html": &fstest.MapFile{Data: []byte(`{{.}}`)},
+	}
 
-		return nil
-	})
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+
+	app.Start()
+	defer app.Close()
 
 	admin := app.Group("/admin")
 
-	admin.Use(func(next HandleFunc) HandleFunc {
-		return func(c *Context) error {
-			if c.routing.Options.String(NavigationAccess) != "admin:*" {
-				c.WriteStatus(http.StatusForbidden)
-				return ErrCancelled
-			}
-
-			return next(c)
-		}
-
-	})
-
 	admin.Get("/", func(c *Context) error {
-		return c.View(nil)
-
-	}, WithNavigation("admin", "fa fa-home", "admin:*"))
-
-	admin.Post("/form", func(c *Context) error {
-		data, err := BindJSON[TestData](c.Request())
-
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
-
-		if !data.Validate(c.AcceptLanguage()...) {
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(data)
-		}
-
-		return c.View(data)
+		return c.View("GET", "admin/index")
 	})
 
-	admin.Get("/search", func(c *Context) error {
-		data, err := BindQuery[TestData](c.Request())
-
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
-
-		if !data.Validate(c.AcceptLanguage()...) {
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(data)
-		}
-
-		return c.View(data)
+	admin.Post("/", func(c *Context) error {
+		return c.View("POST", "admin/index")
 	})
 
-	admin.Post("/form", func(c *Context) error {
-		data, err := BindForm[TestData](c.Request())
-
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
-
-		if !data.Validate(c.AcceptLanguage()...) {
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(data)
-		}
-
-		return c.View(data)
+	admin.Put("/", func(c *Context) error {
+		return c.View("PUT", "admin/index")
 	})
-}
 
-type TestData struct {
+	admin.Delete("/", func(c *Context) error {
+		return c.View("DELETE", "admin/index")
+	})
+
+	req, err := http.NewRequest("GET", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `GET`, string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "application/json")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "\"GET\"\n", string(buf))
+
+	req, err = http.NewRequest("POST", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `POST`, string(buf))
+
+	req, err = http.NewRequest("POST", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "application/json")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "\"POST\"\n", string(buf))
+
+	req, err = http.NewRequest("PUT", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `PUT`, string(buf))
+
+	req, err = http.NewRequest("PUT", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "application/json")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "\"PUT\"\n", string(buf))
+
+	req, err = http.NewRequest("DELETE", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, `DELETE`, string(buf))
+
+	req, err = http.NewRequest("DELETE", srv.URL+"/admin/", nil)
+	req.Header.Set("Accept", "application/json")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "\"DELETE\"\n", string(buf))
+
 }
