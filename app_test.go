@@ -866,6 +866,182 @@ func TestWatchOnStatic(t *testing.T) {
 
 }
 
+func TestWatchOnHtml(t *testing.T) {
+	fsys := fstest.MapFS{
+		"components/header.html": {Data: []byte("<title>header</title>"), ModTime: time.Now()},
+		"layouts/home.html":      {Data: []byte(`<html><head>{{ block "components/header" . }} {{end}}</head><body>{{ block "content" . }} {{end}}</body></html>`), ModTime: time.Now()},
+		"views/shared.html":      {Data: []byte("<!--layout:home-->{{ define \"content\"}}<div>shared</div>{{ end }}"), ModTime: time.Now()},
+		"pages/index.html":       {Data: []byte("<!--layout:home-->{{ define \"content\"}}<div>index</div>{{ end }}"), ModTime: time.Now()},
+		"pages/admin/index.html": {Data: []byte("<!--layout:home-->{{ define \"content\"}}<div>admin/index</div>{{ end }}"), ModTime: time.Now()},
+		"pages/admin/user.html":  {Data: []byte("<!--layout:home-->{{ define \"content\"}}<div>admin/user</div>{{ end }}"), ModTime: time.Now()},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithWatch())
+
+	app.Get("/view", func(c *Context) error {
+		return c.View(nil, "views/shared")
+	})
+
+	app.Start()
+	defer app.Close()
+
+	req, err := http.NewRequest("GET", srv.URL+"/about", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header</title></head><body><div>index</div></body></html>", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/admin/index", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header</title></head><body><div>admin/index</div></body></html>", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/admin/user", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header</title></head><body><div>admin/user</div></body></html>", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/view", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header</title></head><body><div>shared</div></body></html>", string(buf))
+
+	// fixed data race issue on fstest.MapFile
+	app.watcher.Stop()
+
+	fsys["components/header.html"].Data = []byte("<title>header updated</title>")
+	fsys["components/header.html"].ModTime = time.Now()
+
+	fsys["layouts/home.html"].Data = []byte(`<html><head>{{ block "components/header" . }} {{end}}</head><body>layout updated:{{ block "content" . }} {{end}}</body></html>`)
+	fsys["layouts/home.html"].ModTime = time.Now()
+
+	fsys["views/shared.html"].Data = []byte("<!--layout:home-->{{ define \"content\"}}<div>shared updated</div>{{ end }}")
+	fsys["views/shared.html"].ModTime = time.Now()
+
+	fsys["pages/index.html"].Data = []byte("<!--layout:home-->{{ define \"content\"}}<div>index updated</div>{{ end }}")
+	fsys["pages/index.html"].ModTime = time.Now()
+
+	fsys["pages/admin/index.html"].Data = []byte("<!--layout:home-->{{ define \"content\"}}<div>admin/index updated</div>{{ end }}")
+	fsys["pages/admin/index.html"].ModTime = time.Now()
+
+	// added
+	fsys["pages/about.html"] = &fstest.MapFile{Data: []byte("<!--layout:home-->{{ define \"content\"}}<div>about</div>{{ end }}"), ModTime: time.Now()}
+
+	// deleted
+	delete(fsys, "pages/admin/user.html")
+
+	checkInterval := fsnotify.CheckInterval
+	defer func() {
+		fsnotify.CheckInterval = checkInterval
+	}()
+
+	fsnotify.CheckInterval = 100 * time.Millisecond
+	go app.watcher.Start()
+
+	time.Sleep(1 * time.Second)
+
+	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>index updated</div></body></html>", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/admin/index", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>admin/index updated</div></body></html>", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/view", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>shared updated</div></body></html>", string(buf))
+
+	// deleted event is not handled in html view engine, it is not updated, and does not return 404
+	req, err = http.NewRequest("GET", srv.URL+"/admin/user", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header</title></head><body><div>admin/user</div></body></html>", string(buf))
+
+	//added
+	req, err = http.NewRequest("GET", srv.URL+"/about", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>about</div></body></html>", string(buf))
+
+}
+
 func TestApp(t *testing.T) {
 	app := New(WithMux(http.NewServeMux()),
 		WithFsys(os.DirFS(".")))

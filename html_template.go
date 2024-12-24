@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"strings"
 	"text/template"
+
+	"errors"
 )
 
 type HtmlTemplate struct {
@@ -13,6 +15,8 @@ type HtmlTemplate struct {
 	name   string
 	path   string
 	layout string
+
+	version uint
 
 	dependencies map[string]struct{}
 	dependents   map[string]*HtmlTemplate
@@ -118,12 +122,17 @@ func (t *HtmlTemplate) Reload(fsys fs.FS, templates map[string]*HtmlTemplate) er
 		return err
 	}
 
-	for _, it := range t.dependents {
+	for n, it := range t.dependents {
 		err := it.Reload(fsys, templates)
 		if err != nil {
-			return err
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			delete(t.dependents, n)
 		}
 	}
+
+	t.version++
 	return nil
 }
 

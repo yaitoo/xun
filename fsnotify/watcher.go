@@ -106,7 +106,6 @@ func (w *Watcher) check() {
 				mt := fi.ModTime()
 
 				if f.ModTime.Equal(mt) {
-
 					return nil
 				}
 

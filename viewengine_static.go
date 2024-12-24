@@ -34,7 +34,7 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
 
 func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
 	//Nothing should be updated for Write/Remove events.
-	if event.Has(fsnotify.Create) {
+	if event.Has(fsnotify.Create) && strings.HasPrefix(event.Name, "public/") {
 		ve.handle(fsys, app, event.Name)
 	}
 
