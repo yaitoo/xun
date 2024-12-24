@@ -871,13 +871,28 @@ func TestMiddleware(t *testing.T) {
 }
 
 func TestUnhandledError(t *testing.T) {
+	fsys := &fstest.MapFS{
+		"public/skin.css":  &fstest.MapFile{},
+		"pages/index.html": &fstest.MapFile{Data: []byte(`{{.Name `)},
+	}
+
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	w := bytes.NewBuffer(nil)
 	logger := slog.New(slog.NewTextHandler(w, nil))
 
-	app := New(WithMux(mux), WithLogger(logger))
+	app := New(WithMux(mux), WithFsys(fsys), WithLogger(logger))
+
+	app.Use(func(next HandleFunc) HandleFunc {
+		return func(c *Context) error {
+			if c.Request().URL.Path == "/skin.css" {
+				return errors.New("file: file is in use by another process")
+			}
+
+			return next(c)
+		}
+	})
 
 	app.Get("/", func(c *Context) error {
 		return errors.New("internal")
@@ -896,6 +911,34 @@ func TestUnhandledError(t *testing.T) {
 	// unhandled exception should not be returned to client for security issue. it should be logged on on server side.
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	logId := resp.Header.Get("X-Log-Id")
+	require.NotEmpty(t, logId)
+	require.Contains(t, w.String(), logId)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	_, err = io.Copy(io.Discard, resp.Body)
+	require.NoError(t, err)
+	// unhandled exception should not be returned to client for security issue. it should be logged on on server side.
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	logId = resp.Header.Get("X-Log-Id")
+	require.NotEmpty(t, logId)
+	require.Contains(t, w.String(), logId)
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/skin.css", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	_, err = io.Copy(io.Discard, resp.Body)
+	require.NoError(t, err)
+	// unhandled exception should not be returned to client for security issue. it should be logged on on server side.
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	logId = resp.Header.Get("X-Log-Id")
 	require.NotEmpty(t, logId)
 	require.Contains(t, w.String(), logId)
 	resp.Body.Close()
