@@ -1,9 +1,12 @@
 package htmx
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -867,83 +870,34 @@ func TestMiddleware(t *testing.T) {
 
 }
 
-func TestApp(t *testing.T) {
-	app := New(WithMux(http.NewServeMux()),
-		WithFsys(os.DirFS(".")))
+func TestUnhandledError(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	w := bytes.NewBuffer(nil)
+	logger := slog.New(slog.NewTextHandler(w, nil))
 
-	app.Get("/hello", func(c *Context) error {
-		//c.View(map[string]string{"name": "World"})
+	app := New(WithMux(mux), WithLogger(logger))
 
-		return nil
+	app.Get("/", func(c *Context) error {
+		return errors.New("internal")
 	})
 
-	admin := app.Group("/admin")
+	app.Start()
+	defer app.Close()
 
-	admin.Use(func(next HandleFunc) HandleFunc {
-		return func(c *Context) error {
-			if c.routing.Options.String(NavigationAccess) != "admin:*" {
-				c.WriteStatus(http.StatusForbidden)
-				return ErrCancelled
-			}
+	req, err := http.NewRequest("GET", srv.URL+"/", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
 
-			return next(c)
-		}
+	_, err = io.Copy(io.Discard, resp.Body)
+	require.NoError(t, err)
+	// unhandled exception should not be returned to client for security issue. it should be logged on on server side.
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	logId := resp.Header.Get("X-Log-Id")
+	require.NotEmpty(t, logId)
+	require.Contains(t, w.String(), logId)
+	resp.Body.Close()
 
-	})
-
-	admin.Get("/", func(c *Context) error {
-		return c.View(nil)
-
-	}, WithNavigation("admin", "fa fa-home", "admin:*"))
-
-	admin.Post("/form", func(c *Context) error {
-		data, err := BindJSON[TestData](c.Request())
-
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
-
-		if !data.Validate(c.AcceptLanguage()...) {
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(data)
-		}
-
-		return c.View(data)
-	})
-
-	admin.Get("/search", func(c *Context) error {
-		data, err := BindQuery[TestData](c.Request())
-
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
-
-		if !data.Validate(c.AcceptLanguage()...) {
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(data)
-		}
-
-		return c.View(data)
-	})
-
-	admin.Post("/form", func(c *Context) error {
-		data, err := BindForm[TestData](c.Request())
-
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
-
-		if !data.Validate(c.AcceptLanguage()...) {
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(data)
-		}
-
-		return c.View(data)
-	})
-}
-
-type TestData struct {
 }

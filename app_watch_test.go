@@ -2,7 +2,6 @@ package htmx
 
 import (
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,7 +23,7 @@ func TestWatchOnStatic(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithLogger(slog.Default()), WithMux(mux), WithFsys(fsys), WithWatch(), WithViewEngines(&StaticViewEngine{}))
+	app := New(WithMux(mux), WithFsys(fsys), WithWatch(), WithViewEngines(&StaticViewEngine{}))
 
 	app.Start()
 	defer app.Close()

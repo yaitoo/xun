@@ -15,4 +15,4 @@ Contributions are welcome! If you're interested in contributing, please feel fre
 
 
 ## License
-[MIT License](LICENSE)
+[Apache-2.0 license](LICENSE)
