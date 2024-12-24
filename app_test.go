@@ -969,14 +969,15 @@ func TestWatchOnHtml(t *testing.T) {
 	delete(fsys, "pages/admin/user.html")
 
 	checkInterval := fsnotify.CheckInterval
+	fsnotify.CheckInterval = 100 * time.Millisecond
 	defer func() {
 		fsnotify.CheckInterval = checkInterval
 	}()
 
-	fsnotify.CheckInterval = 100 * time.Millisecond
 	go app.watcher.Start()
-
 	time.Sleep(1 * time.Second)
+
+	app.watcher.Stop()
 
 	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
 	req.Header.Set("Accept", "text/html")
@@ -1040,6 +1041,38 @@ func TestWatchOnHtml(t *testing.T) {
 
 	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>about</div></body></html>", string(buf))
 
+}
+
+func TestMiddleware(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux))
+	app.Use(func(next HandleFunc) HandleFunc {
+		return func(c *Context) error {
+			c.Request().Header.Set("X-Test", "test")
+			return next(c)
+		}
+	})
+
+	app.Get("/", func(c *Context) error {
+		return c.View(map[string]string{"test": c.Request().Header.Get("X-Test")})
+	})
+
+	go app.Start()
+	defer app.Close()
+
+	// req, err := http.NewRequest("GET", srv.URL+"/", nil)
+	// require.NoError(t, err)
+	// resp, err := client.Do(req)
+	// require.NoError(t, err)
+
+	// buf, err := io.ReadAll(resp.Body)
+	// require.NoError(t, err)
+	// resp.Body.Close()
+
+	// require.Equal(t, "<html><head><title>header</title></head><body><div>test</div></body></html>", string(buf))
 }
 
 func TestApp(t *testing.T) {

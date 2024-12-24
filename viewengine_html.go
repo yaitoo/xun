@@ -51,14 +51,10 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 
 	name := event.Name[:len(event.Name)-5]
 
-	var err error
 	if event.Has(fsnotify.Write) {
 		t, ok := ve.templates[name]
 		if ok {
-			err = t.Reload(ve.fsys, ve.templates)
-			if err != nil {
-				ve.templates[name] = t
-			}
+			return t.Reload(ve.fsys, ve.templates)
 		}
 	} else if event.Has(fsnotify.Create) {
 

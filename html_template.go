@@ -16,8 +16,6 @@ type HtmlTemplate struct {
 	path   string
 	layout string
 
-	version uint
-
 	dependencies map[string]struct{}
 	dependents   map[string]*HtmlTemplate
 }
@@ -132,7 +130,6 @@ func (t *HtmlTemplate) Reload(fsys fs.FS, templates map[string]*HtmlTemplate) er
 		}
 	}
 
-	t.version++
 	return nil
 }
 
