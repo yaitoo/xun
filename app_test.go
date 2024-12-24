@@ -872,8 +872,8 @@ func TestMiddleware(t *testing.T) {
 
 func TestUnhandledError(t *testing.T) {
 	fsys := &fstest.MapFS{
-		"public/skin.css":  &fstest.MapFile{},
-		"pages/index.html": &fstest.MapFile{Data: []byte(`{{.Name `)},
+		"public/skin.css": &fstest.MapFile{},
+		"pages/user.html": &fstest.MapFile{Data: []byte(`{{.Name }}`)},
 	}
 
 	mux := http.NewServeMux()
@@ -887,6 +887,8 @@ func TestUnhandledError(t *testing.T) {
 	app.Use(func(next HandleFunc) HandleFunc {
 		return func(c *Context) error {
 			if c.Request().URL.Path == "/skin.css" {
+				return errors.New("file: file is in use by another process")
+			} else if c.Request().URL.Path == "/user" {
 				return errors.New("file: file is in use by another process")
 			}
 
@@ -915,7 +917,7 @@ func TestUnhandledError(t *testing.T) {
 	require.Contains(t, w.String(), logId)
 	resp.Body.Close()
 
-	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/user", nil)
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
