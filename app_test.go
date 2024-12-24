@@ -34,9 +34,6 @@ func TestMain(m *testing.M) {
 	}
 	client = http.Client{
 		Transport: tr,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
 	}
 	os.Exit(m.Run())
 }
@@ -211,9 +208,15 @@ func TestStatus(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	resp.Body.Close()
 
+	c := http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
 	req, err = http.NewRequest("GET", srv.URL+"/302", nil)
 	require.NoError(t, err)
-	resp, err = client.Do(req)
+	resp, err = c.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
 	require.Equal(t, "http://127.0.0.1/redirect", resp.Header.Get("Location"))
