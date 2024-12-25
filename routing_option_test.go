@@ -51,6 +51,19 @@ func TestRoutingOption(t *testing.T) {
 	}, WithMetadata("i1", ""),
 		WithNavigation("admin", "ha-dash", "admin:view"))
 
+	app.Get("/invalid", func(c *Context) error {
+
+		data := map[string]any{
+			"s1":     c.Routing.Options.GetString("s1"),
+			"i1":     c.Routing.Options.GetInt("i1"),
+			"name":   c.Routing.Options.Get(NavigationName),
+			"icon":   c.Routing.Options.Get(NavigationIcon),
+			"access": c.Routing.Options.Get(NavigationAccess),
+		}
+
+		return c.View(data)
+	}, WithMetadata("s1", 1), WithMetadata("i1", ""))
+
 	app.Start()
 	defer app.Close()
 
@@ -91,5 +104,24 @@ func TestRoutingOption(t *testing.T) {
 	require.Equal(t, "admin", d2["name"])
 	require.Equal(t, "ha-dash", d2["icon"])
 	require.Equal(t, "admin:view", d2["access"])
+
+	req, err = http.NewRequest("GET", srv.URL+"/invalid", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	d3 := make(map[string]any)
+	err = json.Unmarshal(buf, &d3)
+	require.NoError(t, err)
+
+	require.Equal(t, "", d3["s1"])
+	require.EqualValues(t, 0, d3["i1"])
+	require.Nil(t, d3["name"])
+	require.Nil(t, d3["icon"])
+	require.Nil(t, d3["access"])
 
 }
