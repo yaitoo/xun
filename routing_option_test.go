@@ -53,7 +53,6 @@ func TestRoutingOption(t *testing.T) {
 		WithNavigation("admin", "ha-dash", "admin:view"))
 
 	app.Get("/invalid", func(c *Context) error {
-
 		data := map[string]any{
 			"s1":     c.Routing.Options.GetString("s1"),
 			"i1":     c.Routing.Options.GetInt("i1"),
@@ -63,7 +62,8 @@ func TestRoutingOption(t *testing.T) {
 		}
 
 		return c.View(data)
-	}, WithMetadata("s1", time.Now()), WithMetadata("i1", "v100"))
+	}, WithMetadata("s1", time.Now()), WithMetadata("i1", "v100"),
+		WithNavigation("admin", "ha-dash", "admin:view"))
 
 	app.Start()
 	defer app.Close()

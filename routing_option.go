@@ -1,7 +1,5 @@
 package htmx
 
-import "reflect"
-
 type RoutingOptions struct {
 	metadata map[string]any
 	viewer   Viewer
@@ -53,12 +51,7 @@ func WithMetadata(key string, value any) RoutingOption {
 			ro.metadata = make(map[string]any)
 		}
 
-		v := reflect.ValueOf(value)
-		if v.IsZero() {
-			delete(ro.metadata, key)
-		} else {
-			ro.metadata[key] = value
-		}
+		ro.metadata[key] = value
 	}
 }
 
