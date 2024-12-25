@@ -194,7 +194,7 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 		ctx := &Context{
 			req:     req,
 			rw:      w,
-			routing: *r,
+			Routing: *r,
 			app:     app,
 		}
 
@@ -262,7 +262,7 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 		ctx := &Context{
 			req:     req,
 			rw:      w,
-			routing: *r,
+			Routing: *r,
 			app:     app,
 		}
 
@@ -313,11 +313,13 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 
 	app.routes[pat] = r
 
+	r.Viewers[v.MimeType()] = v
+
 	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &Context{
 			req:     req,
 			rw:      w,
-			routing: *r,
+			Routing: *r,
 			app:     app,
 		}
 

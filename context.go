@@ -9,7 +9,7 @@ import (
 // the HTTP request, the HTTP response writer, and a Viewer instance for rendering.
 // It is used to manage and pass request-scoped data throughout the request lifecycle.
 type Context struct {
-	routing Routing
+	Routing Routing
 	app     *App
 	rw      http.ResponseWriter
 	req     *http.Request
@@ -79,7 +79,7 @@ func (c *Context) View(items ...any) error {
 
 	} else {
 		for _, accept := range c.Accept() {
-			v, ok = c.routing.Viewers[accept]
+			v, ok = c.Routing.Viewers[accept]
 			if ok {
 				break
 			}
@@ -87,7 +87,7 @@ func (c *Context) View(items ...any) error {
 	}
 
 	if !ok {
-		v = c.routing.Options.viewer
+		v = c.Routing.Options.viewer
 	}
 
 	if !c.writtenStatus {

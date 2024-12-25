@@ -11,18 +11,32 @@ func (ro *RoutingOptions) Get(name string) any {
 	return ro.metadata[name]
 }
 
-func (ro *RoutingOptions) String(name string) string {
-	v, ok := ro.metadata[name]
+func (ro *RoutingOptions) GetString(name string) string {
+	it, ok := ro.metadata[name]
 	if !ok {
 		return ""
 	}
 
-	s, ok := v.(string)
+	s, ok := it.(string)
 	if !ok {
 		return ""
 	}
 
 	return s
+}
+
+func (ro *RoutingOptions) GetInt(name string) int {
+	it, ok := ro.metadata[name]
+	if !ok {
+		return 0
+	}
+
+	v, ok := it.(int)
+	if !ok {
+		return 0
+	}
+
+	return v
 }
 
 type RoutingOption func(*RoutingOptions)
