@@ -62,8 +62,7 @@ func TestRoutingOption(t *testing.T) {
 		}
 
 		return c.View(data)
-	}, WithMetadata("s1", time.Now()), WithMetadata("i1", "v100"),
-		WithNavigation("admin", "ha-dash", "admin:view"))
+	}, WithMetadata("s1", time.Now()), WithMetadata("i1", "v100"))
 
 	app.Start()
 	defer app.Close()
