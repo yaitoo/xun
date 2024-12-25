@@ -7,9 +7,6 @@ import (
 	"net/http"
 
 	"github.com/go-playground/form/v4"
-	"github.com/go-playground/locales/en"
-	"github.com/go-playground/locales/zh"
-	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -19,11 +16,6 @@ var (
 
 	// use a single instance of Decoder, it caches struct info
 	formDecoder = form.NewDecoder()
-)
-
-var (
-	uni      = ut.New(en.New(), en.New(), zh.New())
-	validate = validator.New()
 )
 
 func BindQuery[T any](req *http.Request) (*TEntity[T], error) {
@@ -63,7 +55,7 @@ func BindForm[T any](req *http.Request) (*TEntity[T], error) {
 
 }
 
-func BindJSON[T any](req *http.Request) (*TEntity[T], error) {
+func BindJson[T any](req *http.Request) (*TEntity[T], error) {
 	data := new(T)
 
 	buf, err := io.ReadAll(req.Body)
@@ -90,6 +82,8 @@ type TEntity[T any] struct {
 }
 
 func (t *TEntity[T]) Validate(languages ...string) bool {
+	validate := findValidator(languages...)
+
 	err := validate.Struct(t.Data)
 	if err == nil {
 		return true
@@ -97,18 +91,13 @@ func (t *TEntity[T]) Validate(languages ...string) bool {
 
 	errs := err.(validator.ValidationErrors)
 
-	ut, ok := uni.FindTranslator(languages...)
-	if !ok {
-		ut = uni.GetFallback()
-	}
-
 	for _, err := range errs {
 		n := err.Field()
 		if n == "" {
 			n = err.StructField()
 		}
 
-		t.Errors[n] = err.Translate(ut)
+		t.Errors[n] = err.Translate(validate.Translator)
 	}
 
 	return false
