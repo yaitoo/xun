@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +49,7 @@ func TestRoutingOption(t *testing.T) {
 		}
 
 		return c.View(data)
-	}, WithMetadata("i1", ""),
+	},
 		WithNavigation("admin", "ha-dash", "admin:view"))
 
 	app.Get("/invalid", func(c *Context) error {
@@ -62,7 +63,7 @@ func TestRoutingOption(t *testing.T) {
 		}
 
 		return c.View(data)
-	}, WithMetadata("s1", 1), WithMetadata("i1", ""))
+	}, WithMetadata("s1", time.Now()), WithMetadata("i1", "v100"))
 
 	app.Start()
 	defer app.Close()
