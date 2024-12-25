@@ -1,5 +1,5 @@
-# go htmx
-go-htmx is a HTTP web framework based on htmx view engine and built-in router.
+# Go-Htmx
+go-htmx is a HTTP web framework based on Go's built-in `html/template` and `net/http` mux packages.
 
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 [![Tests](https://github.com/yaitoo/htmx/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/htmx/actions/workflows/tests.yml)
@@ -8,7 +8,24 @@ go-htmx is a HTTP web framework based on htmx view engine and built-in router.
 [![GitHub Release](https://img.shields.io/github/v/release/yaitoo/htmx)](https://github.com/yaitoo/htmx/blob/main/CHANGELOG.md)
 [![Go Report Card](https://goreportcard.com/badge/yaitoo/htmx)](http://goreportcard.com/report/yaitoo/htmx)
 
+## Feature
+- Works with Go's built-in `mux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements)
+- Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR)
+- Support multiple view engine. `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`.
+- Support to automatically reload changed files in development environment   
 
+## Tutorials
+
+### Install go-htmx
+- install latest commit from `main` branch
+```
+go get github.com/yaitoo/htmx@main
+```
+
+- install latest release
+```
+go get github.com/yaitoo/htmx@latest
+```
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)

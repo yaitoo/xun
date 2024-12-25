@@ -3,7 +3,6 @@ package htmx
 import (
 	// "encoding/json"
 
-	"io"
 	"net/http"
 
 	"github.com/go-playground/form/v4"
@@ -58,13 +57,7 @@ func BindForm[T any](req *http.Request) (*TEntity[T], error) {
 func BindJson[T any](req *http.Request) (*TEntity[T], error) {
 	data := new(T)
 
-	buf, err := io.ReadAll(req.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(buf, data)
-
+	err := json.NewDecoder(req.Body).Decode(data)
 	if err != nil {
 		return nil, err
 	}
