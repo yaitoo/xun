@@ -321,12 +321,23 @@ func TestStaticViewEngine(t *testing.T) {
 	app.Start()
 	defer app.Close()
 
-	req, err := http.NewRequest("GET", srv.URL+"/", nil)
+	req, err := http.NewRequest("GET", srv.URL, nil)
 	require.NoError(t, err)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 
 	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["public/index.html"].Data, buf)
+
+	req, err = http.NewRequest("GET", srv.URL+"/", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -377,6 +388,17 @@ func TestStaticViewEngine(t *testing.T) {
 	require.Equal(t, 0, len(buf))
 
 	host := strings.ReplaceAll(srv.URL, "127.0.0.1", "abc.com")
+
+	req, err = http.NewRequest("GET", host, nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["public/@abc.com/index.html"].Data, buf)
 
 	req, err = http.NewRequest("GET", host+"/", nil)
 	require.NoError(t, err)
