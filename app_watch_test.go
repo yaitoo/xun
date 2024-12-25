@@ -134,7 +134,7 @@ func TestWatchOnHtml(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 	resp.Body.Close()
 
-	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/", nil)
 	req.Header.Set("Accept", "text/html")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -146,7 +146,7 @@ func TestWatchOnHtml(t *testing.T) {
 
 	require.Equal(t, "<html><head><title>header</title></head><body><div>index</div></body></html>", string(buf))
 
-	req, err = http.NewRequest("GET", srv.URL+"/admin/index", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/admin/", nil)
 	req.Header.Set("Accept", "text/html")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -217,7 +217,7 @@ func TestWatchOnHtml(t *testing.T) {
 
 	app.watcher.Stop()
 
-	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/", nil)
 	req.Header.Set("Accept", "text/html")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -229,7 +229,7 @@ func TestWatchOnHtml(t *testing.T) {
 
 	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>index updated</div></body></html>", string(buf))
 
-	req, err = http.NewRequest("GET", srv.URL+"/admin/index", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/admin/", nil)
 	req.Header.Set("Accept", "text/html")
 	require.NoError(t, err)
 	resp, err = client.Do(req)

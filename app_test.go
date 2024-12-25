@@ -469,7 +469,7 @@ func TestHtmlViewEngine(t *testing.T) {
 	app.Start()
 	defer app.Close()
 
-	req, err := http.NewRequest("GET", srv.URL+"/index", nil)
+	req, err := http.NewRequest("GET", srv.URL+"/", nil)
 	req.Header.Set("Accept", "text/html, */*")
 	require.NoError(t, err)
 	resp, err := client.Do(req)
@@ -485,7 +485,7 @@ func TestHtmlViewEngine(t *testing.T) {
 <div>footer</div>
 </body></html>`, string(buf))
 
-	req, err = http.NewRequest("GET", srv.URL+"/admin/index", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/admin/", nil)
 	req.Header.Set("Accept", "text/html, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -527,7 +527,7 @@ func TestHtmlViewEngine(t *testing.T) {
 
 	host := strings.ReplaceAll(srv.URL, "127.0.0.1", "abc.com")
 
-	req, err = http.NewRequest("GET", host+"/index", nil)
+	req, err = http.NewRequest("GET", host+"/", nil)
 	req.Header.Set("Accept", "text/html, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -543,7 +543,7 @@ func TestHtmlViewEngine(t *testing.T) {
 <div>footer</div>
 </body></html>`, string(buf))
 
-	req, err = http.NewRequest("GET", host+"/admin/index", nil)
+	req, err = http.NewRequest("GET", host+"/admin/", nil)
 	req.Header.Set("Accept", "text/html, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -605,7 +605,7 @@ func TestMixedViewers(t *testing.T) {
 
 	require.Equal(t, fsys["pages/index.html"].Data, buf)
 
-	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/", nil)
 	req.Header.Set("Accept", "text/html, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -886,7 +886,6 @@ func TestMiddleware(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
-
 }
 
 func TestUnhandledError(t *testing.T) {

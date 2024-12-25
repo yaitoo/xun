@@ -2,11 +2,7 @@ package htmx
 
 type Routing struct {
 	Pattern string
-	Method  string
-	Host    string
-	Path    string
-
-	Handle HandleFunc
+	Handle  HandleFunc
 
 	Options *RoutingOptions
 	Viewers map[string]Viewer

@@ -26,18 +26,32 @@ func splitPattern(s string) (string, string, string) {
 }
 
 // host, path, pattern
-func splitFile(s string) (string, string, string) {
+func splitFile(s string) (host string, path string, pattern string) {
+	defer func() {
+		if pattern[len(pattern)-1] == '/' {
+			pattern = pattern + "{$}"
+		}
+	}()
+
 	if len(s) == 0 {
-		return "", "", "GET /"
+		pattern = "GET /"
+		return
 	}
 
 	i := strings.IndexByte(s, '@')
 
+	// xxx
 	if i < 0 { //no host
-		return "", "/" + s, "GET /" + s
+		path = "/" + s        // /xxx
+		pattern = "GET /" + s // GET /xxx
+		return
 	}
 
+	// @abc.com/xxx
 	e := strings.IndexByte(s, '/')
 	//has host
-	return s[i+1 : e], s[e+1:], "GET " + s[i+1:]
+	host = s[i+1 : e]          // abc.com
+	path = "/" + s[e+1:]       // /xxx
+	pattern = "GET " + s[i+1:] // GET abc.com/xxx
+	return
 }

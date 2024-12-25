@@ -162,9 +162,8 @@ func (ve *HtmlViewEngine) loadPages() error {
 }
 
 func (ve *HtmlViewEngine) loadPage(path string) error {
-	name := strings.TrimPrefix(path, "pages/")
+	name := path[6:] //strings.TrimPrefix(path, "pages/")
 
-	_, _, pattern := splitFile(name)
 	t := NewHtmlTemplate(name, path)
 
 	if err := t.Load(ve.fsys, ve.templates); err != nil {
@@ -173,9 +172,14 @@ func (ve *HtmlViewEngine) loadPage(path string) error {
 	//.html
 	ve.templates[path[:len(path)-5]] = t
 
+	if strings.HasSuffix(path, "/index.html") { //remove it, because index.html will be redirected to ./ in http.ServeFileFS
+		name = name[:len(name)-10]
+	}
+
+	_, _, pattern := splitFile(name)
 	pattern = strings.TrimSuffix(pattern, ".html")
 
-	ve.app.HandlePage(pattern, &HtmlViewer{
+	ve.app.HandlePage(pattern, path[6:len(path)-5], &HtmlViewer{
 		template: t,
 	})
 

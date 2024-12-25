@@ -155,6 +155,10 @@ func (app *App) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 }
 
 func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
+	app.handleFunc(pattern, hf, opts, app.middlewares)
+}
+
+func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, middlewares []Middleware) {
 	ro := &RoutingOptions{
 		viewer: app.viewer,
 	}
@@ -162,7 +166,7 @@ func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 		o(ro)
 	}
 
-	method, host, path := splitPattern(pattern)
+	_, host, path := splitPattern(pattern)
 
 	r, ok := app.routes[pattern]
 
@@ -170,45 +174,47 @@ func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 		r.Options = ro
 		r.Handle = hf
 
-	} else {
-		r = &Routing{
-			Options: ro,
-			Pattern: pattern,
-			Method:  method,
-			Host:    host,
-			Path:    path,
-			Handle:  hf,
-			Viewers: make(map[string]Viewer),
+		if ro.viewer != nil {
+			r.Viewers[ro.viewer.MimeType()] = ro.viewer
 		}
 
-		app.routes[pattern] = r
+		return
 
-		app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
-			ctx := &Context{
-				req:     req,
-				rw:      w,
-				routing: *r,
-				app:     app,
-			}
-
-			next := r.Handle
-
-			for i := len(app.middlewares); i > 0; i-- {
-				next = app.middlewares[i-1](next)
-			}
-
-			err := next(ctx)
-
-			if err == nil || errors.Is(err, ErrCancelled) {
-				return
-			}
-
-			logID := nextLogID()
-			ctx.Header("X-Log-Id", logID)
-			ctx.WriteStatus(http.StatusInternalServerError)
-			app.logger.Error("htmx: handle", slog.Any("err", err), slog.String("logid", logID))
-		})
 	}
+	r = &Routing{
+		Options: ro,
+		Pattern: pattern,
+		Handle:  hf,
+		Viewers: make(map[string]Viewer),
+	}
+
+	app.routes[pattern] = r
+
+	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
+		ctx := &Context{
+			req:     req,
+			rw:      w,
+			routing: *r,
+			app:     app,
+		}
+
+		next := r.Handle
+
+		for i := len(middlewares); i > 0; i-- {
+			next = middlewares[i-1](next)
+		}
+
+		err := next(ctx)
+
+		if err == nil || errors.Is(err, ErrCancelled) {
+			return
+		}
+
+		logID := nextLogID()
+		ctx.Header("X-Log-Id", logID)
+		ctx.WriteStatus(http.StatusInternalServerError)
+		app.logger.Error("htmx: handle", slog.Any("err", err), slog.String("logid", logID))
+	})
 
 	if ro.viewer != nil {
 		r.Viewers[ro.viewer.MimeType()] = ro.viewer
@@ -223,10 +229,9 @@ func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
 	if v, ok := app.viewers[viewName]; ok {
 		r.Viewers[v.MimeType()] = v
 	}
-
 }
 
-func (app *App) HandlePage(pattern string, v Viewer) {
+func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	ro := &RoutingOptions{}
 
 	r, ok := app.routes[pattern]
@@ -235,14 +240,8 @@ func (app *App) HandlePage(pattern string, v Viewer) {
 		return
 	}
 
-	_, host, path := splitPattern(pattern)
-
 	ro.viewer = v
-	if host == "" {
-		app.viewers[path] = v
-	} else {
-		app.viewers["@"+host+"/"+path] = v
-	}
+	app.viewers[viewName] = v
 
 	hf := func(c *Context) error {
 		return v.Render(c.rw, c.req, nil)
@@ -251,8 +250,6 @@ func (app *App) HandlePage(pattern string, v Viewer) {
 	r = &Routing{
 		Options: ro,
 		Pattern: pattern,
-		Host:    host,
-		Path:    path,
 		Handle:  hf,
 		Viewers: make(map[string]Viewer),
 	}
@@ -292,7 +289,7 @@ func (app *App) HandlePage(pattern string, v Viewer) {
 func (app *App) HandleFile(name string, v *FileViewer) {
 	ro := &RoutingOptions{}
 
-	host, path, pat := splitFile(name)
+	_, _, pat := splitFile(name)
 
 	r, ok := app.routes[pat]
 
@@ -310,8 +307,6 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 	r = &Routing{
 		Options: ro,
 		Pattern: pat,
-		Host:    host,
-		Path:    path,
 		Handle:  hf,
 		Viewers: make(map[string]Viewer),
 	}
