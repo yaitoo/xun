@@ -14,6 +14,7 @@ func TestPattern(t *testing.T) {
 		path    string
 	}{
 		{"", "", "", ""},
+		{"abc", "", "", "abc"},
 
 		{"/", "", "", ""},
 		{"/abc", "", "", "abc"},
