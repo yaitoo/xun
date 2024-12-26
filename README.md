@@ -36,11 +36,10 @@ go-htmx has some specified directories that is used to organize code, routing an
 - `layouts`: A layout is shared between multiple pages/views
 - `pages`: A public page view. It also is used to automatically create a accessible page routing.
 
-*NB: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use any built-in feature in the official [features](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.*
+*NB: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use all built-in [Actions,Pipelines and Functions](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.*
 
 ### Layouts and Pages
 go-htmx uses file-system based routing, meaning you can use folders and files to define routes. This section will guide you through how to create layouts and pages, and link between them.
-
 
 
 #### Creating a page
@@ -66,7 +65,7 @@ A page is UI that is rendered on a specific route. To create a page, add a page 
 </html>
 ```
 
-### Creating a layout
+#### Creating a layout
 A layout is UI that is shared between multiple pages/views. 
 
 You can create a layout(.html) file inside the `layouts` directory.
@@ -88,7 +87,7 @@ You can create a layout(.html) file inside the `layouts` directory.
     <title>Htmx-Admin</title>
   </head>
   <body>
-    {{ template "content" .}}
+    {{ block "content" .}} {{ end }}
   </body>
 </html>
 ```
@@ -104,7 +103,8 @@ You can create a layout(.html) file inside the `layouts` directory.
 You can store static files, like images, fonts, js and css, under a directory called `public` in the root directory. Files inside public can then be referenced by your code starting from the base URL (/).
 
 *NB: `public/index.html` will be visited by `/` instead of `/index.html`.*
-### Creating a assets component
+
+#### Creating a component
 A component is a partial view that is shared between multiple layouts/pages/views. 
 
 ```
@@ -132,13 +132,18 @@ A component is a partial view that is shared between multiple layouts/pages/view
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Htmx-Admin</title>
-   {{ template "components/assets" . }}
+    {{ block "components/assets" . }} {{ end }}
   </head>
   <body>
-    {{ template "content" .}}
+    {{ block "content" .}} {{ end }}
   </body>
 </html>
 ```
+
+## Building your application
+### Routing
+### Data binding
+### Multiple hosts
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)
