@@ -163,11 +163,15 @@ Page Router only serve static content from html files. We have to define router 
 ```
 
 
-*NB: An `/index.html` always be registered as `/{$}` in routing system. See more detail on [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
+*NB: An `/index.html` always be registered as `/{$}` in routing table. See more detail on [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).*
 > There is one last bit of syntax. As we showed above, patterns ending in a slash, like /posts/, match all paths beginning with that string. To match only the path with the trailing slash, you can write /posts/{$}. That will match /posts/ but not /posts or /posts/234.
 
 #### Dynamic Routes
-When you don't know the exact segment names ahead of time and want to create routes from dynamic data, you can use Dynamic Segments that are filled in at request time. `{var}` can be used in page router as same as router handler in `http.ServeMux`.
+When you don't know the exact segment names ahead of time and want to create routes from dynamic data, you can use Dynamic Segments that are filled in at request time. `{var}` can be used in folder name and file name as same as router handler in `http.ServeMux`. 
+
+For examples, below patterns will be generated automatically, and registered in routing table.
+- `/user/{id}.html` generates pattern `/user/{id}` 
+- `/{id}/user.html` generates pattern `/{id}/user`
 
 ```
 ├── app
@@ -206,6 +210,56 @@ When you don't know the exact segment names ahead of time and want to create rou
 
 
 ### Mixed Viewer
+In our application, a routing can have multiple viewers. Response is render based on the request header `Accept`. Default viewer is used if there is no any viewer is matched by `Accept`. The built-it default viewer is `JsonViewer`. But it can be overridden by `htmx.WithViewer` in `htmx.New`. see more examples on [app_test.go]
+
+> curl -v http://127.0.0.1
+```
+> GET / HTTP/1.1
+> Host: 127.0.0.1
+> User-Agent: curl/8.7.1
+> Accept: */*
+>
+* Request completely sent off
+< HTTP/1.1 200 OK
+< Date: Thu, 26 Dec 2024 07:46:13 GMT
+< Content-Length: 19
+< Content-Type: text/plain; charset=utf-8
+<
+{"Name":"go-htmx"}
+```
+
+> curl --header "Accept: text/html; */*" http://127.0.0.1
+```
+> GET / HTTP/1.1
+> Host: 127.0.0.1
+> User-Agent: curl/8.7.1
+> Accept: text/html; */*
+>
+* Request completely sent off
+< HTTP/1.1 200 OK
+< Date: Thu, 26 Dec 2024 07:49:47 GMT
+< Content-Length: 343
+< Content-Type: text/html; charset=utf-8
+<
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Htmx-Admin</title>
+    <link rel="stylesheet" href="/theme.css">
+<script type="text/javascript" src="/app.js"></script>
+  </head>
+  <body>
+
+    <div id="app">hello go-htmx</div>
+
+  </body>
+</html>
+```
+
+### Middleware
+
 ### Multiple Hosts
 
 ## Contributing
