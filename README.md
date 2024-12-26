@@ -16,6 +16,7 @@ go-htmx is a HTTP web framework based on Go's built-in `html/template` and `http
   
 
 ## Getting Started
+> see full source code on [htmx-examples](https://github.com/yaitoo/htmx-examples)
 
 ### Install go-htmx
 - install latest commit from `main` branch
@@ -210,7 +211,7 @@ For examples, below patterns will be generated automatically, and registered in 
 
 
 ### Mixed Viewer
-In our application, a routing can have multiple viewers. Response is render based on the request header `Accept`. Default viewer is used if there is no any viewer is matched by `Accept`. The built-it default viewer is `JsonViewer`. But it can be overridden by `htmx.WithViewer` in `htmx.New`. see more examples on [app_test.go]
+In our application, a routing can have multiple viewers. Response is render based on the request header `Accept`. Default viewer is used if there is no any viewer is matched by `Accept`. The built-it default viewer is `JsonViewer`. But it can be overridden by `htmx.WithViewer` in `htmx.New`. see more examples on [Tests](app_test.go)
 
 > curl -v http://127.0.0.1
 ```
@@ -228,7 +229,7 @@ In our application, a routing can have multiple viewers. Response is render base
 {"Name":"go-htmx"}
 ```
 
-> curl --header "Accept: text/html; */*" http://127.0.0.1
+> curl --header "Accept: text/html; \*/\*" http://127.0.0.1
 ```
 > GET / HTTP/1.1
 > Host: 127.0.0.1
