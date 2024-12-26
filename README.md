@@ -66,11 +66,39 @@ A page is UI that is rendered on a specific route. To create a page, add a page 
 </html>
 ```
 
-### Creating a layout, and apply it to a page
+### Creating a layout
 A layout is UI that is shared between multiple pages/views. 
 
-You can create a page(.html) inside the `layouts` directory.
+You can create a layout(.html) file inside the `layouts` directory.
+```
+└── app
+    ├── layouts
+    │   └── home.html
+    └── pages
+        └── index.html
+```
 
+> layouts/home.html
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Htmx-Admin</title>
+  </head>
+  <body>
+    {{ block "content" .}} {{end}}
+  </body>
+</html>
+```
+> pages/index.html
+```html
+<!--layout:home-->
+{{ define "content" }}
+    <div id="app">hello world</div>
+{{ end }}
+```
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)
