@@ -29,25 +29,29 @@ go get github.com/yaitoo/htmx@latest
 ```
 
 ### Project structure
-go-htmx has some specified folders that is used to organize code, routing and static assets.
+go-htmx has some specified directories that is used to organize code, routing and static assets.
 - `public`: Static assets to be served. 
 - `components` A partial view that is shared between layouts/pages/views.
 - `views`: A internal page view. It is used in `context.View` to render different view from current routing.
 - `layouts`: A layout is shared between multiple pages/views
 - `pages`: A public page view. It also is used to automatically create a accessible page routing.
 
+*NB*: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use any built-in feature in the official [features](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.
 
 ### Layouts and Pages
-go-htmx uses file-system based routing, meaning you can use folders and files to define routes. This page will guide you through how to create layouts and pages, and link between them.
+go-htmx uses file-system based routing, meaning you can use folders and files to define routes. This section will guide you through how to create layouts and pages, and link between them.
+
+
 
 #### Creating a page
-A page is UI that is rendered on a specific route. To create a page, add a page file(.html) inside the pages directory. For example, to create an index page (/):
+A page is UI that is rendered on a specific route. To create a page, add a page file(.html) inside the `pages` directory. For example, to create an index page (`/`):
 ```
 └── app
     └── pages
         └── index.html
 ```
 
+> index.html
 ``` html
 <!DOCTYPE html>
 <html>
@@ -57,10 +61,16 @@ A page is UI that is rendered on a specific route. To create a page, add a page 
     <title>Htmx-Admin</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">hello world</div>
   </body>
 </html>
 ```
+
+### Creating a layout, and apply it to a page
+A layout is UI that is shared between multiple pages/views. 
+
+You can create a page(.html) inside the `layouts` directory.
+
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)
