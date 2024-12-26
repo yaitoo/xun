@@ -142,8 +142,71 @@ A component is a partial view that is shared between multiple layouts/pages/view
 
 ## Building your application
 ### Routing
-### Data binding
-### Multiple hosts
+#### Route Handler
+Page Router only serve static content from html files. We have to define router handler in go to process request and bind data to the template file via `HtmlViewer`. 
+
+> pages/index.html
+```html
+<!--layout:home-->
+{{ define "content" }}
+    <div id="app">hello {{.Name}}</div>
+{{ end }}
+```
+
+> main.go
+```go
+	app.Get("/{$}", func(c *htmx.Context) error {
+		return c.View(map[string]string{
+			"Name": "go-htmx",
+		})
+	})
+```
+
+
+*NB: An `/index.html` always be registered as `/{$}` in routing system. See more detail on [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
+> There is one last bit of syntax. As we showed above, patterns ending in a slash, like /posts/, match all paths beginning with that string. To match only the path with the trailing slash, you can write /posts/{$}. That will match /posts/ but not /posts or /posts/234.
+
+#### Dynamic Routes
+When you don't know the exact segment names ahead of time and want to create routes from dynamic data, you can use Dynamic Segments that are filled in at request time. `{var}` can be used in page router as same as router handler in `http.ServeMux`.
+
+```
+├── app
+│   ├── components
+│   │   └── assets.html
+│   ├── layouts
+│   │   └── home.html
+│   ├── pages
+│   │   ├── index.html
+│   │   └── user
+│   │       └── {id}.html
+│   └── public
+│       ├── app.js
+│       └── skin.js
+├── go.mod
+├── go.sum
+└── main.go
+```
+
+> pages/user/{id}.html
+```html
+<!--layout:home-->
+{{ define "content" }}
+    <div id="app">hello {{.Name}}</div>
+{{ end }}
+```
+
+> main.go
+```go
+	app.Get("/user/{id}", func(c *htmx.Context) error {
+		id := c.Request().PathValue("id")
+		user := getUserById(id)
+		return c.View(user)
+	})
+```
+
+
+### Mixed Viewer
+### Multiple Hosts
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)
