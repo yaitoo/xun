@@ -36,7 +36,7 @@ go-htmx has some specified directories that is used to organize code, routing an
 - `layouts`: A layout is shared between multiple pages/views
 - `pages`: A public page view. It also is used to automatically create a accessible page routing.
 
-*NB*: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use any built-in feature in the official [features](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.
+*NB: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use any built-in feature in the official [features](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.*
 
 ### Layouts and Pages
 go-htmx uses file-system based routing, meaning you can use folders and files to define routes. This section will guide you through how to create layouts and pages, and link between them.
@@ -88,7 +88,7 @@ You can create a layout(.html) file inside the `layouts` directory.
     <title>Htmx-Admin</title>
   </head>
   <body>
-    {{ block "content" .}} {{end}}
+    {{ template "content" .}}
   </body>
 </html>
 ```
@@ -98,6 +98,46 @@ You can create a layout(.html) file inside the `layouts` directory.
 {{ define "content" }}
     <div id="app">hello world</div>
 {{ end }}
+```
+
+### Static assets
+You can store static files, like images, fonts, js and css, under a directory called `public` in the root directory. Files inside public can then be referenced by your code starting from the base URL (/).
+
+*NB: `public/index.html` will be visited by `/` instead of `/index.html`.*
+### Creating a assets component
+A component is a partial view that is shared between multiple layouts/pages/views. 
+
+```
+└── app
+    ├── components
+    │   └── assets.html
+    ├── layouts
+    │   └── home.html
+    ├── pages
+    │   └── index.html
+    └── public
+        ├── app.js
+        └── skin.js
+```      
+> components/assets.html
+```html
+<link rel="stylesheet" href="/theme.css">
+<script type="text/javascript" src="/app.js"></script>
+```
+> layouts/home.html
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Htmx-Admin</title>
+   {{ template "components/assets" . }}
+  </head>
+  <body>
+    {{ template "content" .}}
+  </body>
+</html>
 ```
 
 ## Contributing
