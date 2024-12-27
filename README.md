@@ -304,7 +304,7 @@ Integrating Middleware into your application can lead to significant improvement
 ```
 
 ### Multiple VirtualHosts
-`net/http` package's router support multiple host names that resolve to a single address by precedence rule. 
+`net/http` package's router supports multiple host names that resolve to a single address by precedence rule. 
 For examples
 ```go
  mux.HandleFunc("GET /", func(w http.ResponseWriter, req *http.Request) {...})
@@ -312,7 +312,7 @@ For examples
  mux.HandleFunc("GET 123.com/", func(w http.ResponseWriter, req *http.Request) {...})
 ```
 
-In Page Router, we use `@` in folder name to setup host rules in routing table. See more examples on [Tests](app_test.go)
+In Page Router, we use `@` in top folder name to setup host rules in routing table. See more examples on [Tests](app_test.go)
 ```
 ├── app
 │   ├── components
@@ -333,6 +333,86 @@ In Page Router, we use `@` in folder name to setup host rules in routing table. 
 ```
 
 ### Form and Validate
+In an api application, we always need to collect data from request, and validate them. It is integrated with i18n feature as built-in feature now.
+
+See full examples on [Tests](binder_test.go)
+
+
+```go
+type Login struct {
+		Email  string `form:"email" json:"email" validate:"required,email"`
+		Passwd string `json:"passwd" validate:"required"`
+	}
+```
+
+#### BindQuery
+```go
+	app.Get("/login", func(c *Context) error {
+		it, err := BindQuery[Login](c.Request())
+		if err != nil {
+			c.WriteStatus(http.StatusBadRequest)
+			return ErrCancelled
+		}
+
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+			return c.View(it)
+		}
+		c.WriteStatus(http.StatusBadRequest)
+		return c.View(it)
+	})
+```
+
+#### BindForm
+```go
+app.Post("/login", func(c *Context) error {
+		it, err := BindForm[Login](c.Request())
+		if err != nil {
+			c.WriteStatus(http.StatusBadRequest)
+			return ErrCancelled
+		}
+
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+			return c.View(it)
+		}
+		c.WriteStatus(http.StatusBadRequest)
+		return c.View(it)
+	})
+```
+
+#### BindJson
+```go
+app.Post("/login", func(c *Context) error {
+		it, err := BindJson[Login](c.Request())
+		if err != nil {
+			c.WriteStatus(http.StatusBadRequest)
+			return ErrCancelled
+		}
+
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+			return c.View(it)
+		}
+		c.WriteStatus(http.StatusBadRequest)
+		return c.View(it)
+	})
+```
+
+#### Validate Rules
+Many [baked-in validations](https://github.com/go-playground/validator) are ready to use. Please feel free to check [docs](https://github.com/go-playground/validator?tab=readme-ov-file#usage-and-documentation) and write your custom validation methods.
+
+#### i18n
+English is default locale for all validate message. It is easy to add other locale.
+```go
+import(
+  "github.com/go-playground/locales/zh"
+	ut "github.com/go-playground/universal-translator"
+	trans "github.com/go-playground/validator/v10/translations/zh"
+
+)
+
+htmx.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslations)
+```
+
+See more translations on [here](https://github.com/go-playground/validator/tree/master/translations)
 
 ### Works with tailwindcss
 
