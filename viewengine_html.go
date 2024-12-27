@@ -9,6 +9,14 @@ import (
 	"github.com/yaitoo/htmx/fsnotify"
 )
 
+// HtmlViewEngine is a view engine that loads templates from a file system.
+//
+// It supports 2 types of templates:
+//   - Components: These are templates that are loaded from the "components" directory.
+//   - Pages: These are templates that are loaded from the "layouts/views/pages/" directory.
+//
+// Components are used to build up larger templates, while pages are used to render
+// the final HTML that is sent to the client.
 type HtmlViewEngine struct {
 	fsys fs.FS
 	app  *App

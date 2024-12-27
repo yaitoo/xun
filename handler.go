@@ -1,5 +1,6 @@
 package htmx
 
+// Handler represents an HTTP handler.
 type Handler struct {
 	Viewers []Viewer
 

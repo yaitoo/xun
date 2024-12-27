@@ -7,6 +7,10 @@ import (
 	trans "github.com/go-playground/validator/v10/translations/en"
 )
 
+// Validator validates struct and field values.
+//
+// It uses the specified languages to find an appropriate validator and
+// translates the error messages.
 type Validator struct {
 	*validator.Validate
 	Translator ut.Translator

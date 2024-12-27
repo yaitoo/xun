@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// Context holds the state for an HTTP request, including the application instance,
-// the HTTP request, the HTTP response writer, and a Viewer instance for rendering.
-// It is used to manage and pass request-scoped data throughout the request lifecycle.
+// Context is the primary structure for handling HTTP requests.
+// It encapsulates the request, response, routing information, and application context.
+// It offers various methods to work with request data, manipulate responses, and manage routing.
 type Context struct {
 	Routing Routing
 	app     *App
@@ -17,19 +17,22 @@ type Context struct {
 	writtenStatus bool
 }
 
-// Writer returns the http.ResponseWriter that the Context is wrapping.
-// It allows direct manipulation of the response writer for the current request.
+// Writer returns the http.ResponseWriter associated with the current context.
+// It allows writing to the HTTP response body and setting response headers.
 func (c *Context) Writer() http.ResponseWriter {
 	return c.rw
 }
 
-// Request returns the underlying HTTP request object associated with the context.
-// It is an exported method, intended for use by other packages that need access
-// to the request details from within the context.
+// Request returns the HTTP request associated with the current context.
+// It allows access to the request data and headers.
 func (c *Context) Request() *http.Request {
 	return c.req
 }
 
+// WriteStatus sets the HTTP status code for the response.
+// It is used to return error or success status codes to the client.
+// The status code will be sent to the client only once the response body is closed.
+// If a status code is not set, the default status code is 200 (OK).
 func (c *Context) WriteStatus(code int) {
 	if !c.writtenStatus {
 		c.rw.WriteHeader(code)
@@ -37,9 +40,9 @@ func (c *Context) WriteStatus(code int) {
 	}
 }
 
-// Header sets or deletes the header with the specified key and value.
+// Header sets a response header.
+//
 // If the value is an empty string, the header will be deleted.
-// Otherwise, the header will be set with the provided key-value pair.
 func (c *Context) Header(key string, value string) {
 	if value == "" {
 		c.rw.Header().Del(key)
@@ -49,6 +52,11 @@ func (c *Context) Header(key string, value string) {
 	c.rw.Header().Set(key, value)
 }
 
+// View renders a view with the given data and optional view name.
+// items should have 1 or 2 inputs. first one is data, second one is view name.
+// If a view name is provided, it attempts to fetch a viewer by name and uses it to render the view.
+// If no view name is provided, it uses the default viewer.
+// The data parameter is any type and will be passed to the viewer's Render method.
 func (c *Context) View(items ...any) error {
 
 	var v Viewer
@@ -97,14 +105,22 @@ func (c *Context) View(items ...any) error {
 	return v.Render(c.rw, c.req, data)
 }
 
-// Redirect sends a redirect response to the client with the specified status code and URL.
-// It sets the 'Location' header to the provided URL and writes the status code to the response writer.
-// This function is an exported API of the Context struct, used for controlling the HTTP response flow.
-func (c *Context) Redirect(statusCode int, url string) {
+// Redirect redirects the user to the given url.
+// It uses the given status code. If the status code is not provided,
+// it uses http.StatusFound (302).
+func (c *Context) Redirect(url string, statusCode ...int) {
 	c.Header("Location", url)
-	c.WriteStatus(statusCode)
+	if len(statusCode) > 0 {
+		c.WriteStatus(statusCode[0])
+	} else {
+		c.WriteStatus(http.StatusFound) //302
+	}
+
 }
 
+// AcceptLanguage returns a slice of strings representing the languages
+// that the client accepts, in order of preference.
+// The languages are normalized to lowercase and whitespace is trimmed.
 func (c *Context) AcceptLanguage() (languages []string) {
 	accepted := c.req.Header.Get("Accept-Language")
 	if accepted == "" {

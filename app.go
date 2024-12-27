@@ -10,6 +10,16 @@ import (
 	"github.com/yaitoo/htmx/fsnotify"
 )
 
+// App is the main struct of the framework.
+//
+// It is used to register routes, middleware, and view engines.
+//
+// The application instance is initialized with a new http.ServeMux,
+// and a handler that serves files from the current working directory
+// is registered.
+//
+// The application instance is ready to be used with the standard
+// http.Server type.
 type App struct {
 	mu sync.RWMutex
 
@@ -25,14 +35,11 @@ type App struct {
 	watcher     *fsnotify.Watcher
 }
 
-// New returns a new instance of the App struct.
+// New allocates an App instance and loads all view engines.
 //
-// The application instance is initialized with a
-// new http.ServeMux, and a handler that serves files
-// from the current working directory is registered.
-//
-// The application instance is ready to be used with
-// the standard http.Server type.
+// All view engines are loaded from root directory of given fs.FS.
+// If watch is true, it will watch all file changes and reload all view engines if any files are changed.
+// If watch is false, it won't watch any file changes.
 func New(opts ...Option) *App {
 	app := &App{
 		routes:  make(map[string]*Routing),
@@ -85,6 +92,11 @@ type HandleFunc func(c *Context) error
 
 type Middleware func(next HandleFunc) HandleFunc
 
+// Middleware is a function that takes a HandleFunc and returns a HandleFunc.
+// Middleware functions are useful for creating reusable pieces of code that can
+// be composed together to create complex behavior. For example, a middleware
+// function might be used to log each request, or to check if a user is
+// authenticated before allowing access to a page.
 func (app *App) Group(prefix string) Router {
 	return &group{
 		prefix: prefix,
@@ -134,26 +146,51 @@ func (app *App) Close() {
 	defer app.mu.Unlock()
 }
 
+// Use registers one or more Middleware functions to be executed
+// before any route handler. Middleware functions are useful for
+// creating reusable pieces of code that can be composed together
+// to create complex behavior. For example, a middleware function
+// might be used to log each request, or to check if a user is
+// authenticated before allowing access to a page.
+//
+// The order of middleware functions matters. The first middleware
+// function that is registered will be executed first, and the last
+// middleware function that is registered will be executed last.
+//
+// Middleware functions are executed in the order they are registered.
 func (app *App) Use(middleware ...Middleware) {
 	app.middlewares = append(app.middlewares, middleware...)
 }
 
+// Get registers a route handler for the given HTTP GET request pattern.
 func (app *App) Get(pattern string, hf HandleFunc, opts ...RoutingOption) {
 	app.HandleFunc(http.MethodGet+" "+pattern, hf, opts...)
 }
 
+// Post registers a route handler for the given HTTP POST request pattern.
 func (app *App) Post(pattern string, hf HandleFunc, opts ...RoutingOption) {
 	app.HandleFunc(http.MethodPost+" "+pattern, hf, opts...)
 }
 
+// Put registers a route handler for the given HTTP PUT request pattern.
 func (app *App) Put(pattern string, hf HandleFunc, opts ...RoutingOption) {
 	app.HandleFunc(http.MethodPut+" "+pattern, hf, opts...)
 }
 
+// Delete registers a route handler for the given HTTP DELETE request pattern.
 func (app *App) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 	app.HandleFunc(http.MethodDelete+" "+pattern, hf, opts...)
 }
 
+// HandleFunc registers a route handler for the given HTTP request pattern.
+//
+// The pattern is expected to be in the format "METHOD PATTERN", where
+// METHOD is the HTTP method (e.g. "GET", "POST", etc.) and PATTERN is
+// the URL path pattern.
+//
+// The opts parameter is a list of RoutingOption functions that can be
+// used to customize the route. See the RoutingOption type for more
+// information.
 func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
 	app.handleFunc(pattern, hf, opts, app.middlewares)
 }
@@ -231,6 +268,12 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 	}
 }
 
+// HandlePage registers a route handler for a page view.
+//
+// This function associates a Viewer with a given route pattern
+// and registers the route in the application's routing table.
+// If a route with the same pattern already exists, it updates
+// the existing route with the new Viewer.
 func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	ro := &RoutingOptions{}
 
@@ -286,6 +329,12 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 
 }
 
+// HandleFile registers a route handler for serving a file.
+//
+// This function associates a FileViewer with a given file name
+// and registers the route in the application's routing table.
+// If a route with the same pattern already exists, it returns immediately
+// without making any changes.
 func (app *App) HandleFile(name string, v *FileViewer) {
 	ro := &RoutingOptions{}
 

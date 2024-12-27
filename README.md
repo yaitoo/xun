@@ -417,6 +417,8 @@ htmx.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslati
 
 ### Works with tailwindcss
 
+### Works with htmx
+
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)
 

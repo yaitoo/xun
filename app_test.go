@@ -168,8 +168,13 @@ func TestStatus(t *testing.T) {
 		return nil
 	})
 
+	app.Get("/301", func(c *Context) error {
+		c.Redirect("http://127.0.0.1/redirect", http.StatusMovedPermanently)
+		return nil
+	})
+
 	app.Get("/302", func(c *Context) error {
-		c.Redirect(http.StatusMovedPermanently, "http://127.0.0.1/redirect")
+		c.Redirect("http://127.0.0.1/redirect")
 		return nil
 	})
 
@@ -214,11 +219,19 @@ func TestStatus(t *testing.T) {
 		},
 	}
 
-	req, err = http.NewRequest("GET", srv.URL+"/302", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/301", nil)
 	require.NoError(t, err)
 	resp, err = c.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+	require.Equal(t, "http://127.0.0.1/redirect", resp.Header.Get("Location"))
+	resp.Body.Close()
+
+	req, err = http.NewRequest("GET", srv.URL+"/302", nil)
+	require.NoError(t, err)
+	resp, err = c.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusFound, resp.StatusCode)
 	require.Equal(t, "http://127.0.0.1/redirect", resp.Header.Get("Location"))
 	resp.Body.Close()
 

@@ -8,9 +8,15 @@ import (
 	"github.com/yaitoo/htmx/fsnotify"
 )
 
+// StaticViewEngine is a view engine that serves static files from a file system.
 type StaticViewEngine struct {
 }
 
+// Load loads all static files from the given file system and registers them with the application.
+//
+// It scans the "public" directory in the given file system and registers each file
+// with the application. It also handles file changes for the "public" directory
+// and updates the application accordingly.
 func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
 
 	err := fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error {
@@ -32,6 +38,14 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
 	return err
 }
 
+// FileChanged handles file changes for the given file system and updates the
+// application accordingly. It is called by the watcher when a file is changed.
+//
+// If the file changed is a Create event and the path is in the "public" directory,
+// it will be registered with the application.
+//
+// If the file changed is a Write/Remove event and the path is in the "public"
+// directory, nothing will be done.
 func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
 	//Nothing should be updated for Write/Remove events.
 	if event.Has(fsnotify.Create) && strings.HasPrefix(event.Name, "public/") {
