@@ -1,5 +1,5 @@
 # GO-HTMX
-go-htmx is a HTTP web framework based on Go's built-in `html/template` and `http/ServeMux`.
+go-htmx is a HTTP web framework based on Go's built-in html/template and net/http package’s router.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Tests](https://github.com/yaitoo/htmx/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/htmx/actions/workflows/tests.yml)
@@ -9,14 +9,14 @@ go-htmx is a HTTP web framework based on Go's built-in `html/template` and `http
 [![Go Report Card](https://goreportcard.com/badge/yaitoo/htmx)](http://goreportcard.com/report/yaitoo/htmx)
 
 ## Features
-- Works with Go's built-in `ServeMux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
+- Works with Go's built-in `net/http.ServeMux` router. that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
-- Support mixed view engine: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`.
+- Support mixed viewer by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
 - Support to automatically reload changed files in development environment.
   
 
 ## Getting Started
-> see full source code on [htmx-examples](https://github.com/yaitoo/htmx-examples)
+> See full source code on [htmx-examples](https://github.com/yaitoo/htmx-examples)
 
 ### Install go-htmx
 - install latest commit from `main` branch
@@ -303,7 +303,38 @@ Integrating Middleware into your application can lead to significant improvement
 	})
 ```
 
-### Multiple Hosts
+### Multiple VirtualHosts
+`net/http` package's router support multiple host names that resolve to a single address by precedence rule. 
+For examples
+```go
+ mux.HandleFunc("GET /", func(w http.ResponseWriter, req *http.Request) {...})
+ mux.HandleFunc("GET abc.com/", func(w http.ResponseWriter, req *http.Request) {...})
+ mux.HandleFunc("GET 123.com/", func(w http.ResponseWriter, req *http.Request) {...})
+```
+
+In Page Router, we use `@` in folder name to setup host rules in routing table. See more examples on [Tests](app_test.go)
+```
+├── app
+│   ├── components
+│   │   └── assets.html
+│   ├── layouts
+│   │   └── home.html
+│   ├── pages
+│   │   ├── @123.com
+│   │   │   └── index.html
+│   │   ├── index.html
+│   │   └── user
+│   │       └── {id}.html
+│   └── public
+│       ├── @abc.com
+│       │   └── index.html
+│       ├── app.js
+│       └── skin.js
+```
+
+### Form and Validate
+
+### Works with tailwindcss
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)
