@@ -24,6 +24,9 @@ type HtmlViewEngine struct {
 	templates map[string]*HtmlTemplate
 }
 
+// Load loads all templates from the given file system.
+//
+// It loads all components, layouts, pages and views from the given file system.
 func (ve *HtmlViewEngine) Load(fsys fs.FS, app *App) error {
 	if ve.templates == nil {
 		ve.templates = map[string]*HtmlTemplate{}
@@ -51,6 +54,9 @@ func (ve *HtmlViewEngine) Load(fsys fs.FS, app *App) error {
 
 }
 
+// FileChanged is called when a file has been changed.
+//
+// It is used to reload templates when they have been changed.
 func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
 
 	if event.Has(fsnotify.Remove) || !strings.EqualFold(filepath.Ext(event.Name), ".html") {

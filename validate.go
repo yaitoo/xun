@@ -30,6 +30,9 @@ func init() {
 	validators[defaultValidator.Translator.Locale()] = defaultValidator
 }
 
+// AddValidator adds a new validator and translator to the map.
+//
+// It also registers the translations for the default locale.
 func AddValidator(trans ut.Translator, register func(v *validator.Validate, trans ut.Translator) (err error)) *Validator {
 	v := &Validator{
 		Validate:   validator.New(),

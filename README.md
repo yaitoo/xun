@@ -104,7 +104,7 @@ You can create a layout(.html) file inside the `layouts` directory.
 ### Static assets
 You can store static files, like images, fonts, js and css, under a directory called `public` in the root directory. Files inside public can then be referenced by your code starting from the base URL (/).
 
-*NB: `public/index.html` will be visited by `/` instead of `/index.html`.*
+*NB: `public/index.html` will be exposed by `/` instead of `/index.html`.*
 
 #### Creating a component
 A component is a partial view that is shared between multiple layouts/pages/views. 

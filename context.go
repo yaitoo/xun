@@ -137,6 +137,9 @@ func (c *Context) AcceptLanguage() (languages []string) {
 	return
 }
 
+// Accept returns a slice of strings representing the media types
+// that the client accepts, in order of preference.
+// The media types are normalized to lowercase and whitespace is trimmed.
 func (c *Context) Accept() (types []string) {
 	accepted := c.req.Header.Get("Accept")
 	if accepted == "" {
