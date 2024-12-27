@@ -119,11 +119,11 @@ A component is a partial view that is shared between multiple layouts/pages/view
     │   └── index.html
     └── public
         ├── app.js
-        └── skin.js
+        └── skin.css
 ```      
 > components/assets.html
 ```html
-<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/skin.css">
 <script type="text/javascript" src="/app.js"></script>
 ```
 > layouts/home.html
@@ -187,7 +187,7 @@ For examples, below patterns will be generated automatically, and registered in 
 │   │       └── {id}.html
 │   └── public
 │       ├── app.js
-│       └── skin.js
+│       └── skin.css
 ├── go.mod
 ├── go.sum
 └── main.go
@@ -249,7 +249,7 @@ In our application, a routing can have multiple viewers. Response is render base
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Htmx-Admin</title>
-    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/skin.css">
 <script type="text/javascript" src="/app.js"></script>
   </head>
   <body>
@@ -330,7 +330,7 @@ In Page Router, we use `@` in top folder name to setup host rules in routing tab
 │       ├── @abc.com
 │       │   └── index.html
 │       ├── app.js
-│       └── skin.js
+│       └── skin.css
 ```
 
 ### Form and Validate
@@ -349,7 +349,7 @@ type Login struct {
 #### BindQuery
 ```go
 	app.Get("/login", func(c *Context) error {
-		it, err := BindQuery[Login](c.Request())
+		it, err := htmx.BindQuery[Login](c.Request())
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -366,7 +366,7 @@ type Login struct {
 #### BindForm
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := BindForm[Login](c.Request())
+		it, err := htmx.BindForm[Login](c.Request())
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -383,7 +383,7 @@ app.Post("/login", func(c *Context) error {
 #### BindJson
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := BindJson[Login](c.Request())
+		it, err := htmx.BindJson[Login](c.Request())
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -405,8 +405,8 @@ English is default locale for all validate message. It is easy to add other loca
 ```go
 import(
   "github.com/go-playground/locales/zh"
-	ut "github.com/go-playground/universal-translator"
-	trans "github.com/go-playground/validator/v10/translations/zh"
+  ut "github.com/go-playground/universal-translator"
+  trans "github.com/go-playground/validator/v10/translations/zh"
 
 )
 
@@ -415,7 +415,53 @@ htmx.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslati
 
 > check more translations on [here](https://github.com/go-playground/validator/tree/master/translations)
 
-### Works with tailwindcss
+### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
+#### Install Tailwind CSS
+Install tailwindcss via npm, and create your tailwind.config.js file.
+```bash
+npm install -D tailwindcss
+npx tailwindcss init
+```
+#### Configure your template paths
+Add the paths to all of your template files in your tailwind.config.js file.
+
+> tailwind.config.js
+```json
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./app/**/*.{html,js}"],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+```
+
+#### Add the Tailwind directives to your CSS
+Add the @tailwind directives for each of Tailwind’s layers to your main CSS file.
+> app/tailwind.css
+```js
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+#### Start the Tailwind CLI build process
+Run the CLI tool to scan your template files for classes and build your CSS.
+
+```bash
+npx tailwindcss -i ./app/tailwind.css -o ./app/public/theme.css --watch
+```
+
+#### Start using Tailwind in your HTML
+Add your compiled CSS file to the <head> and start using Tailwind’s utility classes to style your content.
+
+> components/assets.html
+```html
+<link rel="stylesheet" href="/skin.css">
+<link rel="stylesheet" href="/theme.css">
+<script type="text/javascript" src="/app.js"></script>
+```
 
 ### Works with htmx
 
