@@ -39,6 +39,8 @@ func TestBinder(t *testing.T) {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
+		// should `return ErrCancelled`` in production
+		// `return c.View(it)` is here for test to check collected data
 		return c.View(it)
 	})
 
@@ -53,6 +55,8 @@ func TestBinder(t *testing.T) {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
+		// should `return ErrCancelled`` in production
+		// `return c.View(it)` is here for test to check collected data
 		return c.View(it)
 	})
 
@@ -67,6 +71,8 @@ func TestBinder(t *testing.T) {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
+		// should `return ErrCancelled`` in production
+		// `return c.View(it)` is here for test to check collected data
 		return c.View(it)
 	})
 

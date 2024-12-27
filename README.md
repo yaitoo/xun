@@ -11,6 +11,7 @@ go-htmx is a HTTP web framework based on Go's built-in html/template and net/htt
 ## Features
 - Works with Go's built-in `net/http.ServeMux` router. that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
+- Built-in Form and Validate feature with i18n support.
 - Support mixed viewer by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
 - Support to automatically reload changed files in development environment.
   
@@ -335,7 +336,7 @@ In Page Router, we use `@` in top folder name to setup host rules in routing tab
 ### Form and Validate
 In an api application, we always need to collect data from request, and validate them. It is integrated with i18n feature as built-in feature now.
 
-See full examples on [Tests](binder_test.go)
+> check full examples on [Tests](binder_test.go)
 
 
 ```go
@@ -358,7 +359,7 @@ type Login struct {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
-		return c.View(it)
+		return ErrCancelled
 	})
 ```
 
@@ -375,7 +376,7 @@ app.Post("/login", func(c *Context) error {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
-		return c.View(it)
+		return ErrCancelled
 	})
 ```
 
@@ -392,7 +393,7 @@ app.Post("/login", func(c *Context) error {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
-		return c.View(it)
+		return ErrCancelled
 	})
 ```
 
@@ -412,7 +413,7 @@ import(
 htmx.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslations)
 ```
 
-See more translations on [here](https://github.com/go-playground/validator/tree/master/translations)
+> check more translations on [here](https://github.com/go-playground/validator/tree/master/translations)
 
 ### Works with tailwindcss
 
