@@ -12,8 +12,9 @@ go-htmx is a HTTP web framework based on Go's built-in html/template and net/htt
 - Works with Go's built-in `net/http.ServeMux` router. that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
 - Built-in Form and Validate feature with i18n support.
+- Support Page Router in `StaticViewEngine` and `HtmlViewEngine`.
 - Support mixed viewer by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
-- Support to automatically reload changed files in development environment.
+- Support to reload changed static files automatically in development environment.
   
 
 ## Getting Started
@@ -454,7 +455,7 @@ npx tailwindcss -i ./app/tailwind.css -o ./app/public/theme.css --watch
 ```
 
 #### Start using Tailwind in your HTML
-Add your compiled CSS file to the <head> and start using Tailwind’s utility classes to style your content.
+Add your compiled CSS file to the `assets.html` and start using Tailwind’s utility classes to style your content.
 
 > components/assets.html
 ```html
@@ -463,7 +464,8 @@ Add your compiled CSS file to the <head> and start using Tailwind’s utility cl
 <script type="text/javascript" src="/app.js"></script>
 ```
 
-### Works with htmx
+### Works with [htmx](https://htmx.org/docs/)
+
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)

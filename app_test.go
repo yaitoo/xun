@@ -707,7 +707,7 @@ func TestDataBindOnHtml(t *testing.T) {
 </table>
 </body></html>`)},
 		"pages/user/{id}.html": {Data: []byte(`<html><body>
-<div>{{.Name}}: {{.ID}}</div>
+<div>{{ ToUpper .Name}}: {{.ID}}</div>
 </body></html>`)},
 	}
 
@@ -730,6 +730,8 @@ func TestDataBindOnHtml(t *testing.T) {
 			ID:   3,
 		},
 	}
+
+	FuncMap["ToUpper"] = strings.ToUpper
 
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
@@ -825,7 +827,7 @@ func TestDataBindOnHtml(t *testing.T) {
 	resp.Body.Close()
 
 	require.Equal(t, `<html><body>
-<div>user1: 1</div>
+<div>USER1: 1</div>
 </body></html>`, string(buf))
 
 }

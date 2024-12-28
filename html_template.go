@@ -9,6 +9,10 @@ import (
 	"errors"
 )
 
+// FuncMap is a map of functions that are available to templates.
+var FuncMap template.FuncMap = make(template.FuncMap)
+
+// HtmlTemplate is a template that is loaded from a file system.
 type HtmlTemplate struct {
 	template *template.Template
 
@@ -20,6 +24,7 @@ type HtmlTemplate struct {
 	dependents   map[string]*HtmlTemplate
 }
 
+// NewHtmlTemplate creates a new HtmlTemplate with the given name and path.
 func NewHtmlTemplate(name, path string) *HtmlTemplate {
 	return &HtmlTemplate{
 		name:         name,
@@ -29,13 +34,17 @@ func NewHtmlTemplate(name, path string) *HtmlTemplate {
 	}
 }
 
+// Load loads the template from the given file system.
+//
+// It parses the file, and determines the dependencies of the template.
+// The dependencies are stored in the `dependencies` field.
 func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) error {
 	buf, err := fs.ReadFile(fsys, t.path)
 	if err != nil {
 		return err
 	}
 
-	nt := template.New(t.name)
+	nt := template.New(t.name).Funcs(FuncMap)
 	dependencies := make(map[string]struct{})
 
 	defer func() {
@@ -114,6 +123,10 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 	return nil
 }
 
+// Reload reloads the template and all its dependents from the given file system.
+//
+// It first reloads the current template and then recursively reloads all its dependents.
+// If a dependency does not exist, it is removed from the list of dependents.
 func (t *HtmlTemplate) Reload(fsys fs.FS, templates map[string]*HtmlTemplate) error {
 	err := t.Load(fsys, templates)
 	if err != nil {
@@ -133,6 +146,10 @@ func (t *HtmlTemplate) Reload(fsys fs.FS, templates map[string]*HtmlTemplate) er
 	return nil
 }
 
+// Execute renders the template with the given data and writes the result to the provided writer.
+//
+// If the template has a layout, it uses the layout to render the data.
+// Otherwise, it renders the data using the template itself.
 func (t *HtmlTemplate) Execute(wr io.Writer, data any) error {
 	if t.layout != "" {
 		return t.template.ExecuteTemplate(wr, t.layout, data)

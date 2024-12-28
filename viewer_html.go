@@ -4,10 +4,15 @@ import (
 	"net/http"
 )
 
-var bufpool *BufferPool
+// BufPool is a pool of *bytes.Buffer for reuse to reduce memory alloc.
+//
+// It is used by the HtmlViewer to render the template.
+// The pool is created with a size of 100, but you can change it by setting the
+// BufPool variable before creating any HtmlViewer instances.
+var BufPool *BufferPool
 
 func init() {
-	bufpool = NewBufferPool(1024)
+	BufPool = NewBufferPool(100)
 }
 
 // HtmlViewer is a viewer that renders a html template.
@@ -33,8 +38,8 @@ func (*HtmlViewer) MimeType() string {
 // The rendered result is written to the http.ResponseWriter.
 func (v *HtmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) error {
 	w.Header().Add("Content-Type", "text/html; charset=utf-8")
-	buf := bufpool.Get()
-	defer bufpool.Put(buf)
+	buf := BufPool.Get()
+	defer BufPool.Put(buf)
 
 	err := v.template.Execute(buf, data)
 	if err != nil {
