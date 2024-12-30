@@ -464,7 +464,166 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 <script type="text/javascript" src="/app.js"></script>
 ```
 
-### Works with [htmx](https://htmx.org/docs/)
+### Works with [htmx.org](https://htmx.org/docs/)
+#### Add new pages: `pages/admin/index.html` and `pages/login.html`
+```
+├── app
+│   ├── components
+│   │   └── assets.html
+│   ├── layouts
+│   │   └── home.html
+│   ├── pages
+│   │   ├── @123.com
+│   │   │   └── index.html
+│   │   ├── admin
+│   │   │   └── index.html
+│   │   ├── index.html
+│   │   ├── login.html
+│   │   └── user
+│   │       └── {id}.html
+│   ├── public
+│   │   ├── @abc.com
+│   │   │   └── index.html
+│   │   ├── app.js
+│   │   ├── skin.css
+│   │   └── theme.css
+│   ├── tailwind.css
+```
+
+#### Install htmx.js
+
+> components/assets.html
+```html
+<link rel="stylesheet" href="/skin.css">
+<link rel="stylesheet" href="/theme.css">
+<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+<script type="text/javascript" src="/app.js"></script>
+```
+
+#### Enabled `htmx` feature on pages
+> pages/index.html
+```html
+<!--layout:home-->
+{{ define "content" }}
+    <div id="app" class="text-3xl font-bold underline" hx-boost="true">
+        <span>hello {{.Name}}</span>
+
+        <a href="/admin/">admin</a>
+    </div>
+
+{{ end }}
+```
+
+> pages/login.html
+```html
+<!--layout:home-->
+{{ define "content" }}
+
+<div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+  <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+    <h2 class="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900">Sign in to your account</h2>
+  </div>
+
+  <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+    <form class="space-y-6" action="#" method="POST" hx-post="/login">
+      <div>
+        <label for="email" class="block text-sm/6 font-medium text-gray-900">Email address</label>
+        <div class="mt-2">
+          <input type="email" name="email" id="email" autocomplete="email" required class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6">
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between">
+          <label for="password" class="block text-sm/6 font-medium text-gray-900">Password</label>
+        </div>
+        <div class="mt-2">
+          <input type="password" name="password" id="password" autocomplete="current-password" required class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6">
+        </div>
+      </div>
+
+      <div>
+        <button type="submit" class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Sign in</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{ end }}
+```
+
+> pages/admin/index.html
+```html
+<!--layout:home-->
+{{ define "content" }}
+    <div id="app" class="text-3xl font-bold underline">Hello admin: {{.Name}}</div>
+{{ end }}
+```
+
+#### Create router handler to process request
+create an `admin` group router, and apply a middleware to check if it's logged. if not, redirect to /login.
+
+
+```go
+admin := app.Group("/admin")
+
+	admin.Use(func(next htmx.HandleFunc) htmx.HandleFunc {
+		return func(c *htmx.Context) error {
+			s, err := c.Request().Cookie("session")
+			if err != nil || s == nil || s.Value == "" {
+				c.Redirect("/login?return=" + c.Request().URL.String())
+				return htmx.ErrCancelled
+			}
+
+			c.Request().SetPathValue("session", s.Value)
+			return next(c)
+		}
+	})
+
+	admin.Get("/{$}", func(c *htmx.Context) error {
+		return c.View(User{
+			Name: c.Request().PathValue("session"),
+		})
+	})
+
+	app.Post("/login", func(c *htmx.Context) error {
+
+		it, err := htmx.BindForm[Login](c.Request())
+
+		if err != nil {
+			c.WriteStatus(http.StatusBadRequest)
+			return htmx.ErrCancelled
+		}
+
+		if !it.Validate(c.AcceptLanguage()...) {
+			c.WriteStatus(http.StatusBadRequest)
+			return c.View(it)
+		}
+
+		if it.Data.Email != "htmx@yaitoo.cn" || it.Data.Password != "123" {
+			c.WriteHtmxHeader(htmx.HxTrigger, htmx.HtmxHeader[string]{
+				"showMessage": "Email or password is incorrect",
+			})
+			c.WriteStatus(http.StatusBadRequest)
+			return c.View(it)
+		}
+
+		cookie := http.Cookie{
+			Name:     "session",
+			Value:    it.Data.Email,
+			Path:     "/",
+			MaxAge:   3600,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+		}
+
+		http.SetCookie(c.Writer(), &cookie)
+
+		c.Redirect(c.GetCurrentUrl().Query().Get("return"))
+		return nil
+	})
+```
 
 
 ## Contributing
