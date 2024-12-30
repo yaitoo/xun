@@ -465,7 +465,8 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 ```
 
 ### Works with [htmx.org](https://htmx.org/docs/)
-#### Add new pages: `pages/admin/index.html` and `pages/login.html`
+#### Add new pages
+> `pages/admin/index.html` and `pages/login.html`
 ```
 ├── app
 │   ├── components
@@ -575,14 +576,14 @@ admin := app.Group("/admin")
 				return htmx.ErrCancelled
 			}
 
-			c.Request().SetPathValue("session", s.Value)
+			c.Set("session", s.Value)
 			return next(c)
 		}
 	})
 
 	admin.Get("/{$}", func(c *htmx.Context) error {
 		return c.View(User{
-			Name: c.Request().PathValue("session"),
+			Name: c.Get("session").(string),
 		})
 	})
 

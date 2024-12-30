@@ -16,6 +16,7 @@ type Context struct {
 	req     *http.Request
 
 	writtenStatus bool
+	values        map[string]any
 }
 
 // Writer returns the http.ResponseWriter associated with the current context.
@@ -184,13 +185,35 @@ func (c *Context) GetCurrentUrl() *url.URL {
 	return c.req.URL
 }
 
-// GetHeader returns the value of the specified header key.
-// It is case-insensitive.
-func (c *Context) GetHeader(key string) string {
-	return c.req.Header.Get(key)
-}
-
+// WriteHtmxHeader writes the given value as a header with the given key.
+// The value is marshaled to JSON before being written.
+// If the value is a string, it is written as is.
 func (c *Context) WriteHtmxHeader(key string, value any) {
+	s, ok := value.(string)
+	if ok {
+		c.rw.Header().Set(key, s)
+		return
+	}
+
 	buf, _ := json.Marshal(value)
 	c.rw.Header().Set(key, string(buf))
+}
+
+// Get retrieves a value from the context's values map by key.
+// If the values map is nil or the key does not exist, it returns nil.
+func (c *Context) Get(key string) any {
+	if c.values == nil {
+		return nil
+	}
+
+	return c.values[key]
+}
+
+// Set assigns a value to the specified key in the context's values map.
+// If the values map is nil, it initializes a new map.
+func (c *Context) Set(key string, value any) {
+	if c.values == nil {
+		c.values = make(map[string]any)
+	}
+	c.values[key] = value
 }
