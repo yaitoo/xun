@@ -13,7 +13,7 @@ go-htmx is a HTTP web framework based on Go's built-in html/template and net/htt
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
 - Built-in Form and Validate feature with i18n support.
 - Support Page Router in `StaticViewEngine` and `HtmlViewEngine`.
-- Support mixed viewer by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
+- Support multiple viewers by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
 - Support to reload changed static files automatically in development environment.
   
 
@@ -212,7 +212,7 @@ For examples, below patterns will be generated automatically, and registered in 
 ```
 
 
-### Mixed Viewer
+### Multiple Viewers based on MIME request
 In our application, a routing can have multiple viewers. Response is render based on the request header `Accept`. Default viewer is used if there is no any viewer is matched by `Accept`. The built-it default viewer is `JsonViewer`. But it can be overridden by `htmx.WithViewer` in `htmx.New`. see more examples on [Tests](app_test.go)
 
 > curl -v http://127.0.0.1
