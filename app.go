@@ -192,10 +192,18 @@ func (app *App) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 // used to customize the route. See the RoutingOption type for more
 // information.
 func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
-	app.handleFunc(pattern, hf, opts, app.middlewares)
+	app.handleFunc(pattern, hf, opts, app)
 }
 
-func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, middlewares []Middleware) {
+func (app *App) Next(hf HandleFunc) HandleFunc {
+	next := hf
+	for i := len(app.middlewares); i > 0; i-- {
+		next = app.middlewares[i-1](next)
+	}
+	return next
+}
+
+func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
 	ro := &RoutingOptions{
 		viewer: app.viewer,
 	}
@@ -210,6 +218,7 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 	if ok {
 		r.Options = ro
 		r.Handle = hf
+		r.chain = c
 
 		if ro.viewer != nil {
 			r.Viewers[ro.viewer.MimeType()] = ro.viewer
@@ -222,6 +231,7 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 		Options: ro,
 		Pattern: pattern,
 		Handle:  hf,
+		chain:   c,
 		Viewers: make(map[string]Viewer),
 	}
 
@@ -235,20 +245,14 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 			app:     app,
 		}
 
-		next := r.Handle
-
-		for i := len(middlewares); i > 0; i-- {
-			next = middlewares[i-1](next)
-		}
-
-		err := next(ctx)
+		err := r.Next(ctx)
 
 		if err == nil || errors.Is(err, ErrCancelled) {
 			return
 		}
 
 		logID := nextLogID()
-		ctx.Header("X-Log-Id", logID)
+		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
 		app.logger.Error("htmx: handle", slog.Any("err", err), slog.String("logid", logID))
 	})
@@ -294,6 +298,7 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 		Options: ro,
 		Pattern: pattern,
 		Handle:  hf,
+		chain:   app,
 		Viewers: make(map[string]Viewer),
 	}
 
@@ -309,19 +314,14 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 			app:     app,
 		}
 
-		next := r.Handle
-		for _, m := range app.middlewares {
-			next = m(next)
-		}
-
-		err := next(ctx)
+		err := r.Next(ctx)
 
 		if err == nil || errors.Is(err, ErrCancelled) {
 			return
 		}
 
 		logID := nextLogID()
-		ctx.Header("X-Log-Id", logID)
+		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
 		app.logger.Error("htmx: view", slog.Any("err", err), slog.String("logid", logID))
 
@@ -357,6 +357,7 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 		Options: ro,
 		Pattern: pat,
 		Handle:  hf,
+		chain:   app,
 		Viewers: make(map[string]Viewer),
 	}
 
@@ -372,19 +373,14 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 			app:     app,
 		}
 
-		next := r.Handle
-		for _, m := range app.middlewares {
-			next = m(next)
-		}
-
-		err := next(ctx)
+		err := r.Next(ctx)
 
 		if err == nil || errors.Is(err, ErrCancelled) {
 			return
 		}
 
 		logID := nextLogID()
-		ctx.Header("X-Log-Id", logID)
+		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
 		app.logger.Error("htmx: file", slog.Any("err", err), slog.String("logid", logID))
 	})

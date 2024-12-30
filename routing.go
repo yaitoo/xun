@@ -4,7 +4,12 @@ package htmx
 type Routing struct {
 	Pattern string
 	Handle  HandleFunc
+	chain   chain
 
 	Options *RoutingOptions
 	Viewers map[string]Viewer
+}
+
+func (r *Routing) Next(ctx *Context) error {
+	return r.chain.Next(r.Handle)(ctx)
 }

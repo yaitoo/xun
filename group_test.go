@@ -157,14 +157,14 @@ func TestGroupMiddleware(t *testing.T) {
 	admin.Use(func(next HandleFunc) HandleFunc {
 		return func(c *Context) error {
 			i++
-			c.Header("X-M1", strconv.Itoa(i))
+			c.WriteHeader("X-M1", strconv.Itoa(i))
 
 			return next(c)
 		}
 	}, func(next HandleFunc) HandleFunc {
 		return func(c *Context) error {
 			i++
-			c.Header("X-M2", strconv.Itoa(i))
+			c.WriteHeader("X-M2", strconv.Itoa(i))
 			return next(c)
 		}
 	})
@@ -172,7 +172,7 @@ func TestGroupMiddleware(t *testing.T) {
 	admin.Use(func(next HandleFunc) HandleFunc {
 		return func(c *Context) error {
 			i++
-			c.Header("X-M3", strconv.Itoa(i))
+			c.WriteHeader("X-M3", strconv.Itoa(i))
 			user := c.Request().Header.Get("X-User")
 			if user == "" {
 				c.WriteStatus(http.StatusUnauthorized)

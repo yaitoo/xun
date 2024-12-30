@@ -32,5 +32,13 @@ func (g *group) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 }
 
 func (g *group) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
-	g.app.handleFunc(pattern, hf, opts, g.middlewares)
+	g.app.handleFunc(pattern, hf, opts, g)
+}
+
+func (g *group) Next(hf HandleFunc) HandleFunc {
+	next := hf
+	for i := len(g.middlewares); i > 0; i-- {
+		next = g.middlewares[i-1](next)
+	}
+	return next
 }
