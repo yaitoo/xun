@@ -441,7 +441,7 @@ module.exports = {
 #### Add the Tailwind directives to your CSS
 Add the @tailwind directives for each of Tailwind’s layers to your main CSS file.
 > app/tailwind.css
-```js
+```css
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
