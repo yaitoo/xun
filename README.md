@@ -561,6 +561,17 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 {{ end }}
 ```
 
+#### Setup Hx-Trigger listener
+> app.js
+```js
+window.addEventListener("DOMContentLoaded", (event) => {
+  document.body.addEventListener("showMessage", function(evt){
+    alert(evt.detail.value);
+  })
+});
+
+```
+
 #### Create router handler to process request
 create an `admin` group router, and apply a middleware to check if it's logged. if not, redirect to /login.
 
