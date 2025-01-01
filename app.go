@@ -147,7 +147,7 @@ func (app *App) Start() {
 			keys = append(keys, k)
 		}
 
-		app.logger.Debug(r.Pattern, slog.String("views", strings.Join(keys, ",")))
+		app.logger.Info(r.Pattern, slog.String("views", strings.Join(keys, ",")))
 	}
 
 }
