@@ -574,7 +574,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
 
 ```
 
-### Apply `htmx` interceptor 
+#### Apply `htmx` interceptor 
 ```go
 
 	app := xun.New(xun.WithInterceptor(htmx.New()))
