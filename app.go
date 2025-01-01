@@ -33,6 +33,7 @@ type App struct {
 	fsys        fs.FS
 	watch       bool
 	watcher     *fsnotify.Watcher
+	interceptor Interceptor
 }
 
 // New allocates an App instance and loads all view engines.
@@ -239,10 +240,11 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 
 	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &Context{
-			req:     req,
-			rw:      w,
-			Routing: *r,
-			app:     app,
+			req:         req,
+			rw:          w,
+			Routing:     *r,
+			app:         app,
+			interceptor: app.interceptor,
 		}
 
 		err := r.Next(ctx)
@@ -308,10 +310,11 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 
 	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &Context{
-			req:     req,
-			rw:      w,
-			Routing: *r,
-			app:     app,
+			req:         req,
+			rw:          w,
+			Routing:     *r,
+			app:         app,
+			interceptor: app.interceptor,
 		}
 
 		err := r.Next(ctx)
@@ -367,10 +370,11 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 
 	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &Context{
-			req:     req,
-			rw:      w,
-			Routing: *r,
-			app:     app,
+			req:         req,
+			rw:          w,
+			Routing:     *r,
+			app:         app,
+			interceptor: app.interceptor,
 		}
 
 		err := r.Next(ctx)

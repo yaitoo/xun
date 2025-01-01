@@ -53,3 +53,9 @@ func WithViewEngines(ve ...ViewEngine) Option {
 		app.viewEngines = ve
 	}
 }
+
+func WithInterceptor(i Interceptor) Option {
+	return func(app *App) {
+		app.interceptor = i
+	}
+}

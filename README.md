@@ -615,7 +615,7 @@ admin := app.Group("/admin")
 		}
 
 		if it.Data.Email != "xun@yaitoo.cn" || it.Data.Password != "123" {
-			c.WriteHtmxHeader(xun.HxTrigger, xun.HtmxHeader[string]{
+			htmx.WriteHeader(c,htmx.HxTrigger, htmx.HxHeader[string]{
 				"showMessage": "Email or password is incorrect",
 			})
 			c.WriteStatus(http.StatusBadRequest)
@@ -634,7 +634,7 @@ admin := app.Group("/admin")
 
 		http.SetCookie(c.Writer(), &cookie)
 
-		c.Redirect(c.GetCurrentUrl().Query().Get("return"))
+		c.Redirect(c.RequestReferer().Query().Get("return"))
 		return nil
 	})
 ```

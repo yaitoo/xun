@@ -1,4 +1,9 @@
-package xun
+package htmx
+
+import (
+	jsoniter "github.com/json-iterator/go"
+	"github.com/yaitoo/xun"
+)
 
 const (
 
@@ -53,4 +58,24 @@ const (
 	HxTriggerAfterSwap = "HX-Trigger-After-Swap"
 )
 
-type HtmxHeader[T any] map[string]T
+var (
+	json = jsoniter.Config{UseNumber: false}.Froze()
+)
+
+// HxHeader represents a map of string keys to values of any type.
+// It is a generic type that can hold headers for HTMX requests or responses.
+type HxHeader[T any] map[string]T
+
+// WriteHeader writes the given value as a header with the given key.
+// The value is marshaled to JSON before being written.
+// If the value is a string, it is written as is.
+func WriteHeader[T any](c *xun.Context, key string, value any) {
+	s, ok := value.(string)
+	if ok {
+		c.WriteHeader(key, s)
+		return
+	}
+
+	buf, _ := json.Marshal(value)
+	c.WriteHeader(key, string(buf))
+}
