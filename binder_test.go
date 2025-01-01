@@ -1,7 +1,8 @@
-package htmx
+package xun
 
 import (
 	"bytes"
+
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -35,7 +36,7 @@ func TestBinder(t *testing.T) {
 			return ErrCancelled
 		}
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
@@ -51,7 +52,7 @@ func TestBinder(t *testing.T) {
 			return ErrCancelled
 		}
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
@@ -67,7 +68,7 @@ func TestBinder(t *testing.T) {
 			return ErrCancelled
 		}
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
@@ -120,7 +121,7 @@ func TestBinder(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			var result TEntity[Login]
 
-			req := test.NewRequest(Login{Email: "htmx@yaitoo.cn", Passwd: "123"})
+			req := test.NewRequest(Login{Email: "xun@yaitoo.cn", Passwd: "123"})
 			resp, err := client.Do(req)
 			require.NoError(t, err)
 
@@ -129,11 +130,11 @@ func TestBinder(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 			resp.Body.Close()
-			require.Equal(t, "htmx@yaitoo.cn", result.Data.Email)
+			require.Equal(t, "xun@yaitoo.cn", result.Data.Email)
 			require.Equal(t, "123", result.Data.Passwd)
 			require.Len(t, result.Errors, 0)
 
-			req = test.NewRequest(Login{Email: "htmx@yaitoo.cn", Passwd: "abc"})
+			req = test.NewRequest(Login{Email: "xun@yaitoo.cn", Passwd: "abc"})
 			resp, err = client.Do(req)
 			require.NoError(t, err)
 
@@ -142,11 +143,11 @@ func TestBinder(t *testing.T) {
 			err = json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 			resp.Body.Close()
-			require.Equal(t, "htmx@yaitoo.cn", result.Data.Email)
+			require.Equal(t, "xun@yaitoo.cn", result.Data.Email)
 			require.Equal(t, "abc", result.Data.Passwd)
 			require.Len(t, result.Errors, 0)
 
-			req = test.NewRequest(Login{Email: "htmx"})
+			req = test.NewRequest(Login{Email: "xun"})
 			req.Header.Set("accept-language", "en-US,en;q=0.9,zh;q=0.8,zh-CN;q=0.7,zh-TW;q=0.6")
 			// req.Header.Set("accept-language", "zh-CN,zh;q=0.9,en;q=0.8,en-US;q=0.7,zh-TW;q=0.6")
 			resp, err = client.Do(req)
@@ -161,7 +162,7 @@ func TestBinder(t *testing.T) {
 			require.Equal(t, "Email must be a valid email address", result.Errors["Email"])
 			require.Equal(t, "Passwd is a required field", result.Errors["Passwd"])
 
-			req = test.NewRequest(Login{Email: "htmx"})
+			req = test.NewRequest(Login{Email: "xun"})
 			// req.Header.Set("accept-language", "en-US,en;q=0.9,zh;q=0.8,zh-CN;q=0.7,zh-TW;q=0.6")
 			req.Header.Set("accept-language", "zh-CN,zh;q=0.9,en;q=0.8,en-US;q=0.7,zh-TW;q=0.6")
 			resp, err = client.Do(req)

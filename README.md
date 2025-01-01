@@ -1,12 +1,14 @@
-# GO-HTMX
-go-htmx is a HTTP web framework based on Go's built-in html/template and net/http package’s router.
+# Xun
+Xun is a HTTP web framework based on Go's built-in html/template and net/http package’s router.
+
+Xun`[ʃʊn]` is `迅`. It means lightweight and fast.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Tests](https://github.com/yaitoo/htmx/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/htmx/actions/workflows/tests.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/htmx.svg)](https://pkg.go.dev/github.com/yaitoo/htmx)
-[![Codecov](https://codecov.io/gh/yaitoo/htmx/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/htmx)
-[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/htmx)](https://github.com/yaitoo/htmx/blob/main/CHANGELOG.md)
-[![Go Report Card](https://goreportcard.com/badge/yaitoo/htmx)](http://goreportcard.com/report/yaitoo/htmx)
+[![Tests](https://github.com/yaitoo/xun/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/xun/actions/workflows/tests.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
+[![Codecov](https://codecov.io/gh/yaitoo/xun/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/xun)
+[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun)](https://github.com/yaitoo/xun/blob/main/CHANGELOG.md)
+[![Go Report Card](https://goreportcard.com/badge/yaitoo/xun)](http://goreportcard.com/report/yaitoo/xun)
 
 ## Features
 - Works with Go's built-in `net/http.ServeMux` router. that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
@@ -18,21 +20,21 @@ go-htmx is a HTTP web framework based on Go's built-in html/template and net/htt
   
 
 ## Getting Started
-> See full source code on [htmx-examples](https://github.com/yaitoo/htmx-examples)
+> See full source code on [xun-examples](https://github.com/yaitoo/xun-examples)
 
-### Install go-htmx
+### Install Xun
 - install latest commit from `main` branch
 ```
-go get github.com/yaitoo/htmx@main
+go get github.com/yaitoo/xun@main
 ```
 
 - install latest release
 ```
-go get github.com/yaitoo/htmx@latest
+go get github.com/yaitoo/xun@latest
 ```
 
 ### Project structure
-go-htmx has some specified directories that is used to organize code, routing and static assets.
+`Xun` has some specified directories that is used to organize code, routing and static assets.
 - `public`: Static assets to be served. 
 - `components` A partial view that is shared between layouts/pages/views.
 - `views`: A internal page view. It is used in `context.View` to render different view from current routing.
@@ -42,7 +44,7 @@ go-htmx has some specified directories that is used to organize code, routing an
 *NB: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use all built-in [Actions,Pipelines and Functions](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.*
 
 ### Layouts and Pages
-go-htmx uses file-system based routing, meaning you can use folders and files to define routes. This section will guide you through how to create layouts and pages, and link between them.
+`Xun` uses file-system based routing, meaning you can use folders and files to define routes. This section will guide you through how to create layouts and pages, and link between them.
 
 
 #### Creating a page
@@ -60,7 +62,7 @@ A page is UI that is rendered on a specific route. To create a page, add a page 
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Htmx-Admin</title>
+    <title>Xun-Admin</title>
   </head>
   <body>
     <div id="app">hello world</div>
@@ -87,7 +89,7 @@ You can create a layout(.html) file inside the `layouts` directory.
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Htmx-Admin</title>
+    <title>Xun-Admin</title>
   </head>
   <body>
     {{ block "content" .}} {{ end }}
@@ -134,7 +136,7 @@ A component is a partial view that is shared between multiple layouts/pages/view
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Htmx-Admin</title>
+    <title>Xun-Admin</title>
     {{ block "components/assets" . }} {{ end }}
   </head>
   <body>
@@ -158,9 +160,9 @@ Page Router only serve static content from html files. We have to define router 
 
 > main.go
 ```go
-	app.Get("/{$}", func(c *htmx.Context) error {
+	app.Get("/{$}", func(c *xun.Context) error {
 		return c.View(map[string]string{
-			"Name": "go-htmx",
+			"Name": "go-xun",
 		})
 	})
 ```
@@ -204,7 +206,7 @@ For examples, below patterns will be generated automatically, and registered in 
 
 > main.go
 ```go
-	app.Get("/user/{id}", func(c *htmx.Context) error {
+	app.Get("/user/{id}", func(c *xun.Context) error {
 		id := c.Request().PathValue("id")
 		user := getUserById(id)
 		return c.View(user)
@@ -213,7 +215,7 @@ For examples, below patterns will be generated automatically, and registered in 
 
 
 ### Multiple Viewers based on MIME request
-In our application, a routing can have multiple viewers. Response is render based on the request header `Accept`. Default viewer is used if there is no any viewer is matched by `Accept`. The built-it default viewer is `JsonViewer`. But it can be overridden by `htmx.WithViewer` in `htmx.New`. see more examples on [Tests](app_test.go)
+In our application, a routing can have multiple viewers. Response is render based on the request header `Accept`. Default viewer is used if there is no any viewer is matched by `Accept`. The built-it default viewer is `JsonViewer`. But it can be overridden by `xun.WithViewer` in `xun.New`. see more examples on [Tests](app_test.go)
 
 > curl -v http://127.0.0.1
 ```
@@ -228,7 +230,7 @@ In our application, a routing can have multiple viewers. Response is render base
 < Content-Length: 19
 < Content-Type: text/plain; charset=utf-8
 <
-{"Name":"go-htmx"}
+{"Name":"go-xun"}
 ```
 
 > curl --header "Accept: text/html; \*/\*" http://127.0.0.1
@@ -249,13 +251,13 @@ In our application, a routing can have multiple viewers. Response is render base
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Htmx-Admin</title>
+    <title>Xun-Admin</title>
     <link rel="stylesheet" href="/skin.css">
 <script type="text/javascript" src="/app.js"></script>
   </head>
   <body>
 
-    <div id="app">hello go-htmx</div>
+    <div id="app">hello go-xun</div>
 
   </body>
 </html>
@@ -277,12 +279,12 @@ Integrating Middleware into your application can lead to significant improvement
 ```go
 	admin := app.Group("/admin")
 
-	admin.Use(func(next htmx.HandleFunc) htmx.HandleFunc {
-		return func(c *htmx.Context) error {
+	admin.Use(func(next xun.HandleFunc) xun.HandleFunc {
+		return func(c *xun.Context) error {
 			token := c.Request().Header.Get("X-Token")
 			if !checkToken(token) {
 				c.WriteStatus(http.StatusUnauthorized)
-				return htmx.ErrCancelled
+				return xun.ErrCancelled
 			}
 			return next(c)
 		}
@@ -292,8 +294,8 @@ Integrating Middleware into your application can lead to significant improvement
 
 > Logging
 ```go
-	app.Use(func(next htmx.HandleFunc) htmx.HandleFunc {
-		return func(c *htmx.Context) error {
+	app.Use(func(next xun.HandleFunc) xun.HandleFunc {
+		return func(c *xun.Context) error {
 			n := time.Now()
 			defer func() {
 				duration := time.Since(n)
@@ -350,13 +352,13 @@ type Login struct {
 #### BindQuery
 ```go
 	app.Get("/login", func(c *Context) error {
-		it, err := htmx.BindQuery[Login](c.Request())
+		it, err := xun.BindQuery[Login](c.Request())
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
 		}
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
@@ -367,13 +369,13 @@ type Login struct {
 #### BindForm
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := htmx.BindForm[Login](c.Request())
+		it, err := xun.BindForm[Login](c.Request())
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
 		}
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
@@ -384,13 +386,13 @@ app.Post("/login", func(c *Context) error {
 #### BindJson
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := htmx.BindJson[Login](c.Request())
+		it, err := xun.BindJson[Login](c.Request())
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
 		}
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "htmx@yaitoo.cn" && it.Data.Passwd == "123" {
+		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
 			return c.View(it)
 		}
 		c.WriteStatus(http.StatusBadRequest)
@@ -411,7 +413,7 @@ import(
 
 )
 
-htmx.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslations)
+xun.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslations)
 ```
 
 > check more translations on [here](https://github.com/go-playground/validator/tree/master/translations)
@@ -464,7 +466,7 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 <script type="text/javascript" src="/app.js"></script>
 ```
 
-### Works with [htmx.org](https://htmx.org/docs/)
+### Works with [htmx.js](https://htmx.org/docs/)
 #### Add new pages
 > `pages/admin/index.html` and `pages/login.html`
 ```
@@ -579,12 +581,12 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 ```go
 admin := app.Group("/admin")
 
-	admin.Use(func(next htmx.HandleFunc) htmx.HandleFunc {
-		return func(c *htmx.Context) error {
+	admin.Use(func(next xun.HandleFunc) xun.HandleFunc {
+		return func(c *xun.Context) error {
 			s, err := c.Request().Cookie("session")
 			if err != nil || s == nil || s.Value == "" {
 				c.Redirect("/login?return=" + c.Request().URL.String())
-				return htmx.ErrCancelled
+				return xun.ErrCancelled
 			}
 
 			c.Set("session", s.Value)
@@ -592,19 +594,19 @@ admin := app.Group("/admin")
 		}
 	})
 
-	admin.Get("/{$}", func(c *htmx.Context) error {
+	admin.Get("/{$}", func(c *xun.Context) error {
 		return c.View(User{
 			Name: c.Get("session").(string),
 		})
 	})
 
-	app.Post("/login", func(c *htmx.Context) error {
+	app.Post("/login", func(c *xun.Context) error {
 
-		it, err := htmx.BindForm[Login](c.Request())
+		it, err := xun.BindForm[Login](c.Request())
 
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
-			return htmx.ErrCancelled
+			return xun.ErrCancelled
 		}
 
 		if !it.Validate(c.AcceptLanguage()...) {
@@ -612,8 +614,8 @@ admin := app.Group("/admin")
 			return c.View(it)
 		}
 
-		if it.Data.Email != "htmx@yaitoo.cn" || it.Data.Password != "123" {
-			c.WriteHtmxHeader(htmx.HxTrigger, htmx.HtmxHeader[string]{
+		if it.Data.Email != "xun@yaitoo.cn" || it.Data.Password != "123" {
+			c.WriteHtmxHeader(xun.HxTrigger, xun.HtmxHeader[string]{
 				"showMessage": "Email or password is incorrect",
 			})
 			c.WriteStatus(http.StatusBadRequest)
@@ -639,7 +641,7 @@ admin := app.Group("/admin")
 
 
 ## Contributing
-Contributions are welcome! If you're interested in contributing, please feel free to [contribute to go-htmx](CONTRIBUTING.md)
+Contributions are welcome! If you're interested in contributing, please feel free to [contribute to Xun](CONTRIBUTING.md)
 
 
 ## License

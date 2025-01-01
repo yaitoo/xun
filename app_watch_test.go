@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 import (
 	"io"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/yaitoo/htmx/fsnotify"
+	"github.com/yaitoo/xun/fsnotify"
 )
 
 func TestWatchOnStatic(t *testing.T) {

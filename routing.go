@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 // Routing represents a single route in the router.
 type Routing struct {

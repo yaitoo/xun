@@ -46,7 +46,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: yaitoo/htmx
+          slug: yaitoo/xun
           files: ./coverage.txt
           flags: Unit-Tests
           verbose: true

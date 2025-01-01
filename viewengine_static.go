@@ -1,11 +1,11 @@
-package htmx
+package xun
 
 import (
 	"errors"
 	"io/fs"
 	"strings"
 
-	"github.com/yaitoo/htmx/fsnotify"
+	"github.com/yaitoo/xun/fsnotify"
 )
 
 // StaticViewEngine is a view engine that serves static files from a file system.

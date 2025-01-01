@@ -1,4 +1,4 @@
-module github.com/yaitoo/htmx
+module github.com/yaitoo/xun
 
 go 1.22
 

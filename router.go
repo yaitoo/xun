@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 // Router is the interface that wraps the minimum set of methods required for
 // an effective router, namely methods for adding routes for different HTTP

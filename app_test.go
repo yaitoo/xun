@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 import (
 	"bytes"
@@ -896,7 +896,7 @@ func TestMiddleware(t *testing.T) {
 
 	i = 0
 	req, err = http.NewRequest("GET", srv.URL+"/", nil)
-	req.Header.Set("X-User", "htmx")
+	req.Header.Set("X-User", "xun")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)

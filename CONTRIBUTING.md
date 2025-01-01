@@ -1,5 +1,5 @@
 # Contributing
-go-htmx is actively looking for contributors so feel free to help out when:
+`Xun` is actively looking for contributors so feel free to help out when:
 
 - Reporting a bug
 - Discussing the current state of the code
@@ -20,7 +20,7 @@ We use github to host code, to track issues and feature requests, as well as acc
 ### Any contributions you make will be under the MIT Software License
 In short, when you submit code changes, your submissions are understood to be under the same [Apache-2.0 license](LICENSE) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-### Report bugs using Github's [Issues](https://github.com/yaitoo/htmx/issues)
+### Report bugs using Github's [Issues](https://github.com/yaitoo/xun/issues)
 We use GitHub issues to track public bugs. Report a bug by opening a new issue; it's that easy!
 
 ### Write bug reports with detail, background, and sample code
@@ -36,4 +36,4 @@ We use GitHub issues to track public bugs. Report a bug by opening a new issue; 
 - Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
 
 ### License
-By contributing, you agree that your contributions will be licensed under its MIT License.
+By contributing, you agree that your contributions will be licensed under its Apache-2.0 license.
