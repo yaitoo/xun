@@ -69,7 +69,7 @@ type HxHeader[T any] map[string]T
 // WriteHeader writes the given value as a header with the given key.
 // The value is marshaled to JSON before being written.
 // If the value is a string, it is written as is.
-func WriteHeader[T any](c *xun.Context, key string, value any) {
+func WriteHeader(c *xun.Context, key string, value any) {
 	s, ok := value.(string)
 	if ok {
 		c.WriteHeader(key, s)
