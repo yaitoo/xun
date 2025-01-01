@@ -574,6 +574,13 @@ window.addEventListener("DOMContentLoaded", (event) => {
 
 ```
 
+### Apply `htmx` interceptor 
+```go
+
+	app := xun.New(xun.WithInterceptor(htmx.New()))
+
+```
+
 #### Create router handler to process request
 create an `admin` group router, and apply a middleware to check if it's logged. if not, redirect to /login.
 

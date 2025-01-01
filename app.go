@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/yaitoo/xun/fsnotify"
@@ -139,6 +140,15 @@ func (app *App) enableHotReload() {
 func (app *App) Start() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
+
+	for _, r := range app.routes {
+		keys := make([]string, 0, len(r.Viewers))
+		for k := range r.Viewers {
+			keys = append(keys, k)
+		}
+
+		app.logger.Debug(r.Pattern, slog.String("views", strings.Join(keys, ",")))
+	}
 
 }
 
