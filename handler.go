@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 // Handler represents an HTTP handler.
 type Handler struct {

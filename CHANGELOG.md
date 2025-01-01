@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2025-01-01
+### Changed
+- renamed package name with `xun` (#4)
+- moved `htmx` helper to `ext/htmx` (#4)
+
 ## [1.0.1] - 2024-12-30
 ### Added
 - added htmx helper

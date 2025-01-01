@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 import (
 	"io"
@@ -210,7 +210,7 @@ func TestGroupMiddleware(t *testing.T) {
 
 	i = 0
 	req, err = http.NewRequest("GET", srv.URL+"/admin/", nil)
-	req.Header.Set("X-User", "htmx")
+	req.Header.Set("X-User", "xun")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)

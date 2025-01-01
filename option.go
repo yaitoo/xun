@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 import (
 	"io/fs"
@@ -51,5 +51,11 @@ func WithViewer(v Viewer) Option {
 func WithViewEngines(ve ...ViewEngine) Option {
 	return func(app *App) {
 		app.viewEngines = ve
+	}
+}
+
+func WithInterceptor(i Interceptor) Option {
+	return func(app *App) {
+		app.interceptor = i
 	}
 }

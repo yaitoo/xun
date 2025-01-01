@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 // RoutingOptions holds metadata and a viewer for routing configuration.
 type RoutingOptions struct {

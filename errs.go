@@ -1,7 +1,7 @@
-package htmx
+package xun
 
 import "errors"
 
 var (
-	ErrCancelled = errors.New("htmx: request_cancelled")
+	ErrCancelled = errors.New("xun: request_cancelled")
 )

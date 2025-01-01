@@ -1,9 +1,9 @@
-package htmx
+package xun
 
 import (
 	"io/fs"
 
-	"github.com/yaitoo/htmx/fsnotify"
+	"github.com/yaitoo/xun/fsnotify"
 )
 
 // ViewEngine is the interface that wraps the minimum set of methods required for

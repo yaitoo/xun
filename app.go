@@ -1,13 +1,14 @@
-package htmx
+package xun
 
 import (
 	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
-	"github.com/yaitoo/htmx/fsnotify"
+	"github.com/yaitoo/xun/fsnotify"
 )
 
 // App is the main struct of the framework.
@@ -33,6 +34,7 @@ type App struct {
 	fsys        fs.FS
 	watch       bool
 	watcher     *fsnotify.Watcher
+	interceptor Interceptor
 }
 
 // New allocates an App instance and loads all view engines.
@@ -76,7 +78,7 @@ func New(opts ...Option) *App {
 		if app.watch {
 			app.watcher = fsnotify.NewWatcher(app.fsys)
 			if err := app.watcher.Add("."); err != nil {
-				app.logger.Error("htmx: watcher add", slog.Any("err", err))
+				app.logger.Error("xun: watcher add", slog.Any("err", err))
 			}
 
 			if app.watcher != nil {
@@ -119,7 +121,7 @@ func (app *App) enableHotReload() {
 			for _, ve := range app.viewEngines {
 				err = ve.FileChanged(app.fsys, app, event)
 				if err != nil {
-					app.logger.Error("htmx: on file changed", slog.Any("err", err))
+					app.logger.Error("xun: on file changed", slog.Any("err", err))
 				}
 			}
 
@@ -128,7 +130,7 @@ func (app *App) enableHotReload() {
 				return
 			}
 
-			app.logger.Error("htmx: watcher", slog.Any("err", err))
+			app.logger.Error("xun: watcher", slog.Any("err", err))
 
 		}
 	}
@@ -138,6 +140,15 @@ func (app *App) enableHotReload() {
 func (app *App) Start() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
+
+	for _, r := range app.routes {
+		keys := make([]string, 0, len(r.Viewers))
+		for k := range r.Viewers {
+			keys = append(keys, k)
+		}
+
+		app.logger.Debug(r.Pattern, slog.String("views", strings.Join(keys, ",")))
+	}
 
 }
 
@@ -239,10 +250,11 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 
 	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &Context{
-			req:     req,
-			rw:      w,
-			Routing: *r,
-			app:     app,
+			req:         req,
+			rw:          w,
+			Routing:     *r,
+			app:         app,
+			interceptor: app.interceptor,
 		}
 
 		err := r.Next(ctx)
@@ -254,7 +266,7 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
-		app.logger.Error("htmx: handle", slog.Any("err", err), slog.String("logid", logID))
+		app.logger.Error("xun: handle", slog.Any("err", err), slog.String("logid", logID))
 	})
 
 	if ro.viewer != nil {
@@ -308,10 +320,11 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 
 	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &Context{
-			req:     req,
-			rw:      w,
-			Routing: *r,
-			app:     app,
+			req:         req,
+			rw:          w,
+			Routing:     *r,
+			app:         app,
+			interceptor: app.interceptor,
 		}
 
 		err := r.Next(ctx)
@@ -323,7 +336,7 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
-		app.logger.Error("htmx: view", slog.Any("err", err), slog.String("logid", logID))
+		app.logger.Error("xun: view", slog.Any("err", err), slog.String("logid", logID))
 
 	})
 
@@ -367,10 +380,11 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 
 	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
 		ctx := &Context{
-			req:     req,
-			rw:      w,
-			Routing: *r,
-			app:     app,
+			req:         req,
+			rw:          w,
+			Routing:     *r,
+			app:         app,
+			interceptor: app.interceptor,
 		}
 
 		err := r.Next(ctx)
@@ -382,6 +396,6 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
-		app.logger.Error("htmx: file", slog.Any("err", err), slog.String("logid", logID))
+		app.logger.Error("xun: file", slog.Any("err", err), slog.String("logid", logID))
 	})
 }

@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 import (
 	"net/http"
@@ -17,6 +17,7 @@ type Context struct {
 
 	writtenStatus bool
 	values        map[string]any
+	interceptor   Interceptor
 }
 
 // Writer returns the http.ResponseWriter associated with the current context.
@@ -111,13 +112,12 @@ func (c *Context) View(items ...any) error {
 // It uses the given status code. If the status code is not provided,
 // it uses http.StatusFound (302).
 func (c *Context) Redirect(url string, statusCode ...int) {
+	if c.interceptor != nil {
+		if c.interceptor.Redirect(c, url, statusCode...) {
+			return
+		}
 
-	if c.IsHxRequest() {
-		c.WriteHeader("HX-Redirect", url)
-		c.WriteStatus(http.StatusOK)
-		return
 	}
-
 	c.WriteHeader("Location", url)
 	if len(statusCode) > 0 {
 		c.WriteStatus(statusCode[0])
@@ -165,38 +165,23 @@ func (c *Context) Accept() (types []string) {
 	return
 }
 
-// htmx helper
-
-// IsHxRequest checks if the current request is an HTMX request.
-// It returns true if the "HX-Request" header is set to "true".
-func (c *Context) IsHxRequest() bool {
-	return c.req.Header.Get(HxRequest) == "true"
-}
-
-// GetCurrentUrl returns the current URL of the request.
-// If the request is an HTMX request, it returns the value of the "HX-Current-URL" header.
-// Otherwise, it returns the request URL.
-func (c *Context) GetCurrentUrl() *url.URL {
-	if c.IsHxRequest() {
-		u, _ := url.Parse(c.req.Header.Get(HxCurrentUrl))
-		return u
+// RequestReferer returns the referer of the request.
+func (c *Context) RequestReferer() *url.URL {
+	var v string
+	if c.interceptor != nil {
+		v = c.interceptor.RequestReferer(c)
 	}
 
-	return c.req.URL
-}
-
-// WriteHtmxHeader writes the given value as a header with the given key.
-// The value is marshaled to JSON before being written.
-// If the value is a string, it is written as is.
-func (c *Context) WriteHtmxHeader(key string, value any) {
-	s, ok := value.(string)
-	if ok {
-		c.rw.Header().Set(key, s)
-		return
+	if v == "" {
+		v = c.req.Header.Get("Referer")
 	}
 
-	buf, _ := json.Marshal(value)
-	c.rw.Header().Set(key, string(buf))
+	if v == "" {
+		return nil
+	}
+
+	u, _ := url.Parse(v)
+	return u
 }
 
 // Get retrieves a value from the context's values map by key.

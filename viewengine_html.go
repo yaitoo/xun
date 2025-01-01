@@ -1,4 +1,4 @@
-package htmx
+package xun
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yaitoo/htmx/fsnotify"
+	"github.com/yaitoo/xun/fsnotify"
 )
 
 // HtmlViewEngine is a view engine that loads templates from a file system.
