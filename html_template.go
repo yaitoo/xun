@@ -4,7 +4,7 @@ import (
 	"io"
 	"io/fs"
 	"strings"
-	"text/template"
+	"html/template"
 
 	"errors"
 )
