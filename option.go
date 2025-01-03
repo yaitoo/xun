@@ -54,8 +54,34 @@ func WithViewEngines(ve ...ViewEngine) Option {
 	}
 }
 
+// WithInterceptor returns an Option that sets the provided Interceptor
+// to the App. This allows customization of the App's behavior by
+// intercepting and potentially modifying requests or responses.
+//
+// Parameters:
+//   - i: An Interceptor instance to be set in the App.
+//
+// Returns:
+//   - Option: A function that takes an App pointer and sets its interceptor
+//     to the provided Interceptor.
 func WithInterceptor(i Interceptor) Option {
 	return func(app *App) {
 		app.interceptor = i
+	}
+}
+
+// WithCompressor is an option function that sets the compressors for the application.
+// It takes a variadic parameter of Compressor type and assigns it to the app's compressors field.
+//
+// Parameters:
+//
+//	c ...Compressor - A variadic list of Compressor instances to be used by the application.
+//
+// Returns:
+//
+//	Option - A function that takes an App pointer and sets its compressors field.
+func WithCompressor(c ...Compressor) Option {
+	return func(app *App) {
+		app.compressors = c
 	}
 }

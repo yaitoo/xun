@@ -17,7 +17,6 @@ type Context struct {
 
 	writtenStatus bool
 	values        map[string]any
-	interceptor   Interceptor
 }
 
 // Writer returns the http.ResponseWriter associated with the current context.
@@ -112,8 +111,8 @@ func (c *Context) View(items ...any) error {
 // It uses the given status code. If the status code is not provided,
 // it uses http.StatusFound (302).
 func (c *Context) Redirect(url string, statusCode ...int) {
-	if c.interceptor != nil {
-		if c.interceptor.Redirect(c, url, statusCode...) {
+	if c.app.interceptor != nil {
+		if c.app.interceptor.Redirect(c, url, statusCode...) {
 			return
 		}
 
@@ -168,8 +167,8 @@ func (c *Context) Accept() (types []string) {
 // RequestReferer returns the referer of the request.
 func (c *Context) RequestReferer() *url.URL {
 	var v string
-	if c.interceptor != nil {
-		v = c.interceptor.RequestReferer(c)
+	if c.app.interceptor != nil {
+		v = c.app.interceptor.RequestReferer(c)
 	}
 
 	if v == "" {
