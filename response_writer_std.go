@@ -9,5 +9,5 @@ type stdResponseWriter struct {
 
 // Close implements the ResponseWriter interface Close method.
 // It is a no-op for the standard response writer.
-func (w *stdResponseWriter) Close() {
+func (*stdResponseWriter) Close() {
 }

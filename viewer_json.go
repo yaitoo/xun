@@ -20,7 +20,7 @@ func (*JsonViewer) MimeType() string {
 // Render renders the given data as JSON to the http.ResponseWriter.
 //
 // It sets the Content-Type header to "application/json".
-func (*JsonViewer) Render(w http.ResponseWriter, r *http.Request, data any) error {
+func (*JsonViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
 	w.Header().Add("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(data)
 }
