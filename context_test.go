@@ -24,11 +24,6 @@ func TestContextRequestReferer(t *testing.T) {
 			referer:  "",
 			expected: "",
 		},
-		{
-			name:     "invalid",
-			referer:  "\x00",
-			expected: "",
-		},
 	}
 
 	for _, test := range tests {
@@ -40,7 +35,7 @@ func TestContextRequestReferer(t *testing.T) {
 
 			ctx.req.Header.Set("Referer", test.referer)
 
-			require.Equal(t, test.expected, ctx.RequestReferer().String())
+			require.Equal(t, test.expected, ctx.RequestReferer())
 		})
 	}
 }

@@ -23,7 +23,7 @@ func TestHtmxInterceptor(t *testing.T) {
 	})
 
 	app.Get("/referer", func(c *xun.Context) error {
-		return c.View(c.RequestReferer().String())
+		return c.View(c.RequestReferer())
 	})
 
 	go app.Start()
