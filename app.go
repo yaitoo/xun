@@ -395,16 +395,6 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 	if ro.viewer != nil {
 		r.Viewers[ro.viewer.MimeType()] = ro.viewer
 	}
-
-	viewName := path
-	if host != "" {
-		viewName = "@" + host + "/" + path
-	}
-
-	// try to find html viewer
-	if v, ok := app.viewers[viewName]; ok {
-		r.Viewers[v.MimeType()] = v
-	}
 }
 
 func (app *App) enableHotReload() {
