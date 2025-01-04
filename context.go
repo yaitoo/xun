@@ -121,7 +121,7 @@ func (c *Context) Redirect(url string, statusCode ...int) {
 	if len(statusCode) > 0 {
 		c.WriteStatus(statusCode[0])
 	} else {
-		c.WriteStatus(http.StatusFound) //302
+		c.WriteStatus(http.StatusFound) // 302
 	}
 
 }

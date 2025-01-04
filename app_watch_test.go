@@ -267,7 +267,7 @@ func TestWatchOnHtml(t *testing.T) {
 
 	require.Equal(t, "<html><head><title>header</title></head><body><div>admin/user</div></body></html>", string(buf))
 
-	//added
+	// added
 	req, err = http.NewRequest("GET", srv.URL+"/about", nil)
 	require.NoError(t, err)
 	resp, err = client.Do(req)

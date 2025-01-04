@@ -194,6 +194,136 @@ func (app *App) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 	app.HandleFunc(http.MethodDelete+" "+pattern, hf, opts...)
 }
 
+// Next applies the middlewares in the app to the given HandleFunc in reverse order.
+// It returns the final HandleFunc after all middlewares have been applied.
+func (app *App) Next(hf HandleFunc) HandleFunc {
+	next := hf
+	for i := len(app.middlewares); i > 0; i-- {
+		next = app.middlewares[i-1](next)
+	}
+	return next
+}
+
+// HandleFile registers a route handler for serving a file.
+//
+// This function associates a FileViewer with a given file name
+// and registers the route in the application's routing table.
+// If a route with the same pattern already exists, it returns immediately
+// without making any changes.
+func (app *App) HandleFile(name string, v *FileViewer) {
+	ro := &RoutingOptions{}
+
+	_, _, pat := splitFile(name)
+
+	r, ok := app.routes[pat]
+
+	if ok {
+		return
+	}
+
+	ro.viewer = v
+	app.viewers[name] = v
+
+	hf := func(c *Context) error {
+		return v.Render(c.rw, c.req, nil)
+	}
+
+	r = &Routing{
+		Options: ro,
+		Pattern: pat,
+		Handle:  hf,
+		chain:   app,
+		Viewers: make(map[string]Viewer),
+	}
+
+	app.routes[pat] = r
+
+	r.Viewers[v.MimeType()] = v
+
+	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
+		rw := app.createWriter(req, w)
+		defer rw.Close()
+
+		ctx := &Context{
+			req:     req,
+			rw:      rw,
+			Routing: *r,
+			app:     app,
+		}
+
+		err := r.Next(ctx)
+
+		if err == nil || errors.Is(err, ErrCancelled) {
+			return
+		}
+
+		logID := nextLogID()
+		ctx.WriteHeader("X-Log-Id", logID)
+		ctx.WriteStatus(http.StatusInternalServerError)
+		app.logger.Error("xun: file", slog.Any("err", err), slog.String("logid", logID))
+	})
+}
+
+// HandlePage registers a route handler for a page view.
+//
+// This function associates a Viewer with a given route pattern
+// and registers the route in the application's routing table.
+// If a route with the same pattern already exists, it updates
+// the existing route with the new Viewer.
+func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
+	ro := &RoutingOptions{}
+
+	r, ok := app.routes[pattern]
+	if ok {
+		r.Viewers[v.MimeType()] = v
+		return
+	}
+
+	ro.viewer = v
+	app.viewers[viewName] = v
+
+	hf := func(c *Context) error {
+		return v.Render(c.rw, c.req, nil)
+	}
+
+	r = &Routing{
+		Options: ro,
+		Pattern: pattern,
+		Handle:  hf,
+		chain:   app,
+		Viewers: make(map[string]Viewer),
+	}
+
+	r.Viewers[v.MimeType()] = v
+
+	app.routes[pattern] = r
+
+	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
+		rw := app.createWriter(req, w)
+		defer rw.Close()
+
+		ctx := &Context{
+			req:     req,
+			rw:      rw,
+			Routing: *r,
+			app:     app,
+		}
+
+		err := r.Next(ctx)
+
+		if err == nil || errors.Is(err, ErrCancelled) {
+			return
+		}
+
+		logID := nextLogID()
+		ctx.WriteHeader("X-Log-Id", logID)
+		ctx.WriteStatus(http.StatusInternalServerError)
+		app.logger.Error("xun: view", slog.Any("err", err), slog.String("logid", logID))
+
+	})
+
+}
+
 // HandleFunc registers a route handler for the given HTTP request pattern.
 //
 // The pattern is expected to be in the format "METHOD PATTERN", where
@@ -204,18 +334,30 @@ func (app *App) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 // used to customize the route. See the RoutingOption type for more
 // information.
 func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
-	app.handleFunc(pattern, hf, opts, app)
+	app.createHandler(pattern, hf, opts, app)
 }
 
-func (app *App) Next(hf HandleFunc) HandleFunc {
-	next := hf
-	for i := len(app.middlewares); i > 0; i-- {
-		next = app.middlewares[i-1](next)
+// createWriter creates a ResponseWriter that supports compression based on the
+// "Accept-Encoding" header in the HTTP request. If the header contains a
+// supported encoding or a wildcard "*", it returns a compressed ResponseWriter.
+// Otherwise, it returns a standard ResponseWriter.
+func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseWriter {
+	acceptEncoding := req.Header.Get("Accept-Encoding")
+
+	stars := strings.ContainsAny(acceptEncoding, "*")
+
+	for _, compressor := range app.compressors {
+		if stars || strings.Contains(acceptEncoding, compressor.AcceptEncoding()) {
+			return compressor.New(w)
+		}
 	}
-	return next
+	return &stdResponseWriter{ResponseWriter: w}
 }
 
-func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
+// createHandler registers a new route with the given pattern, handler function, routing options, and middleware chain.
+// It updates the route if it already exists or creates a new one if it doesn't.
+// The function also sets up the HTTP handler for the route and manages the viewers for different MIME types.
+func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
 	ro := &RoutingOptions{
 		viewer: app.viewer,
 	}
@@ -285,137 +427,4 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 	if v, ok := app.viewers[viewName]; ok {
 		r.Viewers[v.MimeType()] = v
 	}
-}
-
-// HandlePage registers a route handler for a page view.
-//
-// This function associates a Viewer with a given route pattern
-// and registers the route in the application's routing table.
-// If a route with the same pattern already exists, it updates
-// the existing route with the new Viewer.
-func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
-	ro := &RoutingOptions{}
-
-	r, ok := app.routes[pattern]
-	if ok {
-		r.Viewers[v.MimeType()] = v
-		return
-	}
-
-	ro.viewer = v
-	app.viewers[viewName] = v
-
-	hf := func(c *Context) error {
-		return v.Render(c.rw, c.req, nil)
-	}
-
-	r = &Routing{
-		Options: ro,
-		Pattern: pattern,
-		Handle:  hf,
-		chain:   app,
-		Viewers: make(map[string]Viewer),
-	}
-
-	r.Viewers[v.MimeType()] = v
-
-	app.routes[pattern] = r
-
-	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
-		rw := app.createWriter(req, w)
-		defer rw.Close()
-
-		ctx := &Context{
-			req:     req,
-			rw:      rw,
-			Routing: *r,
-			app:     app,
-		}
-
-		err := r.Next(ctx)
-
-		if err == nil || errors.Is(err, ErrCancelled) {
-			return
-		}
-
-		logID := nextLogID()
-		ctx.WriteHeader("X-Log-Id", logID)
-		ctx.WriteStatus(http.StatusInternalServerError)
-		app.logger.Error("xun: view", slog.Any("err", err), slog.String("logid", logID))
-
-	})
-
-}
-
-func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseWriter {
-	acceptEncoding := req.Header.Get("Accept-Encoding")
-
-	stars := strings.ContainsAny(acceptEncoding, "*")
-
-	for _, compressor := range app.compressors {
-		if stars || strings.Contains(acceptEncoding, compressor.AcceptEncoding()) {
-			return compressor.New(w)
-		}
-	}
-	return &responseWriter{ResponseWriter: w}
-}
-
-// HandleFile registers a route handler for serving a file.
-//
-// This function associates a FileViewer with a given file name
-// and registers the route in the application's routing table.
-// If a route with the same pattern already exists, it returns immediately
-// without making any changes.
-func (app *App) HandleFile(name string, v *FileViewer) {
-	ro := &RoutingOptions{}
-
-	_, _, pat := splitFile(name)
-
-	r, ok := app.routes[pat]
-
-	if ok {
-		return
-	}
-
-	ro.viewer = v
-	app.viewers[name] = v
-
-	hf := func(c *Context) error {
-		return v.Render(c.rw, c.req, nil)
-	}
-
-	r = &Routing{
-		Options: ro,
-		Pattern: pat,
-		Handle:  hf,
-		chain:   app,
-		Viewers: make(map[string]Viewer),
-	}
-
-	app.routes[pat] = r
-
-	r.Viewers[v.MimeType()] = v
-
-	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
-		rw := app.createWriter(req, w)
-		defer rw.Close()
-
-		ctx := &Context{
-			req:     req,
-			rw:      rw,
-			Routing: *r,
-			app:     app,
-		}
-
-		err := r.Next(ctx)
-
-		if err == nil || errors.Is(err, ErrCancelled) {
-			return
-		}
-
-		logID := nextLogID()
-		ctx.WriteHeader("X-Log-Id", logID)
-		ctx.WriteStatus(http.StatusInternalServerError)
-		app.logger.Error("xun: file", slog.Any("err", err), slog.String("logid", logID))
-	})
 }

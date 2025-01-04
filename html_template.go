@@ -1,10 +1,10 @@
 package xun
 
 import (
+	"html/template"
 	"io"
 	"io/fs"
 	"strings"
-	"html/template"
 
 	"errors"
 )
@@ -71,7 +71,7 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 	}
 
 	layoutName := ""
-	//<!--layout:home-->   xxxxx  \n
+	// <!--layout:home-->   xxxxx  \n
 	if len(buf) > 11 && string(buf[0:11]) == "<!--layout:" {
 		n := len(buf) - 2
 		for i := 11; i < n; i++ {

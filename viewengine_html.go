@@ -176,17 +176,18 @@ func (ve *HtmlViewEngine) loadPages() error {
 }
 
 func (ve *HtmlViewEngine) loadPage(path string) error {
-	name := path[6:] //strings.TrimPrefix(path, "pages/")
+	name := path[6:] // delete prefix  "pages/"
 
 	t := NewHtmlTemplate(name, path)
 
 	if err := t.Load(ve.fsys, ve.templates); err != nil {
 		return err
 	}
-	//.html
+
+	// delete file extension ".html"
 	ve.templates[path[:len(path)-5]] = t
 
-	if strings.HasSuffix(path, "/index.html") { //remove it, because index.html will be redirected to ./ in http.ServeFileFS
+	if strings.HasSuffix(path, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
 		name = name[:len(name)-10]
 	}
 

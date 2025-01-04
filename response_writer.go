@@ -12,12 +12,3 @@ type ResponseWriter interface {
 
 	Close()
 }
-
-// responseWriter is a wrapper around http.ResponseWriter that allows for
-// additional functionality to be added to the standard ResponseWriter.
-type responseWriter struct {
-	http.ResponseWriter
-}
-
-func (w *responseWriter) Close() {
-}
