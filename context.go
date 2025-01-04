@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var emptyURL = &url.URL{}
+var emptyURL = url.URL{}
 
 // Context is the primary structure for handling HTTP requests.
 // It encapsulates the request, response, routing information, and application context.
@@ -167,7 +167,7 @@ func (c *Context) Accept() (types []string) {
 }
 
 // RequestReferer returns the referer of the request.
-func (c *Context) RequestReferer() *url.URL {
+func (c *Context) RequestReferer() url.URL {
 	var v string
 	if c.app.interceptor != nil {
 		v = c.app.interceptor.RequestReferer(c)
@@ -186,7 +186,7 @@ func (c *Context) RequestReferer() *url.URL {
 		return emptyURL
 	}
 
-	return u
+	return *u
 }
 
 // Get retrieves a value from the context's values map by key.
