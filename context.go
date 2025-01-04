@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+var emptyURL = &url.URL{}
+
 // Context is the primary structure for handling HTTP requests.
 // It encapsulates the request, response, routing information, and application context.
 // It offers various methods to work with request data, manipulate responses, and manage routing.
@@ -176,10 +178,14 @@ func (c *Context) RequestReferer() *url.URL {
 	}
 
 	if v == "" {
-		return nil
+		return emptyURL
 	}
 
-	u, _ := url.Parse(v)
+	u, err := url.Parse(v)
+	if err != nil {
+		return emptyURL
+	}
+
 	return u
 }
 
