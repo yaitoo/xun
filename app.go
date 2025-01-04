@@ -408,8 +408,8 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 }
 
 func (app *App) enableHotReload() {
-	defer app.watcher.Stop()
 	go app.watcher.Start()
+	defer app.watcher.Stop()
 
 	for {
 		select {
@@ -430,9 +430,7 @@ func (app *App) enableHotReload() {
 			if !ok {
 				return
 			}
-
 			app.logger.Error("xun: watcher", slog.Any("err", err))
-
 		}
 	}
 

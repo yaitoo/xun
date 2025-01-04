@@ -29,7 +29,7 @@ func (i *interceptor) RequestReferer(c *xun.Context) string {
 	return ""
 }
 
-func (i *interceptor) Redirect(c *xun.Context, url string, statusCode ...int) bool {
+func (i *interceptor) Redirect(c *xun.Context, url string, statusCode ...int) bool { //skipcq: RVV-B0012
 	if i.IsHxRequest(c) {
 		c.WriteHeader("HX-Redirect", url)
 		c.WriteStatus(http.StatusOK)

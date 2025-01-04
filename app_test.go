@@ -26,7 +26,7 @@ var (
 func TestMain(m *testing.M) {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) { //skipcq: RVV-B0012
 		if strings.HasPrefix(addr, "abc.com") {
 			return net.Dial("tcp", strings.TrimPrefix(addr, "abc.com"))
 		}
@@ -214,7 +214,7 @@ func TestStatus(t *testing.T) {
 	resp.Body.Close()
 
 	c := http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { //skipcq: RVV-B0012
 			return http.ErrUseLastResponse
 		},
 	}
@@ -951,7 +951,7 @@ func TestUnhandledError(t *testing.T) {
 		}
 	})
 
-	app.Get("/", func(c *Context) error {
+	app.Get("/", func(*Context) error {
 		return errors.New("internal")
 	})
 
