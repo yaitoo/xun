@@ -11,6 +11,14 @@ import (
 	"github.com/yaitoo/xun/fsnotify"
 )
 
+// HandleFunc defines a function type that takes a Context pointer as an argument
+// and returns an error. It is used to handle requests within the application.
+type HandleFunc func(c *Context) error
+
+// Middleware is a function type that takes a HandleFunc as an argument and returns a HandleFunc.
+// It is used to wrap or decorate an existing HandleFunc with additional functionality.
+type Middleware func(next HandleFunc) HandleFunc
+
 // App is the main struct of the framework.
 //
 // It is used to register routes, middleware, and view engines.
@@ -91,15 +99,9 @@ func New(opts ...Option) *App {
 	return app
 }
 
-type HandleFunc func(c *Context) error
-
-type Middleware func(next HandleFunc) HandleFunc
-
-// Middleware is a function that takes a HandleFunc and returns a HandleFunc.
-// Middleware functions are useful for creating reusable pieces of code that can
-// be composed together to create complex behavior. For example, a middleware
-// function might be used to log each request, or to check if a user is
-// authenticated before allowing access to a page.
+// Group creates a new router group with the specified prefix.
+// It returns a Router interface that can be used to define routes
+// within the group.
 func (app *App) Group(prefix string) Router {
 	return &group{
 		prefix: prefix,
@@ -107,37 +109,9 @@ func (app *App) Group(prefix string) Router {
 	}
 }
 
-func (app *App) enableHotReload() {
-	defer app.watcher.Stop()
-	go app.watcher.Start()
-
-	for {
-		select {
-		case event, ok := <-app.watcher.Events:
-			if !ok {
-				return
-			}
-
-			var err error
-			for _, ve := range app.viewEngines {
-				err = ve.FileChanged(app.fsys, app, event)
-				if err != nil {
-					app.logger.Error("xun: on file changed", slog.Any("err", err))
-				}
-			}
-
-		case err, ok := <-app.watcher.Errors:
-			if !ok {
-				return
-			}
-
-			app.logger.Error("xun: watcher", slog.Any("err", err))
-
-		}
-	}
-
-}
-
+// Start initializes and starts the application by locking the mutex,
+// iterating through the routes, and logging the pattern and viewers
+// for each route. It ensures thread safety by using a mutex lock.
 func (app *App) Start() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -153,6 +127,10 @@ func (app *App) Start() {
 
 }
 
+// Close safely locks the App instance, ensuring that no other
+// goroutines can access it until the lock is released. This method
+// should be called when the App instance is no longer needed to
+// prevent any further operations on it.
 func (app *App) Close() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -427,4 +405,35 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 	if v, ok := app.viewers[viewName]; ok {
 		r.Viewers[v.MimeType()] = v
 	}
+}
+
+func (app *App) enableHotReload() {
+	defer app.watcher.Stop()
+	go app.watcher.Start()
+
+	for {
+		select {
+		case event, ok := <-app.watcher.Events:
+			if !ok {
+				return
+			}
+
+			var err error
+			for _, ve := range app.viewEngines {
+				err = ve.FileChanged(app.fsys, app, event)
+				if err != nil {
+					app.logger.Error("xun: on file changed", slog.Any("err", err))
+				}
+			}
+
+		case err, ok := <-app.watcher.Errors:
+			if !ok {
+				return
+			}
+
+			app.logger.Error("xun: watcher", slog.Any("err", err))
+
+		}
+	}
+
 }
