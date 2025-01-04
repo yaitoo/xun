@@ -280,3 +280,7 @@ func TestWatchOnHtml(t *testing.T) {
 	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>about</div></body></html>", string(buf))
 
 }
+
+func TestWatchEvents(t *testing.T) {
+
+}

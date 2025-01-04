@@ -80,7 +80,7 @@ func New(opts ...Option) *App {
 		for _, ve := range app.viewEngines {
 			err := ve.Load(app.fsys, app)
 			if err != nil {
-				panic(err)
+				app.logger.Error("xun: load views", slog.Any("err", err))
 			}
 		}
 
