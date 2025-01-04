@@ -2,11 +2,8 @@ package xun
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 )
-
-var emptyURL = url.URL{}
 
 // Context is the primary structure for handling HTTP requests.
 // It encapsulates the request, response, routing information, and application context.
