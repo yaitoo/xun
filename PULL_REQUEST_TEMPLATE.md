@@ -1,8 +1,11 @@
-### Changes
+### Changed
 -
 
-### Fixes
+### Fixed
 -
+
+### Added
+- 
 
 ### Tests
 Tasks to complete before merging PR:
