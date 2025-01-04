@@ -13,6 +13,7 @@ Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signif
 ## Features
 - Works with Go's built-in `net/http.ServeMux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
+- Built-in response compression support for `gzip` and `deflate`. 
 - Built-in Form and Validate feature with i18n support.
 - Support Page Router in `StaticViewEngine` and `HtmlViewEngine`.
 - Support multiple viewers by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
