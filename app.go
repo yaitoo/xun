@@ -343,8 +343,6 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 		o(ro)
 	}
 
-	_, host, path := splitPattern(pattern)
-
 	r, ok := app.routes[pattern]
 
 	if ok {
