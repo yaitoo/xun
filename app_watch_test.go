@@ -286,10 +286,10 @@ func TestWatchOnHtml(t *testing.T) {
 type mockViewEngine struct {
 }
 
-func (v *mockViewEngine) Load(fsys fs.FS, app *App) error {
+func (*mockViewEngine) Load(fsys fs.FS, app *App) error { // skipcq: RVV-B0012
 	return nil
 }
-func (v *mockViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
+func (*mockViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { // skipcq: RVV-B0012
 	return errors.New("err: unhandled error")
 }
 
@@ -349,7 +349,7 @@ func TestHotReloadChannels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(*testing.T) {
 			app := tt.createApp()
 			defer app.Close()
 
