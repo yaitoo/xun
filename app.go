@@ -88,9 +88,7 @@ func New(opts ...Option) *App {
 			app.watcher = fsnotify.NewWatcher(app.fsys)
 			if err := app.watcher.Add("."); err != nil {
 				app.logger.Error("xun: watcher add", slog.Any("err", err))
-			}
-
-			if app.watcher != nil {
+			} else {
 				go app.enableHotReload()
 			}
 		}
@@ -396,8 +394,8 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 }
 
 func (app *App) enableHotReload() {
-	go app.watcher.Start()
 	defer app.watcher.Stop()
+	go app.watcher.Start()
 
 	for {
 		select {
