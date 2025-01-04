@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"compress/flate"
 	"compress/gzip"
 	"io"
 	"net/http"
@@ -64,6 +65,14 @@ func TestGzipCompressor(t *testing.T) {
 			contentEncoding: "",
 			createReader: func(r io.Reader) io.Reader {
 				return r
+			},
+		},
+		{
+			name:            "deflate",
+			acceptEncoding:  "deflate",
+			contentEncoding: "deflate",
+			createReader: func(r io.Reader) io.Reader {
+				return flate.NewReader(r)
 			},
 		},
 	}
