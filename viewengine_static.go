@@ -47,7 +47,7 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
 // If the file changed is a Write/Remove event and the path is in the "public"
 // directory, nothing will be done.
 func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
-	//Nothing should be updated for Write/Remove events.
+	// Nothing should be updated for Write/Remove events.
 	if event.Has(fsnotify.Create) && strings.HasPrefix(event.Name, "public/") {
 		ve.handle(fsys, app, event.Name)
 	}
@@ -59,7 +59,7 @@ func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 
 	name := strings.ToLower(path)
 
-	if strings.HasSuffix(name, "/index.html") { //remove it, because index.html will be redirected to ./ in http.ServeFileFS
+	if strings.HasSuffix(name, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
 		name = name[:len(name)-10]
 	}
 

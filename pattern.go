@@ -41,7 +41,7 @@ func splitFile(s string) (host string, path string, pattern string) {
 	i := strings.IndexByte(s, '@')
 
 	// xxx
-	if i < 0 { //no host
+	if i < 0 { // no host
 		path = "/" + s        // /xxx
 		pattern = "GET /" + s // GET /xxx
 		return
@@ -49,7 +49,7 @@ func splitFile(s string) (host string, path string, pattern string) {
 
 	// @abc.com/xxx
 	e := strings.IndexByte(s, '/')
-	//has host
+	// has host
 	host = s[i+1 : e]          // abc.com
 	path = "/" + s[e+1:]       // /xxx
 	pattern = "GET " + s[i+1:] // GET abc.com/xxx

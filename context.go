@@ -2,7 +2,6 @@ package xun
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -121,7 +120,7 @@ func (c *Context) Redirect(url string, statusCode ...int) {
 	if len(statusCode) > 0 {
 		c.WriteStatus(statusCode[0])
 	} else {
-		c.WriteStatus(http.StatusFound) //302
+		c.WriteStatus(http.StatusFound) // 302
 	}
 
 }
@@ -165,7 +164,7 @@ func (c *Context) Accept() (types []string) {
 }
 
 // RequestReferer returns the referer of the request.
-func (c *Context) RequestReferer() *url.URL {
+func (c *Context) RequestReferer() string {
 	var v string
 	if c.app.interceptor != nil {
 		v = c.app.interceptor.RequestReferer(c)
@@ -175,12 +174,7 @@ func (c *Context) RequestReferer() *url.URL {
 		v = c.req.Header.Get("Referer")
 	}
 
-	if v == "" {
-		return nil
-	}
-
-	u, _ := url.Parse(v)
-	return u
+	return v
 }
 
 // Get retrieves a value from the context's values map by key.

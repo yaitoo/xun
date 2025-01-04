@@ -11,6 +11,14 @@ import (
 	"github.com/yaitoo/xun/fsnotify"
 )
 
+// HandleFunc defines a function type that takes a Context pointer as an argument
+// and returns an error. It is used to handle requests within the application.
+type HandleFunc func(c *Context) error
+
+// Middleware is a function type that takes a HandleFunc as an argument and returns a HandleFunc.
+// It is used to wrap or decorate an existing HandleFunc with additional functionality.
+type Middleware func(next HandleFunc) HandleFunc
+
 // App is the main struct of the framework.
 //
 // It is used to register routes, middleware, and view engines.
@@ -72,7 +80,7 @@ func New(opts ...Option) *App {
 		for _, ve := range app.viewEngines {
 			err := ve.Load(app.fsys, app)
 			if err != nil {
-				panic(err)
+				app.logger.Error("xun: load views", slog.Any("err", err))
 			}
 		}
 
@@ -80,9 +88,7 @@ func New(opts ...Option) *App {
 			app.watcher = fsnotify.NewWatcher(app.fsys)
 			if err := app.watcher.Add("."); err != nil {
 				app.logger.Error("xun: watcher add", slog.Any("err", err))
-			}
-
-			if app.watcher != nil {
+			} else {
 				go app.enableHotReload()
 			}
 		}
@@ -91,15 +97,9 @@ func New(opts ...Option) *App {
 	return app
 }
 
-type HandleFunc func(c *Context) error
-
-type Middleware func(next HandleFunc) HandleFunc
-
-// Middleware is a function that takes a HandleFunc and returns a HandleFunc.
-// Middleware functions are useful for creating reusable pieces of code that can
-// be composed together to create complex behavior. For example, a middleware
-// function might be used to log each request, or to check if a user is
-// authenticated before allowing access to a page.
+// Group creates a new router group with the specified prefix.
+// It returns a Router interface that can be used to define routes
+// within the group.
 func (app *App) Group(prefix string) Router {
 	return &group{
 		prefix: prefix,
@@ -107,37 +107,9 @@ func (app *App) Group(prefix string) Router {
 	}
 }
 
-func (app *App) enableHotReload() {
-	defer app.watcher.Stop()
-	go app.watcher.Start()
-
-	for {
-		select {
-		case event, ok := <-app.watcher.Events:
-			if !ok {
-				return
-			}
-
-			var err error
-			for _, ve := range app.viewEngines {
-				err = ve.FileChanged(app.fsys, app, event)
-				if err != nil {
-					app.logger.Error("xun: on file changed", slog.Any("err", err))
-				}
-			}
-
-		case err, ok := <-app.watcher.Errors:
-			if !ok {
-				return
-			}
-
-			app.logger.Error("xun: watcher", slog.Any("err", err))
-
-		}
-	}
-
-}
-
+// Start initializes and starts the application by locking the mutex,
+// iterating through the routes, and logging the pattern and viewers
+// for each route. It ensures thread safety by using a mutex lock.
 func (app *App) Start() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -153,6 +125,10 @@ func (app *App) Start() {
 
 }
 
+// Close safely locks the App instance, ensuring that no other
+// goroutines can access it until the lock is released. This method
+// should be called when the App instance is no longer needed to
+// prevent any further operations on it.
 func (app *App) Close() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -194,19 +170,8 @@ func (app *App) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 	app.HandleFunc(http.MethodDelete+" "+pattern, hf, opts...)
 }
 
-// HandleFunc registers a route handler for the given HTTP request pattern.
-//
-// The pattern is expected to be in the format "METHOD PATTERN", where
-// METHOD is the HTTP method (e.g. "GET", "POST", etc.) and PATTERN is
-// the URL path pattern.
-//
-// The opts parameter is a list of RoutingOption functions that can be
-// used to customize the route. See the RoutingOption type for more
-// information.
-func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
-	app.handleFunc(pattern, hf, opts, app)
-}
-
+// Next applies the middlewares in the app to the given HandleFunc in reverse order.
+// It returns the final HandleFunc after all middlewares have been applied.
 func (app *App) Next(hf HandleFunc) HandleFunc {
 	next := hf
 	for i := len(app.middlewares); i > 0; i-- {
@@ -215,41 +180,43 @@ func (app *App) Next(hf HandleFunc) HandleFunc {
 	return next
 }
 
-func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
-	ro := &RoutingOptions{
-		viewer: app.viewer,
-	}
-	for _, o := range opts {
-		o(ro)
-	}
+// HandleFile registers a route handler for serving a file.
+//
+// This function associates a FileViewer with a given file name
+// and registers the route in the application's routing table.
+// If a route with the same pattern already exists, it returns immediately
+// without making any changes.
+func (app *App) HandleFile(name string, v *FileViewer) {
+	ro := &RoutingOptions{}
 
-	_, host, path := splitPattern(pattern)
+	_, _, pat := splitFile(name)
 
-	r, ok := app.routes[pattern]
+	r, ok := app.routes[pat]
 
 	if ok {
-		r.Options = ro
-		r.Handle = hf
-		r.chain = c
-
-		if ro.viewer != nil {
-			r.Viewers[ro.viewer.MimeType()] = ro.viewer
-		}
-
 		return
-
 	}
+
+	ro.viewer = v
+	app.viewers[name] = v
+
+	hf := func(c *Context) error {
+		return v.Render(c.rw, c.req, nil)
+	}
+
 	r = &Routing{
 		Options: ro,
-		Pattern: pattern,
+		Pattern: pat,
 		Handle:  hf,
-		chain:   c,
+		chain:   app,
 		Viewers: make(map[string]Viewer),
 	}
 
-	app.routes[pattern] = r
+	app.routes[pat] = r
 
-	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
+	r.Viewers[v.MimeType()] = v
+
+	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
 		rw := app.createWriter(req, w)
 		defer rw.Close()
 
@@ -269,22 +236,8 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
-		app.logger.Error("xun: handle", slog.Any("err", err), slog.String("logid", logID))
+		app.logger.Error("xun: file", slog.Any("err", err), slog.String("logid", logID))
 	})
-
-	if ro.viewer != nil {
-		r.Viewers[ro.viewer.MimeType()] = ro.viewer
-	}
-
-	viewName := path
-	if host != "" {
-		viewName = "@" + host + "/" + path
-	}
-
-	// try to find html viewer
-	if v, ok := app.viewers[viewName]; ok {
-		r.Viewers[v.MimeType()] = v
-	}
 }
 
 // HandlePage registers a route handler for a page view.
@@ -347,6 +300,23 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 
 }
 
+// HandleFunc registers a route handler for the given HTTP request pattern.
+//
+// The pattern is expected to be in the format "METHOD PATTERN", where
+// METHOD is the HTTP method (e.g. "GET", "POST", etc.) and PATTERN is
+// the URL path pattern.
+//
+// The opts parameter is a list of RoutingOption functions that can be
+// used to customize the route. See the RoutingOption type for more
+// information.
+func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
+	app.createHandler(pattern, hf, opts, app)
+}
+
+// createWriter creates a ResponseWriter that supports compression based on the
+// "Accept-Encoding" header in the HTTP request. If the header contains a
+// supported encoding or a wildcard "*", it returns a compressed ResponseWriter.
+// Otherwise, it returns a standard ResponseWriter.
 func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseWriter {
 	acceptEncoding := req.Header.Get("Accept-Encoding")
 
@@ -357,46 +327,45 @@ func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseW
 			return compressor.New(w)
 		}
 	}
-	return &responseWriter{ResponseWriter: w}
+	return &stdResponseWriter{ResponseWriter: w}
 }
 
-// HandleFile registers a route handler for serving a file.
-//
-// This function associates a FileViewer with a given file name
-// and registers the route in the application's routing table.
-// If a route with the same pattern already exists, it returns immediately
-// without making any changes.
-func (app *App) HandleFile(name string, v *FileViewer) {
-	ro := &RoutingOptions{}
+// createHandler registers a new route with the given pattern, handler function, routing options, and middleware chain.
+// It updates the route if it already exists or creates a new one if it doesn't.
+// The function also sets up the HTTP handler for the route and manages the viewers for different MIME types.
+func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
+	ro := &RoutingOptions{
+		viewer: app.viewer,
+	}
+	for _, o := range opts {
+		o(ro)
+	}
 
-	_, _, pat := splitFile(name)
-
-	r, ok := app.routes[pat]
+	r, ok := app.routes[pattern]
 
 	if ok {
+		r.Options = ro
+		r.Handle = hf
+		r.chain = c
+
+		if ro.viewer != nil {
+			r.Viewers[ro.viewer.MimeType()] = ro.viewer
+		}
+
 		return
+
 	}
-
-	ro.viewer = v
-	app.viewers[name] = v
-
-	hf := func(c *Context) error {
-		return v.Render(c.rw, c.req, nil)
-	}
-
 	r = &Routing{
 		Options: ro,
-		Pattern: pat,
+		Pattern: pattern,
 		Handle:  hf,
-		chain:   app,
+		chain:   c,
 		Viewers: make(map[string]Viewer),
 	}
 
-	app.routes[pat] = r
+	app.routes[pattern] = r
 
-	r.Viewers[v.MimeType()] = v
-
-	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
+	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
 		rw := app.createWriter(req, w)
 		defer rw.Close()
 
@@ -416,6 +385,39 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
-		app.logger.Error("xun: file", slog.Any("err", err), slog.String("logid", logID))
+		app.logger.Error("xun: handle", slog.Any("err", err), slog.String("logid", logID))
 	})
+
+	if ro.viewer != nil {
+		r.Viewers[ro.viewer.MimeType()] = ro.viewer
+	}
+}
+
+func (app *App) enableHotReload() {
+	defer app.watcher.Stop()
+	go app.watcher.Start()
+
+	for {
+		select {
+		case event, ok := <-app.watcher.Events:
+			if !ok {
+				return
+			}
+
+			var err error
+			for _, ve := range app.viewEngines {
+				err = ve.FileChanged(app.fsys, app, event)
+				if err != nil {
+					app.logger.Error("xun: on file changed", slog.Any("err", err))
+				}
+			}
+
+		case err, ok := <-app.watcher.Errors:
+			if !ok {
+				return
+			}
+			app.logger.Error("xun: watcher", slog.Any("err", err))
+		}
+	}
+
 }

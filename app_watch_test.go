@@ -1,7 +1,9 @@
 package xun
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -267,7 +269,7 @@ func TestWatchOnHtml(t *testing.T) {
 
 	require.Equal(t, "<html><head><title>header</title></head><body><div>admin/user</div></body></html>", string(buf))
 
-	//added
+	// added
 	req, err = http.NewRequest("GET", srv.URL+"/about", nil)
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -278,5 +280,81 @@ func TestWatchOnHtml(t *testing.T) {
 	resp.Body.Close()
 
 	require.Equal(t, "<html><head><title>header updated</title></head><body>layout updated:<div>about</div></body></html>", string(buf))
+
+}
+
+type mockViewEngine struct {
+}
+
+func (*mockViewEngine) Load(fsys fs.FS, app *App) error { // skipcq: RVV-B0012
+	return nil
+}
+func (*mockViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { // skipcq: RVV-B0012
+	return errors.New("err: unhandled error")
+}
+
+func TestHotReloadChannels(t *testing.T) {
+	createApp := func(ve ...ViewEngine) *App {
+		fsys := fstest.MapFS{
+			"public/home.html": {Data: []byte("home"), Mode: os.ModePerm, ModTime: time.Now()},
+		}
+
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+		opts := []Option{WithMux(mux), WithFsys(fsys), WithWatch()}
+		if ve != nil {
+			opts = append(opts, WithViewEngines(ve...))
+		}
+		app := New(opts...)
+
+		app.Start()
+
+		return app
+	}
+
+	tests := []struct {
+		name       string
+		createApp  func() *App
+		throwError func(app *App)
+	}{
+		{
+			name:      "should_not_panic_when_watcher_events_channel_is_closed",
+			createApp: func() *App { return createApp() },
+			throwError: func(app *App) {
+				close(app.watcher.Events)
+			},
+		},
+		{
+			name:      "should_not_panic_when_watcher_errors_channel_is_closed",
+			createApp: func() *App { return createApp() },
+			throwError: func(app *App) {
+				close(app.watcher.Errors)
+			},
+		},
+		{
+			name:      "should_not_panic_when_watcher_failed_to_load_views",
+			createApp: func() *App { return createApp(&mockViewEngine{}) },
+			throwError: func(app *App) {
+				app.watcher.Events <- fsnotify.Event{Name: "public/home.html", Op: fsnotify.Write}
+			},
+		},
+		{
+			name:      "should_work_when_watcher_catch_an_error",
+			createApp: func() *App { return createApp(&mockViewEngine{}) },
+			throwError: func(app *App) {
+				app.watcher.Errors <- errors.New("err: unhandled error")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(*testing.T) {
+			app := tt.createApp()
+			defer app.Close()
+
+			tt.throwError(app)
+		})
+	}
 
 }

@@ -32,7 +32,7 @@ func (g *group) Delete(pattern string, hf HandleFunc, opts ...RoutingOption) {
 }
 
 func (g *group) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
-	g.app.handleFunc(pattern, hf, opts, g)
+	g.app.createHandler(pattern, hf, opts, g)
 }
 
 func (g *group) Next(hf HandleFunc) HandleFunc {
