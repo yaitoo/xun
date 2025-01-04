@@ -35,6 +35,7 @@ type App struct {
 	watch       bool
 	watcher     *fsnotify.Watcher
 	interceptor Interceptor
+	compressors []Compressor
 }
 
 // New allocates an App instance and loads all view engines.
@@ -249,12 +250,14 @@ func (app *App) handleFunc(pattern string, hf HandleFunc, opts []RoutingOption, 
 	app.routes[pattern] = r
 
 	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
+		rw := app.createWriter(req, w)
+		defer rw.Close()
+
 		ctx := &Context{
-			req:         req,
-			rw:          w,
-			Routing:     *r,
-			app:         app,
-			interceptor: app.interceptor,
+			req:     req,
+			rw:      rw,
+			Routing: *r,
+			app:     app,
 		}
 
 		err := r.Next(ctx)
@@ -319,12 +322,14 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	app.routes[pattern] = r
 
 	app.mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
+		rw := app.createWriter(req, w)
+		defer rw.Close()
+
 		ctx := &Context{
-			req:         req,
-			rw:          w,
-			Routing:     *r,
-			app:         app,
-			interceptor: app.interceptor,
+			req:     req,
+			rw:      rw,
+			Routing: *r,
+			app:     app,
 		}
 
 		err := r.Next(ctx)
@@ -340,6 +345,19 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 
 	})
 
+}
+
+func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseWriter {
+	acceptEncoding := req.Header.Get("Accept-Encoding")
+
+	stars := strings.ContainsAny(acceptEncoding, "*")
+
+	for _, compressor := range app.compressors {
+		if stars || strings.Contains(acceptEncoding, compressor.AcceptEncoding()) {
+			return compressor.New(w)
+		}
+	}
+	return &responseWriter{ResponseWriter: w}
 }
 
 // HandleFile registers a route handler for serving a file.
@@ -379,12 +397,14 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 	r.Viewers[v.MimeType()] = v
 
 	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
+		rw := app.createWriter(req, w)
+		defer rw.Close()
+
 		ctx := &Context{
-			req:         req,
-			rw:          w,
-			Routing:     *r,
-			app:         app,
-			interceptor: app.interceptor,
+			req:     req,
+			rw:      rw,
+			Routing: *r,
+			app:     app,
 		}
 
 		err := r.Next(ctx)

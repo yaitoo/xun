@@ -8,10 +8,10 @@ Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signif
 [![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
 [![Codecov](https://codecov.io/gh/yaitoo/xun/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/xun)
 [![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun)](https://github.com/yaitoo/xun/blob/main/CHANGELOG.md)
-[![Go Report Card](https://goreportcard.com/badge/yaitoo/xun)](http://goreportcard.com/report/yaitoo/xun)
+[![Go Report Card](https://goreportcard.com/badge/github.com/yaitoo/xun)](https://goreportcard.com/report/github.com/yaitoo/xun)
 
 ## Features
-- Works with Go's built-in `net/http.ServeMux` router. that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
+- Works with Go's built-in `net/http.ServeMux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
 - Built-in Form and Validate feature with i18n support.
 - Support Page Router in `StaticViewEngine` and `HtmlViewEngine`.
