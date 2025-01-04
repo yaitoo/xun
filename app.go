@@ -61,13 +61,6 @@ func New(opts ...Option) *App {
 		app.mux = http.DefaultServeMux
 	}
 
-	if app.compressors == nil {
-		app.compressors = []Compressor{
-			&GzipCompressor{},
-			&DeflateCompressor{},
-		}
-	}
-
 	if app.viewEngines == nil {
 		app.viewEngines = []ViewEngine{
 			&StaticViewEngine{},
@@ -356,8 +349,11 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 
 func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseWriter {
 	acceptEncoding := req.Header.Get("Accept-Encoding")
+
+	stars := strings.ContainsAny(acceptEncoding, "*")
+
 	for _, compressor := range app.compressors {
-		if strings.Contains(acceptEncoding, compressor.AcceptEncoding()) {
+		if stars || strings.Contains(acceptEncoding, compressor.AcceptEncoding()) {
 			return compressor.New(w)
 		}
 	}
