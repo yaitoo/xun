@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/acme/autocert"
@@ -31,15 +32,19 @@ func TestConfigure(t *testing.T) {
 	require.NotNil(t, httpSrv.Handler)
 	require.NotNil(t, httpsSrv.TLSConfig)
 
+	require.Equal(t, 3*time.Second, httpSrv.ReadHeaderTimeout)
+
 	require.Equal(t, uint16(tls.VersionTLS12), httpsSrv.TLSConfig.MinVersion)
 	require.Equal(t, uint16(0), httpsSrv.TLSConfig.MaxVersion)
 
 	require.NotNil(t, httpsSrv.TLSConfig.GetCertificate)
 
-	httpSrv = &http.Server{}
+	httpSrv = &http.Server{
+		ReadHeaderTimeout: 1 * time.Second,
+	}
 	httpsSrv = &http.Server{
 		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS10,
+			MinVersion: tls.VersionTLS10, // skipcq: GSC-G402
 			MaxVersion: tls.VersionTLS13,
 		},
 	}
@@ -47,6 +52,8 @@ func TestConfigure(t *testing.T) {
 	as.Configure(httpSrv, httpsSrv)
 	require.NotNil(t, httpSrv.Handler)
 	require.NotNil(t, httpsSrv.TLSConfig)
+
+	require.Equal(t, 1*time.Second, httpSrv.ReadHeaderTimeout)
 
 	require.Equal(t, uint16(tls.VersionTLS10), httpsSrv.TLSConfig.MinVersion)
 	require.Equal(t, uint16(tls.VersionTLS13), httpsSrv.TLSConfig.MaxVersion)
