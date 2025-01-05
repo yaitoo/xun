@@ -1,4 +1,4 @@
-package autossl
+package autotls
 
 import (
 	"crypto/tls"
@@ -8,12 +8,12 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// AutoSSL is a wrapper around autocert.Manager that provides automatic
+// Manager is a wrapper around autocert.Manager that provides automatic
 // management of SSL/TLS certificates. It embeds autocert.Manager to
 // inherit its methods and functionalities, allowing for seamless
 // integration and usage of automatic certificate management in your
 // application.
-type AutoSSL struct {
+type Manager struct {
 	*autocert.Manager
 }
 
@@ -28,7 +28,7 @@ type AutoSSL struct {
 // Returns:
 //
 //	A pointer to an AutoSSL instance with the configured autocert.Manager.
-func New(opts ...Option) *AutoSSL {
+func New(opts ...Option) *Manager {
 	cm := &autocert.Manager{
 		Prompt: autocert.AcceptTOS,
 	}
@@ -41,7 +41,7 @@ func New(opts ...Option) *AutoSSL {
 		cm.Cache = autocert.DirCache(".")
 	}
 
-	return &AutoSSL{
+	return &Manager{
 		Manager: cm,
 	}
 }
@@ -54,9 +54,9 @@ func New(opts ...Option) *AutoSSL {
 // Parameters:
 //   - httpSrv: A pointer to the HTTP server to be configured.
 //   - httpsSrv: A pointer to the HTTPS server to be configured.
-func (autossl *AutoSSL) Configure(httpSrv *http.Server, httpsSrv *http.Server) {
+func (m *Manager) Configure(httpSrv *http.Server, httpsSrv *http.Server) {
 	if httpSrv != nil && httpsSrv != nil {
-		httpSrv.Handler = autossl.Manager.HTTPHandler(httpSrv.Handler)
+		httpSrv.Handler = m.Manager.HTTPHandler(httpSrv.Handler)
 
 		if httpSrv.ReadHeaderTimeout == 0 {
 			httpSrv.ReadHeaderTimeout = 3 * time.Second // prevent Potential slowloris attack
@@ -73,7 +73,7 @@ func (autossl *AutoSSL) Configure(httpSrv *http.Server, httpsSrv *http.Server) {
 			}
 		}
 
-		httpsSrv.TLSConfig.GetCertificate = autossl.Manager.GetCertificate
+		httpsSrv.TLSConfig.GetCertificate = m.Manager.GetCertificate
 	}
 
 }

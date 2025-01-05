@@ -1,4 +1,4 @@
-package autossl
+package autotls
 
 import "golang.org/x/crypto/acme/autocert"
 
