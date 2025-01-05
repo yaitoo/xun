@@ -55,18 +55,25 @@ func New(opts ...Option) *AutoSSL {
 //   - httpSrv: A pointer to the HTTP server to be configured.
 //   - httpsSrv: A pointer to the HTTPS server to be configured.
 func (autossl *AutoSSL) Configure(httpSrv *http.Server, httpsSrv *http.Server) {
-	httpSrv.Handler = autossl.Manager.HTTPHandler(httpSrv.Handler)
+	if httpSrv != nil && httpsSrv != nil {
+		httpSrv.Handler = autossl.Manager.HTTPHandler(httpSrv.Handler)
 
-	if httpSrv.ReadHeaderTimeout == 0 {
-		httpSrv.ReadHeaderTimeout = 3 * time.Second // Potential slowloris attack
-	}
-
-	if httpsSrv.TLSConfig == nil {
-		httpsSrv.TLSConfig = &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			MaxVersion: 0,
+		if httpSrv.ReadHeaderTimeout == 0 {
+			httpSrv.ReadHeaderTimeout = 3 * time.Second // prevent Potential slowloris attack
 		}
+
+		if httpsSrv.ReadHeaderTimeout == 0 {
+			httpsSrv.ReadHeaderTimeout = 3 * time.Second // prevent Potential slowloris attack
+		}
+
+		if httpsSrv.TLSConfig == nil {
+			httpsSrv.TLSConfig = &tls.Config{
+				MinVersion: tls.VersionTLS12,
+				MaxVersion: 0,
+			}
+		}
+
+		httpsSrv.TLSConfig.GetCertificate = autossl.Manager.GetCertificate
 	}
 
-	httpsSrv.TLSConfig.GetCertificate = autossl.Manager.GetCertificate
 }
