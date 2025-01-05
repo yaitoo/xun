@@ -3,6 +3,7 @@ package autossl
 import (
 	"crypto/tls"
 	"net/http"
+	"time"
 
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -34,8 +35,9 @@ func New(mux *http.ServeMux, opts ...Option) (*http.Server, *http.Server) {
 	}
 
 	httpServer := &http.Server{
-		Addr:    ":http",
-		Handler: cm.HTTPHandler(mux),
+		Addr:              ":http",
+		Handler:           cm.HTTPHandler(mux),
+		ReadHeaderTimeout: 3 * time.Second,
 	}
 
 	httpsServer := &http.Server{
