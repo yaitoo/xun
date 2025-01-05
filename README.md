@@ -15,10 +15,12 @@ Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signif
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
 - Built-in response compression support for `gzip` and `deflate`. 
 - Built-in Form and Validate feature with i18n support.
+- Built-in `AutoTLS` feature. It automatic SSL certificate issuance and renewal through Let's Encrypt and other ACME-based CAs
 - Support Page Router in `StaticViewEngine` and `HtmlViewEngine`.
 - Support multiple viewers by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
 - Support to reload changed static files automatically in development environment.
-  
+
+
 
 ## Getting Started
 > See full source code on [xun-examples](https://github.com/yaitoo/xun-examples)
@@ -418,6 +420,44 @@ xun.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslatio
 ```
 
 > check more translations on [here](https://github.com/go-playground/validator/tree/master/translations)
+
+### Extensions
+#### GZip/Deflate handler
+Set up the compression extension to interpret and respond to `Accept-Encoding` headers in client requests, supporting both GZip and Deflate compression methods.
+
+```go
+app := xun.New(WithCompressor(&GzipCompressor{}, &DeflateCompressor{}))
+```
+
+#### AutoTLS
+Use `autotls.Configure` to set up servers for automatic obtaining and renewing of TLS certificates from Let's Encrypt.
+
+```go
+
+	mux := http.NewServeMux()
+
+	app := xun.New(xun.WithMux(mux))
+
+	//...
+
+	httpServer := &http.Server{
+		Addr: ":http",
+		//...
+	}
+
+	httpsServer := &http.Server{
+		Addr: ":https",
+		//...
+	}
+
+	autotls.
+		New(autotls.WithCache(autocert.DirCache("./certs")),
+			autotls.WithHosts("abc.com", "123.com")).
+		Configure(httpServer, httpsServer)
+
+	go httpServer.ListenAndServe()
+	go httpsServer.ListenAndServeTLS("", "")
+```
 
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
 #### Install Tailwind CSS
