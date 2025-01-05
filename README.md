@@ -423,13 +423,14 @@ xun.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslatio
 
 ### Extensions
 #### GZip/Deflate handler
-setup compression extension to reply `Accept-Encoding` request.
+Set up the compression extension to interpret and respond to `Accept-Encoding` headers in client requests, supporting both GZip and Deflate compression methods.
+
 ```go
 app := xun.New(WithCompressor(&GzipCompressor{}, &DeflateCompressor{}))
 ```
 
-#### AutoTLS 
-use `autotls.Configure` servers to obtain/renew TLS certificates for a domain automatically from Let's Encrypt
+#### AutoTLS
+Use `autotls.Configure` to set up servers for automatic obtaining and renewing of TLS certificates from Let's Encrypt.
 
 ```go
 
