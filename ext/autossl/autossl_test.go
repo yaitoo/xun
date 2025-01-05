@@ -25,7 +25,7 @@ func TestConfigure(t *testing.T) {
 	require.NotNil(t, as)
 
 	httpSrv := &http.Server{}  // skipcp: GO-S2112
-	httpsSrv := &http.Server{} // skipcq: GSC-G402
+	httpsSrv := &http.Server{} // skipcq: GO-S2112,GSC-G402
 
 	as.Configure(httpSrv, httpsSrv)
 
@@ -45,8 +45,8 @@ func TestConfigure(t *testing.T) {
 	}
 	httpsSrv = &http.Server{
 		ReadHeaderTimeout: 1 * time.Second,
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS10, // skipcq: GSC-G402
+		TLSConfig: &tls.Config{ // skipcq: GSC-G402
+			MinVersion: tls.VersionTLS10,
 			MaxVersion: tls.VersionTLS13,
 		},
 	}
