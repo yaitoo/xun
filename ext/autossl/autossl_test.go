@@ -24,7 +24,7 @@ func TestConfigure(t *testing.T) {
 	as := New()
 	require.NotNil(t, as)
 
-	httpSrv := &http.Server{}  // skipcp: GO-S2112
+	httpSrv := &http.Server{}  // skipcq: GO-S2112
 	httpsSrv := &http.Server{} // skipcq: GO-S2112,GSC-G402
 
 	as.Configure(httpSrv, httpsSrv)
