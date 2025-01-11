@@ -731,7 +731,7 @@ func TestDataBindOnHtml(t *testing.T) {
 		},
 	}
 
-	FuncMap["ToUpper"] = strings.ToUpper
+	HtmlFuncMap["ToUpper"] = strings.ToUpper
 
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
