@@ -3,7 +3,6 @@ package xun
 import (
 	"errors"
 	"io/fs"
-	"path/filepath"
 	"strings"
 
 	"github.com/yaitoo/xun/fsnotify"
@@ -18,9 +17,8 @@ import (
 // Components are used to build up larger templates, while pages are used to render
 // the final HTML that is sent to the client.
 type HtmlViewEngine struct {
-	fsys fs.FS
-	app  *App
-
+	fsys      fs.FS
+	app       *App
 	templates map[string]*HtmlTemplate
 }
 
@@ -59,11 +57,11 @@ func (ve *HtmlViewEngine) Load(fsys fs.FS, app *App) error {
 // It is used to reload templates when they have been changed.
 func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { //skipcq: RVV-B0012
 
-	if event.Has(fsnotify.Remove) || !strings.EqualFold(filepath.Ext(event.Name), ".html") {
+	if event.Has(fsnotify.Remove) {
 		return nil
 	}
 
-	name := event.Name[:len(event.Name)-5]
+	name := strings.TrimSuffix(event.Name, ".html") // only remove .html, because it is removed on template name
 
 	if event.Has(fsnotify.Write) {
 		t, ok := ve.templates[name]
@@ -93,7 +91,7 @@ func (ve *HtmlViewEngine) loadComponents() error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".html") {
+		if d.IsDir() {
 			return nil
 		}
 
@@ -136,15 +134,14 @@ func (ve *HtmlViewEngine) loadLayouts() error {
 			return err
 		}
 
-		if !d.IsDir() {
-
-			_, err = ve.loadTemplate(path)
-
-			return err
-
+		if d.IsDir() {
+			return nil
 		}
 
-		return nil
+		_, err = ve.loadTemplate(path)
+
+		return err
+
 	})
 
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
@@ -160,7 +157,7 @@ func (ve *HtmlViewEngine) loadPages() error {
 			return err
 		}
 
-		if d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".html") {
+		if d.IsDir() {
 			return nil
 		}
 
@@ -184,17 +181,18 @@ func (ve *HtmlViewEngine) loadPage(path string) error {
 		return err
 	}
 
-	// delete file extension ".html"
-	ve.templates[path[:len(path)-5]] = t
+	ve.templates[strings.TrimSuffix(path, ".html")] = t
 
-	if strings.HasSuffix(path, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
+	viewName := strings.TrimSuffix(name, ".html")
+
+	if strings.HasSuffix(path, "/index.html") { // remove it, because index.html will be registered as /{$}
 		name = name[:len(name)-10]
 	}
 
 	_, _, pattern := splitFile(name)
 	pattern = strings.TrimSuffix(pattern, ".html")
 
-	ve.app.HandlePage(pattern, path[6:len(path)-5], &HtmlViewer{
+	ve.app.HandlePage(pattern, viewName, &HtmlViewer{
 		template: t,
 	})
 
@@ -207,7 +205,7 @@ func (ve *HtmlViewEngine) loadViews() error {
 			return err
 		}
 
-		if d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".html") {
+		if d.IsDir() {
 			return nil
 		}
 
@@ -229,7 +227,7 @@ func (ve *HtmlViewEngine) loadView(path string) error {
 		return err
 	}
 
-	ve.app.viewers[path[:len(path)-5]] = &HtmlViewer{
+	ve.app.viewers[strings.TrimSuffix(path, ".html")] = &HtmlViewer{
 		template: t,
 	}
 
