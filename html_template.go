@@ -49,6 +49,9 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 		return err
 	}
 
+	charset := "; charset=utf-8"
+	mt := "text/html"
+
 	nt := template.New(t.name).Funcs(FuncMap)
 
 	dependencies := make(map[string]struct{})
@@ -58,16 +61,14 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 		t.dependencies = dependencies
 
 		// text/html; charset=utf-8
-		i := strings.Index(t.mime, ";")
+		i := strings.Index(mt, ";")
 		if i > -1 {
-			t.charset = t.mime[i:]
-			t.mime = t.mime[:i]
+			charset = mt[i:]
+			mt = mt[:i]
 		}
 
-		if t.mime == "" {
-			t.charset = ""
-			t.mime = "application/octet-stream"
-		}
+		t.charset = charset
+		t.mime = mt
 
 	}()
 
@@ -75,10 +76,10 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 		return nil
 	}
 
-	t.mime = mime.TypeByExtension(filepath.Ext(t.path))
+	mt = mime.TypeByExtension(filepath.Ext(t.path))
 
-	if t.mime == "" {
-		t.mime = http.DetectContentType(buf)
+	if mt == "" {
+		mt = http.DetectContentType(buf)
 	}
 
 	nt, err = nt.Parse(string(buf))
