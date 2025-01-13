@@ -12,8 +12,6 @@ import (
 	"errors"
 )
 
-const sniffLen = 512
-
 // FuncMap is a map of functions that are available to templates.
 var FuncMap template.FuncMap = make(template.FuncMap)
 
@@ -21,10 +19,11 @@ var FuncMap template.FuncMap = make(template.FuncMap)
 type HtmlTemplate struct {
 	template *template.Template
 
-	name   string
-	path   string
-	layout string
-	mime   string
+	name    string
+	path    string
+	layout  string
+	mime    string
+	charset string
 
 	dependencies map[string]struct{}
 	dependents   map[string]*HtmlTemplate
@@ -44,7 +43,7 @@ func NewHtmlTemplate(name, path string) *HtmlTemplate {
 //
 // It parses the file, and determines the dependencies of the template.
 // The dependencies are stored in the `dependencies` field.
-func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) error {
+func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) error { // skipcq: GO-R1005
 	buf, err := fs.ReadFile(fsys, t.path)
 	if err != nil {
 		return err
@@ -57,9 +56,19 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 	defer func() {
 		t.template = nt
 		t.dependencies = dependencies
+
+		// text/html; charset=utf-8
+		i := strings.Index(t.mime, ";")
+		if i > -1 {
+			t.charset = t.mime[i:]
+			t.mime = t.mime[:i]
+		}
+
 		if t.mime == "" {
+			t.charset = ""
 			t.mime = "application/octet-stream"
 		}
+
 	}()
 
 	if len(buf) == 0 {
@@ -69,15 +78,7 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 	t.mime = mime.TypeByExtension(filepath.Ext(t.path))
 
 	if t.mime == "" {
-		// read a chunk to decide between utf-8 text and binary
-		var b []byte
-		if len(buf) > sniffLen {
-			b = buf[:sniffLen]
-		} else {
-			b = buf[:]
-		}
-
-		t.mime = http.DetectContentType(b)
+		t.mime = http.DetectContentType(buf)
 	}
 
 	nt, err = nt.Parse(string(buf))
