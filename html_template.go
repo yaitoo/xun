@@ -4,10 +4,15 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"mime"
+	"net/http"
+	"path/filepath"
 	"strings"
 
 	"errors"
 )
+
+const sniffLen = 512
 
 // FuncMap is a map of functions that are available to templates.
 var FuncMap template.FuncMap = make(template.FuncMap)
@@ -19,6 +24,7 @@ type HtmlTemplate struct {
 	name   string
 	path   string
 	layout string
+	mime   string
 
 	dependencies map[string]struct{}
 	dependents   map[string]*HtmlTemplate
@@ -45,15 +51,33 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 	}
 
 	nt := template.New(t.name).Funcs(FuncMap)
+
 	dependencies := make(map[string]struct{})
 
 	defer func() {
 		t.template = nt
 		t.dependencies = dependencies
+		if t.mime == "" {
+			t.mime = "application/octet-stream"
+		}
 	}()
 
 	if len(buf) == 0 {
 		return nil
+	}
+
+	t.mime = mime.TypeByExtension(filepath.Ext(t.path))
+
+	if t.mime == "" {
+		// read a chunk to decide between utf-8 text and binary
+		var b []byte
+		if len(buf) > sniffLen {
+			b = buf[:sniffLen]
+		} else {
+			b = buf[:]
+		}
+
+		t.mime = http.DetectContentType(b)
 	}
 
 	nt, err = nt.Parse(string(buf))

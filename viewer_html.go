@@ -28,8 +28,8 @@ type HtmlViewer struct {
 // MimeType returns the MIME type of the HTML content.
 //
 // This implementation returns "text/html".
-func (*HtmlViewer) MimeType() string {
-	return "text/html"
+func (v *HtmlViewer) MimeType() string {
+	return v.template.mime
 }
 
 // Render renders the template with the given data and writes the result to the http.ResponseWriter.
@@ -37,7 +37,7 @@ func (*HtmlViewer) MimeType() string {
 // This implementation uses the `HtmlTemplate.Execute` method to render the template.
 // The rendered result is written to the http.ResponseWriter.
 func (v *HtmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { //skipcq: RVV-B0012
-	w.Header().Add("Content-Type", "text/html; charset=utf-8")
+	w.Header().Add("Content-Type", v.template.mime)
 	buf := BufPool.Get()
 	defer BufPool.Put(buf)
 
