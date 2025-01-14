@@ -3,10 +3,6 @@ package xun
 import (
 	"io"
 	"io/fs"
-	"mime"
-	"net/http"
-	"path/filepath"
-	"strings"
 	"text/template"
 )
 
@@ -27,23 +23,13 @@ func (t *TextTemplate) Load(fsys fs.FS) error {
 	}
 
 	nt := template.New(t.name).Funcs(FuncMap)
-	charset := "; charset=utf-8"
-	mt := "text/plain"
-
-	defer func() {
-		t.template = nt
-		t.charset = charset
-		t.mime = mt
-	}()
 
 	if len(buf) == 0 {
 		nt, _ = nt.Parse("")
+		t.template = nt
+		t.mime = "text/plain"
+		t.charset = "; charset=utf-8"
 		return nil
-	}
-
-	mt = mime.TypeByExtension(filepath.Ext(t.name))
-	if mt == "" {
-		mt = http.DetectContentType(buf)
 	}
 
 	nt, err = nt.Parse(string(buf))
@@ -51,12 +37,8 @@ func (t *TextTemplate) Load(fsys fs.FS) error {
 		return err
 	}
 
-	// text/plain; charset=utf-8
-	i := strings.Index(mt, ";")
-	if i > -1 {
-		charset = mt[i:]
-		mt = mt[:i]
-	}
+	t.mime, t.charset = GetMimeType(t.name, buf)
+	t.template = nt
 
 	return nil
 }
