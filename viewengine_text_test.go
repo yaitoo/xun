@@ -99,14 +99,14 @@ func TestWatchOnText(t *testing.T) {
 		return c.View(nil, "text/robots.txt")
 	})
 
-	app.Get("/new.md", func(c *Context) error {
-		return c.View(nil, "text/new.md")
+	app.Get("/new.txt", func(c *Context) error {
+		return c.View(nil, "text/new.txt")
 	})
 
 	app.Start()
 	defer app.Close()
 
-	req, err := http.NewRequest("GET", srv.URL+"/new.md", nil)
+	req, err := http.NewRequest("GET", srv.URL+"/new.txt", nil)
 	require.NoError(t, err)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestWatchOnText(t *testing.T) {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`), ModTime: time.Now()}
 
 	// added
-	fsys["text/new.md"] = &fstest.MapFile{Data: []byte("new content"), ModTime: time.Now()}
+	fsys["text/new.txt"] = &fstest.MapFile{Data: []byte("new content"), ModTime: time.Now()}
 
 	// deleted
 	delete(fsys, "text/robots.txt")
@@ -164,7 +164,7 @@ func TestWatchOnText(t *testing.T) {
 
 	app.watcher.Stop()
 
-	req, err = http.NewRequest("GET", srv.URL+"/new.md", nil)
+	req, err = http.NewRequest("GET", srv.URL+"/new.txt", nil)
 	req.Header.Set("Accept", "text/plain")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
@@ -174,7 +174,7 @@ func TestWatchOnText(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 
-	require.Equal(t, fsys["text/new.md"].Data, buf)
+	require.Equal(t, fsys["text/new.txt"].Data, buf)
 
 	req, err = http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
 	req.Header.Set("Accept", "application/xml")
