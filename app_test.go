@@ -26,7 +26,7 @@ var (
 func TestMain(m *testing.M) {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) { //skipcq: RVV-B0012
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012
 		if strings.HasPrefix(addr, "abc.com") {
 			return net.Dial("tcp", strings.TrimPrefix(addr, "abc.com"))
 		}
@@ -214,7 +214,7 @@ func TestStatus(t *testing.T) {
 	resp.Body.Close()
 
 	c := http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error { //skipcq: RVV-B0012
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { // skipcq: RVV-B0012
 			return http.ErrUseLastResponse
 		},
 	}
@@ -493,6 +493,8 @@ func TestHtmlViewEngine(t *testing.T) {
 {{ define "content" }}<div>abc.com/index</div>{{ end }}`)},
 		"pages/@abc.com/admin/index.html": {Data: []byte(`<!--layout:admin-->
 {{ define "content" }}<div>abc.com/admin/index</div>{{ end }}`)},
+
+		"pages/empty.html": {},
 	}
 
 	mux := http.NewServeMux()
@@ -593,6 +595,18 @@ func TestHtmlViewEngine(t *testing.T) {
 <div>abc.com/admin/index</div>
 <div>footer</div>
 </body></html>`, string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/empty", nil)
+	req.Header.Set("Accept", "text/html, */*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Empty(t, buf)
 
 }
 
