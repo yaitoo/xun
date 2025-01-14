@@ -73,6 +73,7 @@ func New(opts ...Option) *App {
 		app.viewEngines = []ViewEngine{
 			&StaticViewEngine{},
 			&HtmlViewEngine{},
+			&TextViewEngine{},
 		}
 	}
 

@@ -3,17 +3,17 @@ package xun
 import (
 	"io"
 	"io/fs"
+	"mime"
+	"net/http"
+	"path/filepath"
+	"strings"
 	"text/template"
 )
 
-// TextFuncMap is a template.FuncMap that contains custom functions for use in text templates.
-var TextFuncMap template.FuncMap = make(template.FuncMap)
-
 // NewTextTemplate creates a new TextTemplate with the given name and path.
-func NewTextTemplate(name, path string) *TextTemplate {
+func NewTextTemplate(name string) *TextTemplate {
 	return &TextTemplate{
 		name: name,
-		path: path,
 	}
 }
 
@@ -21,25 +21,45 @@ func NewTextTemplate(name, path string) *TextTemplate {
 type TextTemplate struct {
 	template *template.Template
 
-	name string
-	path string
+	name    string
+	mime    string
+	charset string
 }
 
 // Load loads the template from the given file system.
 func (t *TextTemplate) Load(fsys fs.FS, templates map[string]*TextTemplate) error {
-	buf, err := fs.ReadFile(fsys, t.path)
+	buf, err := fs.ReadFile(fsys, t.name)
 	if err != nil {
 		return err
 	}
 
-	nt := template.New(t.name).Funcs(TextFuncMap)
+	nt := template.New(t.name).Funcs(FuncMap)
+
+	charset := "; charset=utf-8"
+	mt := "text/plain"
 
 	defer func() {
 		t.template = nt
+
+		// text/plain; charset=utf-8
+		i := strings.Index(mt, ";")
+		if i > -1 {
+			charset = mt[i:]
+			mt = mt[:i]
+		}
+
+		t.charset = charset
+		t.mime = mt
 	}()
 
 	if len(buf) == 0 {
 		return nil
+	}
+
+	mt = mime.TypeByExtension(filepath.Ext(t.name))
+
+	if mt == "" {
+		mt = http.DetectContentType(buf)
 	}
 
 	nt, err = nt.Parse(string(buf))

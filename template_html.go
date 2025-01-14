@@ -9,8 +9,8 @@ import (
 	"errors"
 )
 
-// HtmlFuncMap is a map of functions that are available to templates.
-var HtmlFuncMap template.FuncMap = make(template.FuncMap)
+// FuncMap is a map of functions that are available to templates.
+var FuncMap template.FuncMap = make(template.FuncMap)
 
 // HtmlTemplate is a template that is loaded from a file system.
 type HtmlTemplate struct {
@@ -44,7 +44,7 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 		return err
 	}
 
-	nt := template.New(t.name).Funcs(HtmlFuncMap)
+	nt := template.New(t.name).Funcs(FuncMap)
 	dependencies := make(map[string]struct{})
 
 	defer func() {

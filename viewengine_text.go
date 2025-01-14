@@ -3,7 +3,6 @@ package xun
 import (
 	"errors"
 	"io/fs"
-	"path"
 	"strings"
 
 	"github.com/yaitoo/xun/fsnotify"
@@ -12,24 +11,31 @@ import (
 // TextViewEngine is a view engine that renders text-based templates.
 // It watches the file system for changes to text files and updates the corresponding views.
 type TextViewEngine struct {
-	pattern string
+	fsys      fs.FS
+	app       *App
+	templates map[string]*TextTemplate
 }
 
 // Load walks the file system and loads all text-based templates that match the TextViewEngine's pattern.
 // It calls the handle method for each matching file to add the template to the app's viewers.
 func (ve *TextViewEngine) Load(fsys fs.FS, app *App) error {
 
-	err := fs.WalkDir(fsys, ".", func(file string, d fs.DirEntry, err error) error {
-		if ok, _ := path.Match(ve.pattern, file); !ok {
-			return nil
-		}
+	if ve.templates == nil {
+		ve.templates = map[string]*TextTemplate{}
+	}
+
+	ve.fsys = fsys
+	ve.app = app
+
+	err := fs.WalkDir(fsys, "text", func(path string, d fs.DirEntry, err error) error {
 
 		if err != nil {
 			return err
 		}
 
 		if !d.IsDir() {
-			ve.handle(fsys, app, file)
+			return ve.loadText(path)
+
 		}
 
 		return nil
@@ -42,23 +48,53 @@ func (ve *TextViewEngine) Load(fsys fs.FS, app *App) error {
 	return err
 }
 
+func (ve *TextViewEngine) loadText(path string) error {
+	t, err := ve.loadTemplate(path)
+	if err != nil {
+		return err
+	}
+
+	ve.app.viewers[path] = &TextViewer{
+		template: t,
+	}
+	return err
+}
+
 // FileChanged is called when a file in the file system has changed. It checks if the change is a
-// file creation event in the "public/" directory, and if so, calls the handle method to update the
+// file creation event in the "text/" directory, and if so, calls the handle method to update the
 // corresponding view in the app.
 func (ve *TextViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
-	// Nothing should be updated for Write/Remove events.
-	if event.Has(fsnotify.Create) && strings.HasPrefix(event.Name, "public/") {
-		ve.handle(app, event.Name)
+	if event.Has(fsnotify.Remove) {
+		return nil
+	}
+
+	if event.Has(fsnotify.Write) {
+		t, ok := ve.templates[event.Name]
+		if ok {
+			return t.Reload(fsys, ve.templates)
+		}
+	} else if event.Has(fsnotify.Create) {
+
+		if strings.HasPrefix(event.Name, "text/") {
+			err := ve.loadText(event.Name)
+			return err
+		}
+
+		return nil
 	}
 
 	return nil
 }
 
-func (ßve *TextViewEngine) handle(app *App, path string) {
+func (ve *TextViewEngine) loadTemplate(path string) (*TextTemplate, error) {
 
-	name := strings.ToLower(path)
+	t := NewTextTemplate(path)
 
-	app.viewers["@text/"+name] = &TextViewer{
-		template: NewTextTemplate(name, path),
+	if err := t.Load(ve.fsys, ve.templates); err != nil {
+		return nil, err
 	}
+
+	ve.templates[path] = t
+
+	return t, nil
 }
