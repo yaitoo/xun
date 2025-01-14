@@ -19,5 +19,4 @@ func GetMimeType(file string, buf []byte) (string, string) {
 		return mt, "; charset=utf-8"
 	}
 	return mt[:i], mt[i:]
-
 }
