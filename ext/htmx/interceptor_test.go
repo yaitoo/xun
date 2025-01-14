@@ -30,7 +30,7 @@ func TestHtmxInterceptor(t *testing.T) {
 	defer app.Close()
 
 	client := http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error { //skipcq: RVV-B0012
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { // skipcq: RVV-B0012
 			return http.ErrUseLastResponse
 		},
 	}

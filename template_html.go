@@ -38,7 +38,7 @@ func NewHtmlTemplate(name, path string) *HtmlTemplate {
 //
 // It parses the file, and determines the dependencies of the template.
 // The dependencies are stored in the `dependencies` field.
-func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) error {
+func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) error { // skipcq: GO-R1005
 	buf, err := fs.ReadFile(fsys, t.path)
 	if err != nil {
 		return err
@@ -53,6 +53,8 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate) erro
 	}()
 
 	if len(buf) == 0 {
+		// fixed err: `template: "?" is an incomplete or empty template
+		nt, _ = nt.Parse("")
 		return nil
 	}
 
