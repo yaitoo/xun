@@ -43,16 +43,12 @@ func (t *TextTemplate) Load(fsys fs.FS) error {
 	return nil
 }
 
-// Reload reloads the template and all its dependents from the given file system.
+// Reload reloads the template from the given file system.
 func (t *TextTemplate) Reload(fsys fs.FS) error {
-	err := t.Load(fsys)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return t.Load(fsys)
 }
 
+// Execute executes the template with the given data and writes the result to the given writer.
 func (t *TextTemplate) Execute(wr io.Writer, data any) error {
 	return t.template.Execute(wr, data)
 }
