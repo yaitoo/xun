@@ -177,7 +177,7 @@ func TestWatchOnText(t *testing.T) {
 	require.Equal(t, fsys["text/new.txt"].Data, buf)
 
 	req, err = http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
-	req.Header.Set("Accept", "application/xml,text/xml,text/plain, */*")
+	req.Header.Set("Accept", "application/xml;q=0.9,text/xml,text/plain;q=0.8, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)

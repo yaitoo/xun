@@ -10,13 +10,6 @@ import (
 	"text/template"
 )
 
-// NewTextTemplate creates a new TextTemplate with the given name and path.
-func NewTextTemplate(name string) *TextTemplate {
-	return &TextTemplate{
-		name: name,
-	}
-}
-
 // TextTemplate represents a text template that can be loaded from a file system and executed with data.
 type TextTemplate struct {
 	template *template.Template

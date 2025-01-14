@@ -87,7 +87,9 @@ func (ve *TextViewEngine) FileChanged(fsys fs.FS, _ *App, event fsnotify.Event) 
 
 func (ve *TextViewEngine) loadTemplate(path string) (*TextTemplate, error) {
 
-	t := NewTextTemplate(path)
+	t := &TextTemplate{
+		name: path,
+	}
 
 	if err := t.Load(ve.fsys); err != nil {
 		return nil, err
