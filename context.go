@@ -79,7 +79,7 @@ func (c *Context) View(items ...any) error {
 			mime := v.MimeType()
 			ok = false
 			for _, accept := range c.Accept() {
-				if mime == accept {
+				if mime == accept || mime == "*/*" || accept == "*/*" {
 					ok = true
 					break
 				}
@@ -157,8 +157,11 @@ func (c *Context) Accept() (types []string) {
 	types = make([]string, l)
 
 	for i := 0; i < l; i++ {
-		items := strings.SplitN(options[i], ";", 2)
-		types[i] = strings.Trim(items[0], " ")
+		if n := strings.IndexByte(options[i], ';'); n >= 0 {
+			types[i] = strings.TrimSpace(options[i][:n])
+		} else {
+			types[i] = strings.TrimSpace(options[i])
+		}
 	}
 	return
 }

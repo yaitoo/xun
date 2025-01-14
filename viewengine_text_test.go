@@ -42,7 +42,7 @@ func TestTextViewEngine(t *testing.T) {
 	defer app.Close()
 
 	req, err := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
-	req.Header.Set("Accept", "application/xml, */*")
+	req.Header.Set("Accept", "application/xml,text/xml,text/plain, */*")
 	require.NoError(t, err)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ func TestWatchOnText(t *testing.T) {
 	resp.Body.Close()
 
 	req, err = http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
-	req.Header.Set("Accept", "application/xml")
+	req.Header.Set("Accept", "application/xml,text/xml,text/plain, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
