@@ -27,37 +27,28 @@ type TextTemplate struct {
 }
 
 // Load loads the template from the given file system.
-func (t *TextTemplate) Load(fsys fs.FS, templates map[string]*TextTemplate) error {
+func (t *TextTemplate) Load(fsys fs.FS) error {
 	buf, err := fs.ReadFile(fsys, t.name)
 	if err != nil {
 		return err
 	}
 
 	nt := template.New(t.name).Funcs(FuncMap)
-
 	charset := "; charset=utf-8"
 	mt := "text/plain"
 
 	defer func() {
 		t.template = nt
-
-		// text/plain; charset=utf-8
-		i := strings.Index(mt, ";")
-		if i > -1 {
-			charset = mt[i:]
-			mt = mt[:i]
-		}
-
 		t.charset = charset
 		t.mime = mt
 	}()
 
 	if len(buf) == 0 {
+		nt, _ = nt.Parse("")
 		return nil
 	}
 
 	mt = mime.TypeByExtension(filepath.Ext(t.name))
-
 	if mt == "" {
 		mt = http.DetectContentType(buf)
 	}
@@ -67,12 +58,19 @@ func (t *TextTemplate) Load(fsys fs.FS, templates map[string]*TextTemplate) erro
 		return err
 	}
 
+	// text/plain; charset=utf-8
+	i := strings.Index(mt, ";")
+	if i > -1 {
+		charset = mt[i:]
+		mt = mt[:i]
+	}
+
 	return nil
 }
 
 // Reload reloads the template and all its dependents from the given file system.
-func (t *TextTemplate) Reload(fsys fs.FS, templates map[string]*TextTemplate) error {
-	err := t.Load(fsys, templates)
+func (t *TextTemplate) Reload(fsys fs.FS) error {
+	err := t.Load(fsys)
 	if err != nil {
 		return err
 	}

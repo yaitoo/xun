@@ -19,7 +19,6 @@ type TextViewEngine struct {
 // Load walks the file system and loads all text-based templates that match the TextViewEngine's pattern.
 // It calls the handle method for each matching file to add the template to the app's viewers.
 func (ve *TextViewEngine) Load(fsys fs.FS, app *App) error {
-
 	if ve.templates == nil {
 		ve.templates = map[string]*TextTemplate{}
 	}
@@ -63,7 +62,7 @@ func (ve *TextViewEngine) loadText(path string) error {
 // FileChanged is called when a file in the file system has changed. It checks if the change is a
 // file creation event in the "text/" directory, and if so, calls the handle method to update the
 // corresponding view in the app.
-func (ve *TextViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
+func (ve *TextViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { // skipcp: RVV-B0012
 	if event.Has(fsnotify.Remove) {
 		return nil
 	}
@@ -71,7 +70,7 @@ func (ve *TextViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 	if event.Has(fsnotify.Write) {
 		t, ok := ve.templates[event.Name]
 		if ok {
-			return t.Reload(fsys, ve.templates)
+			return t.Reload(fsys)
 		}
 	} else if event.Has(fsnotify.Create) {
 
@@ -90,7 +89,7 @@ func (ve *TextViewEngine) loadTemplate(path string) (*TextTemplate, error) {
 
 	t := NewTextTemplate(path)
 
-	if err := t.Load(ve.fsys, ve.templates); err != nil {
+	if err := t.Load(ve.fsys); err != nil {
 		return nil, err
 	}
 

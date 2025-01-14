@@ -57,7 +57,7 @@ func (ve *HtmlViewEngine) Load(fsys fs.FS, app *App) error {
 // FileChanged is called when a file has been changed.
 //
 // It is used to reload templates when they have been changed.
-func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { //skipcq: RVV-B0012
+func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { // skipcq: RVV-B0012
 
 	if event.Has(fsnotify.Remove) || !strings.EqualFold(filepath.Ext(event.Name), ".html") {
 		return nil
