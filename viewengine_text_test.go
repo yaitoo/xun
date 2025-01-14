@@ -130,7 +130,7 @@ func TestWatchOnText(t *testing.T) {
 	require.Equal(t, fsys["text/sitemap.xml"].Data, buf)
 
 	req, err = http.NewRequest("GET", srv.URL+"/robots.txt", nil)
-	req.Header.Set("Accept", "text/plain")
+	req.Header.Set("Accept", "text/plain, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestWatchOnText(t *testing.T) {
 	app.watcher.Stop()
 
 	req, err = http.NewRequest("GET", srv.URL+"/new.txt", nil)
-	req.Header.Set("Accept", "text/plain")
+	req.Header.Set("Accept", "text/plain, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestWatchOnText(t *testing.T) {
 	require.Equal(t, fsys["text/new.txt"].Data, buf)
 
 	req, err = http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
-	req.Header.Set("Accept", "application/xml")
+	req.Header.Set("Accept", "application/xml,text/xml,text/plain, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestWatchOnText(t *testing.T) {
 
 	// deleted not be handled, robots.txt still be there
 	req, err = http.NewRequest("GET", srv.URL+"/robots.txt", nil)
-	req.Header.Set("Accept", "text/plain")
+	req.Header.Set("Accept", "text/plain, */*")
 	require.NoError(t, err)
 	resp, err = client.Do(req)
 	require.NoError(t, err)
