@@ -198,7 +198,7 @@ A text view is UI that is referenced in `context.View` to render the view with a
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-  <loc>https://github.com/yatioo/xun</loc>
+  <loc>https://github.com/yaitoo/xun</loc>
   <lastmod>2025-01-15T19:51:56+08:00</lastmod>
   <changefreq>hourly</changefreq>
   <priority>1.0</priority>
