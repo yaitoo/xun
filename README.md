@@ -150,7 +150,7 @@ A component is a partial view that is shared between multiple layouts/pages/view
 ```
 
 ### Text View
-A text view is UI that is referenced by `context.View` to render the view with a data model.
+A text view is UI that is referenced in `context.View` to render the view with a data model.
 
 **NOTE: Text files are parsed using the `text/template` package. This is different from the `html/template` package used in `pages/layouts/views/components`. While `text/template` is designed for generating textual output based on data, it does not automatically secure HTML output against certain attacks. Therefore, please ensure your output is safe to prevent code injection.**
 
