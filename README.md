@@ -45,7 +45,7 @@ go get github.com/yaitoo/xun@latest
 - `pages`: A public page view that will create public page routing automatically.
 - `text`: An internal text view that can be referenced in `context.View` to render with a data model.
 
-*NB: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use all built-in [Actions,Pipelines and Functions](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.*
+**NOTE: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use all built-in [Actions,Pipelines and Functions](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.**
 
 ### Layouts and Pages
 `Xun` uses file-system based routing, meaning you can use folders and files to define routes. This section will guide you through how to create layouts and pages, and link between them.
@@ -111,7 +111,7 @@ You can create a layout(.html) file inside the `layouts` directory.
 ### Static assets
 You can store static files, like images, fonts, js and css, under a directory called `public` in the root directory. Files inside public can then be referenced by your code starting from the base URL (/).
 
-*NB: `public/index.html` will be exposed by `/` instead of `/index.html`.*
+**NOTE: `public/index.html` will be exposed by `/` instead of `/index.html`.**
 
 #### Creating a component
 A component is a partial view that is shared between multiple layouts/pages/views. 
@@ -152,7 +152,7 @@ A component is a partial view that is shared between multiple layouts/pages/view
 ### Text View
 A text view is UI that is referenced by `context.View` to render the view with a data model.
 
-*NB: Text files are parsed using the `text/template` package. This is different from the `html/template` package used in `pages/layouts/views/components`. While `text/template` is designed for generating textual output based on data, it does not automatically secure HTML output against certain attacks. Therefore, please ensure your output is safe to prevent code injection. *
+**NOTE: Text files are parsed using the `text/template` package. This is different from the `html/template` package used in `pages/layouts/views/components`. While `text/template` is designed for generating textual output based on data, it does not automatically secure HTML output against certain attacks. Therefore, please ensure your output is safe to prevent code injection.**
 
 #### Creating a text view
 ```
@@ -232,7 +232,7 @@ Page Router only serve static content from html files. We have to define router 
 ```
 
 
-*NB: An `/index.html` always be registered as `/{$}` in routing table. See more detail on [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).*
+**NOTE: An `/index.html` always be registered as `/{$}` in routing table. See more detail on [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).**
 > There is one last bit of syntax. As we showed above, patterns ending in a slash, like /posts/, match all paths beginning with that string. To match only the path with the trailing slash, you can write /posts/{$}. That will match /posts/ but not /posts or /posts/234.
 
 #### Dynamic Routes
