@@ -40,9 +40,10 @@ go get github.com/yaitoo/xun@latest
 `Xun` has some specified directories that is used to organize code, routing and static assets.
 - `public`: Static assets to be served. 
 - `components` A partial view that is shared between layouts/pages/views.
-- `views`: A internal page view. It is used in `context.View` to render different view from current routing.
+- `views`: An internal page view that can be referenced in `context.View` to render different UI for current routing.
 - `layouts`: A layout is shared between multiple pages/views
-- `pages`: A public page view. It also is used to automatically create a accessible page routing.
+- `pages`: A public page view that will create public page routing automatically.
+- `text`: An internal text view that can be referenced in `context.View` to render with a data model.
 
 *NB: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use all built-in [Actions,Pipelines and Functions](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.*
 
@@ -148,6 +149,65 @@ A component is a partial view that is shared between multiple layouts/pages/view
 </html>
 ```
 
+### Text View
+A text view is UI that is parsed by `text/template` and referenced by `context.View` to render the view with a data model.
+
+#### Creating a text view
+```
+└── app
+    ├── components
+    │   └── assets.html
+    ├── layouts
+    │   └── home.html
+    ├── pages
+    │   └── index.html
+    └── public
+    │   ├── app.js
+    │   └── skin.css
+    └── text
+        ├── sitemap.xml
+```
+
+#### Render text view with data model
+```go
+	app.Get("/sitemap.xml", func(c *xun.Context) error {
+		return c.View(struct {
+			LastMod time.Time
+		}{
+			LastMod: time.Now(),
+		})
+	})
+```
+
+```bash
+curl --header "Accept: application/xml, text/xml,text/plain, */*" -v http://127.0.0.1/sitemap.xml
+*   Trying 127.0.0.1:80...
+* Connected to 127.0.0.1 (127.0.0.1) port 80
+> GET /sitemap.xml HTTP/1.1
+> Host: 127.0.0.1
+> User-Agent: curl/8.7.1
+> Accept: application/xml, text/xml,text/plain, */*
+>
+* Request completely sent off
+< HTTP/1.1 200 OK
+< Date: Wed, 15 Jan 2025 11:51:56 GMT
+< Content-Length: 277
+< Content-Type: text/xml; charset=utf-8
+<
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+  <loc>https://github.com/yatioo/xun</loc>
+  <lastmod>2025-01-15T19:51:56+08:00</lastmod>
+  <changefreq>hourly</changefreq>
+  <priority>1.0</priority>
+  </url>
+* Connection #0 to host 127.0.0.1 left intact
+</urlset>%
+```
+
+
+
 ## Building your application
 ### Routing
 #### Route Handler
@@ -217,11 +277,11 @@ For examples, below patterns will be generated automatically, and registered in 
 ```
 
 
-### Multiple Viewers based on MIME request
-In our application, a routing can have multiple viewers. Response is render based on the request header `Accept`. Default viewer is used if there is no any viewer is matched by `Accept`. The built-it default viewer is `JsonViewer`. But it can be overridden by `xun.WithViewer` in `xun.New`. see more examples on [Tests](app_test.go)
+### Multiple Viewers
+In our application, a route can support multiple viewers. The response is rendered based on the `Accept` request header. If no viewer matches the `Accept` header, the default viewer is used. The built-in default viewer is `JsonViewer`, but this can be overridden using `xun.WithViewer` when initializing with `xun.New`. For more examples, see the [Tests](app_test.go).
 
-> curl -v http://127.0.0.1
-```
+```bash
+curl -v http://127.0.0.1
 > GET / HTTP/1.1
 > Host: 127.0.0.1
 > User-Agent: curl/8.7.1
@@ -265,7 +325,6 @@ In our application, a routing can have multiple viewers. Response is render base
   </body>
 </html>
 ```
-
 ### Middleware
 Middleware allows you to run code before a request is completed. Then, based on the incoming request, you can modify the response by rewriting, redirecting, modifying the request or response headers, or responding directly.
 
