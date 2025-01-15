@@ -168,19 +168,18 @@ A text view is UI that is parsed by `text/template` and referenced by `context.V
         ├── sitemap.xml
 ```
 
-#### Render text view with data model
+#### Render the view with a data model
 ```go
 	app.Get("/sitemap.xml", func(c *xun.Context) error {
-		return c.View(struct {
-			LastMod time.Time
-		}{
+		return c.View(Sitemap{
 			LastMod: time.Now(),
-		})
+		}, "text/sitemap.xml") // redirect to `text/sitemap.xml` as current Viewer to render
 	})
 ```
 
+> curl --header "Accept: application/xml, text/xml,text/plain, */*" -v http://127.0.0.1/sitemap.xml
+
 ```bash
-curl --header "Accept: application/xml, text/xml,text/plain, */*" -v http://127.0.0.1/sitemap.xml
 *   Trying 127.0.0.1:80...
 * Connected to 127.0.0.1 (127.0.0.1) port 80
 > GET /sitemap.xml HTTP/1.1
