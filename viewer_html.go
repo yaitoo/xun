@@ -25,11 +25,13 @@ type HtmlViewer struct {
 	template *HtmlTemplate
 }
 
+var htmlViewerMime = &MimeType{Type: "text", SubType: "html"}
+
 // MimeType returns the MIME type of the HTML content.
 //
 // This implementation returns "text/html".
-func (*HtmlViewer) MimeType() string {
-	return "text/html"
+func (*HtmlViewer) MimeType() *MimeType {
+	return htmlViewerMime
 }
 
 // Render renders the template with the given data and writes the result to the http.ResponseWriter.

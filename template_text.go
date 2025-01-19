@@ -11,7 +11,7 @@ type TextTemplate struct {
 	template *template.Template
 
 	name    string
-	mime    string
+	mime    MimeType
 	charset string
 }
 
@@ -27,7 +27,7 @@ func (t *TextTemplate) Load(fsys fs.FS) error {
 	if len(buf) == 0 {
 		nt, _ = nt.Parse("")
 		t.template = nt
-		t.mime = "text/plain"
+		t.mime = MimeType{Type: "text", SubType: "plain"}
 		t.charset = "; charset=utf-8"
 		return nil
 	}

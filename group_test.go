@@ -189,7 +189,7 @@ func TestGroupMiddleware(t *testing.T) {
 	})
 
 	admin.Get("/", func(c *Context) error {
-		return c.View()
+		return c.View(nil)
 	})
 
 	go app.Start()

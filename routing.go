@@ -7,7 +7,7 @@ type Routing struct {
 	chain   chain
 
 	Options *RoutingOptions
-	Viewers map[string]Viewer
+	Viewers []Viewer
 }
 
 func (r *Routing) Next(ctx *Context) error {
