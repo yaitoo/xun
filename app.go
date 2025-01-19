@@ -32,18 +32,18 @@ type Middleware func(next HandleFunc) HandleFunc
 type App struct {
 	mu sync.RWMutex
 
-	mux         *http.ServeMux
-	middlewares []Middleware
-	viewers     map[string]Viewer
-	routes      map[string]*Routing
-	viewer      Viewer
-	viewEngines []ViewEngine
-	logger      *slog.Logger
-	fsys        fs.FS
-	watch       bool
-	watcher     *fsnotify.Watcher
-	interceptor Interceptor
-	compressors []Compressor
+	mux            *http.ServeMux
+	middlewares    []Middleware
+	viewers        map[string]Viewer
+	routes         map[string]*Routing
+	handlerViewers []Viewer
+	engines        []ViewEngine
+	logger         *slog.Logger
+	fsys           fs.FS
+	watch          bool
+	watcher        *fsnotify.Watcher
+	interceptor    Interceptor
+	compressors    []Compressor
 }
 
 // New allocates an App instance and loads all view engines.
@@ -53,9 +53,9 @@ type App struct {
 // If watch is false, it won't watch any file changes.
 func New(opts ...Option) *App {
 	app := &App{
-		routes:  make(map[string]*Routing),
-		viewers: make(map[string]Viewer),
-		viewer:  &JsonViewer{},
+		routes:         make(map[string]*Routing),
+		viewers:        make(map[string]Viewer),
+		handlerViewers: []Viewer{&JsonViewer{}},
 	}
 
 	for _, o := range opts {
@@ -69,8 +69,8 @@ func New(opts ...Option) *App {
 		app.mux = http.DefaultServeMux
 	}
 
-	if app.viewEngines == nil {
-		app.viewEngines = []ViewEngine{
+	if app.engines == nil {
+		app.engines = []ViewEngine{
 			&StaticViewEngine{},
 			&HtmlViewEngine{},
 			&TextViewEngine{},
@@ -78,7 +78,7 @@ func New(opts ...Option) *App {
 	}
 
 	if app.fsys != nil {
-		for _, ve := range app.viewEngines {
+		for _, ve := range app.engines {
 			err := ve.Load(app.fsys, app)
 			if err != nil {
 				app.logger.Error("xun: load views", slog.Any("err", err))
@@ -198,7 +198,7 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 		return
 	}
 
-	ro.viewer = v
+	ro.viewers = []Viewer{v}
 	app.viewers[name] = v
 
 	hf := func(c *Context) error {
@@ -248,7 +248,7 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 // the existing route with the new Viewer.
 func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	ro := &RoutingOptions{
-		viewer: v,
+		viewers: []Viewer{v},
 	}
 
 	r, ok := app.routes[pattern]
@@ -257,7 +257,6 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 		return
 	}
 
-	ro.viewer = v
 	app.viewers[viewName] = v
 
 	hf := func(c *Context) error {
@@ -336,7 +335,7 @@ func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseW
 // The function also sets up the HTTP handler for the route and manages the viewers for different MIME types.
 func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
 	ro := &RoutingOptions{
-		viewer: app.viewer,
+		viewers: app.handlerViewers,
 	}
 	for _, o := range opts {
 		o(ro)
@@ -350,9 +349,9 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 		r.Handle = hf
 		r.chain = c
 
-		if ro.viewer != nil {
+		if len(ro.viewers) > 0 {
 			// append current handler's viewer to existing viewers
-			r.Viewers = append(r.Viewers, ro.viewer)
+			r.Viewers = append(r.Viewers, ro.viewers...)
 		}
 
 		return
@@ -366,9 +365,9 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 		chain:   c,
 	}
 
-	if ro.viewer != nil {
+	if len(ro.viewers) > 0 {
 		// append current handler's viewer to first viewer
-		r.Viewers = append(r.Viewers, ro.viewer)
+		r.Viewers = append(r.Viewers, ro.viewers...)
 	}
 
 	app.routes[pattern] = r
@@ -410,7 +409,7 @@ func (app *App) enableHotReload() {
 			}
 
 			var err error
-			for _, ve := range app.viewEngines {
+			for _, ve := range app.engines {
 				err = ve.FileChanged(app.fsys, app, event)
 				if err != nil {
 					app.logger.Error("xun: on file changed", slog.Any("err", err))

@@ -279,7 +279,7 @@ For examples, below patterns will be generated automatically, and registered in 
 
 
 ### Multiple Viewers
-In our application, a route can support multiple viewers. The response is rendered based on the `Accept` request header. If no viewer matches the `Accept` header, the default viewer is used. The built-in default viewer is `JsonViewer`, but this can be overridden using `xun.WithViewer` when initializing with `xun.New`. For more examples, see the [Tests](app_test.go).
+In our application, a route can support multiple viewers. The response is rendered based on the `Accept` request header. If no viewer matches the `Accept` header, first registered viewer is used. For more examples, see the [Tests](app_test.go).
 
 ```bash
 curl -v http://127.0.0.1

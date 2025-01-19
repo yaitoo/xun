@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"encoding/xml"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -64,6 +65,21 @@ func TestRoutingOption(t *testing.T) {
 		return c.View(data)
 	}, WithMetadata("s1", time.Now()), WithMetadata("i1", "v100"))
 
+	type xmlObject struct {
+		Name string
+		Icon int
+	}
+
+	// overwrite the route handler's viewer with XmlViewer instead of JsonViewer
+	app.Get("/xml", func(c *Context) error {
+		data := &xmlObject{
+			Name: "xml_name",
+			Icon: 100,
+		}
+
+		return c.View(data)
+	}, WithViewer(&XmlViewer{}))
+
 	app.Start()
 	defer app.Close()
 
@@ -124,4 +140,18 @@ func TestRoutingOption(t *testing.T) {
 	require.Nil(t, d3["icon"])
 	require.Nil(t, d3["access"])
 
+	req, err = http.NewRequest("GET", srv.URL+"/xml", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+	xo := &xmlObject{}
+	err = xml.Unmarshal(buf, xo)
+	require.NoError(t, err)
+
+	require.Equal(t, "xml_name", xo.Name)
+	require.EqualValues(t, 100, xo.Icon)
 }
