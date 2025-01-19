@@ -23,7 +23,6 @@ import (
 //
 //	app.HandleFile("example.txt", viewer)
 type FileViewer struct {
-	mime *MimeType
 	fsys fs.FS
 	path string
 }
