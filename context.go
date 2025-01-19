@@ -66,41 +66,44 @@ func (c *Context) View(data any, options ...string) error {
 		name = options[0]
 	}
 
-	v := c.getViewer(name)
+	v, ok := c.getViewer(name)
 
-	if v == nil {
+	if !ok {
 		for _, accept := range c.Accept() {
 			for _, viewer := range c.Routing.Viewers {
 				if viewer.MimeType().Match(accept) {
 					v = viewer
+					ok = true
 					break
 				}
 			}
 		}
 	}
 	// no any viewer is matched
-	if v == nil {
-		v = c.Routing.Viewers[0] // pickup first viewer as default
+	if !ok {
+		if v == nil {
+			v = c.Routing.Viewers[0] // use the first viewer as a fallback when no viewer is matched or specified by name
+		}
 	}
 
 	return v.Render(c.rw, c.req, data)
 }
 
 // getViewer get viewer by name
-func (c *Context) getViewer(name string) Viewer {
+func (c *Context) getViewer(name string) (Viewer, bool) {
 	if name == "" {
-		return nil
+		return nil, false
 	}
 	v, ok := c.app.viewers[name]
 	if ok {
 		mime := v.MimeType()
 		for _, accept := range c.Accept() {
 			if mime.Match(accept) {
-				return v
+				return v, true
 			}
 		}
 	}
-	return nil
+	return v, false
 }
 
 // Redirect redirects the user to the given url.
