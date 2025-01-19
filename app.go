@@ -117,8 +117,8 @@ func (app *App) Start() {
 
 	for _, r := range app.routes {
 		keys := make([]string, 0, len(r.Viewers))
-		for k := range r.Viewers {
-			keys = append(keys, k)
+		for _, v := range r.Viewers {
+			keys = append(keys, v.MimeType().String())
 		}
 
 		app.logger.Info(r.Pattern, slog.String("viewer", strings.Join(keys, ",")))
@@ -210,12 +210,11 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 		Pattern: pat,
 		Handle:  hf,
 		chain:   app,
-		Viewers: make(map[string]Viewer),
 	}
 
 	app.routes[pat] = r
 
-	r.Viewers[v.MimeType()] = v
+	r.Viewers = append(r.Viewers, v)
 
 	app.mux.HandleFunc(pat, func(w http.ResponseWriter, req *http.Request) {
 		rw := app.createWriter(req, w)
@@ -248,11 +247,13 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 // If a route with the same pattern already exists, it updates
 // the existing route with the new Viewer.
 func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
-	ro := &RoutingOptions{}
+	ro := &RoutingOptions{
+		viewer: v,
+	}
 
 	r, ok := app.routes[pattern]
 	if ok {
-		r.Viewers[v.MimeType()] = v
+		r.Viewers = append(r.Viewers, v)
 		return
 	}
 
@@ -268,10 +269,9 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 		Pattern: pattern,
 		Handle:  hf,
 		chain:   app,
-		Viewers: make(map[string]Viewer),
 	}
 
-	r.Viewers[v.MimeType()] = v
+	r.Viewers = append(r.Viewers, v)
 
 	app.routes[pattern] = r
 
@@ -345,23 +345,30 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 	r, ok := app.routes[pattern]
 
 	if ok {
+		// overwrite existing page route
 		r.Options = ro
 		r.Handle = hf
 		r.chain = c
 
 		if ro.viewer != nil {
-			r.Viewers[ro.viewer.MimeType()] = ro.viewer
+			// append current handler's viewer to existing viewers
+			r.Viewers = append(r.Viewers, ro.viewer)
 		}
 
 		return
 
 	}
+
 	r = &Routing{
 		Options: ro,
 		Pattern: pattern,
 		Handle:  hf,
 		chain:   c,
-		Viewers: make(map[string]Viewer),
+	}
+
+	if ro.viewer != nil {
+		// append current handler's viewer to first viewer
+		r.Viewers = append(r.Viewers, ro.viewer)
 	}
 
 	app.routes[pattern] = r
@@ -389,9 +396,6 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 		app.logger.Error("xun: handle", slog.Any("err", err), slog.String("logid", logID))
 	})
 
-	if ro.viewer != nil {
-		r.Viewers[ro.viewer.MimeType()] = ro.viewer
-	}
 }
 
 func (app *App) enableHotReload() {

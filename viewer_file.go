@@ -23,15 +23,18 @@ import (
 //
 //	app.HandleFile("example.txt", viewer)
 type FileViewer struct {
+	mime *MimeType
 	fsys fs.FS
 	path string
 }
 
+var fileViewerMime = &MimeType{Type: "*", SubType: "*"}
+
 // MimeType returns the MIME type of the file.
 //
 // The MIME type is determined by the file extension of the file.
-func (*FileViewer) MimeType() string {
-	return "*/*"
+func (*FileViewer) MimeType() *MimeType {
+	return fileViewerMime
 }
 
 // Render serves a file from the file system using the FileViewer.

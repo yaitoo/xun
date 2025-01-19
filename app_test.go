@@ -623,9 +623,13 @@ func TestMixedViewers(t *testing.T) {
 
 	app := New(WithMux(mux), WithFsys(fsys))
 
-	app.Get("/", func(c *Context) error {
+	app.Get("/index", func(c *Context) error {
+		return c.View(nil, "index")
+	})
+
+	app.Get("/{$}", func(c *Context) error {
 		if c.Request().URL.Path == "/" {
-			return c.View(nil, "index")
+			return c.View(nil)
 		}
 
 		c.WriteStatus(http.StatusNotFound)
@@ -707,6 +711,45 @@ func TestMixedViewers(t *testing.T) {
 
 	require.Equal(t, data.Name, "list")
 	require.Equal(t, data.Num, 2)
+
+	// accept doesn't matched , first viewer(text/html) should be used
+	req, err = http.NewRequest("GET", srv.URL+"/", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["pages/index.html"].Data, buf)
+
+	// getViewer should match its viewer
+	req, err = http.NewRequest("GET", srv.URL+"/index", nil)
+	req.Header.Set("Accept", "text/html")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["pages/index.html"].Data, buf)
+
+	// wildcard accept should be matched on first viewer
+	req, err = http.NewRequest("GET", srv.URL+"/", nil)
+	req.Header.Set("Accept", "*/*")
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+
+	buf, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	require.Equal(t, fsys["pages/index.html"].Data, buf)
+
 }
 
 func TestDataBindOnHtml(t *testing.T) {
@@ -889,7 +932,7 @@ func TestMiddleware(t *testing.T) {
 	})
 
 	app.Get("/", func(c *Context) error {
-		return c.View()
+		return c.View(nil)
 	})
 
 	go app.Start()

@@ -53,50 +53,34 @@ func (c *Context) WriteHeader(key string, value string) {
 	c.rw.Header().Set(key, value)
 }
 
-// View renders a view with the given data and optional view name.
-// items should have 1 or 2 inputs. first one is data, second one is view name.
-// If a view name is provided, it attempts to fetch a viewer by name and uses it to render the view.
-// If no view name is provided, it uses the default viewer.
-// The data parameter is any type and will be passed to the viewer's Render method.
-func (c *Context) View(items ...any) error {
-
-	var v Viewer
-	var ok bool
-
-	var data any
+// View renders the specified data as a response to the client.
+// It can be used to render HTML, JSON, XML, or any other type of response.
+//
+// The first argument is the data to be rendered. The second argument is an
+// optional list of viewer names. If the list is empty, the viewer associated
+// with the current route will be used. If the list is not empty, the first
+// viewer in the list that matches the current request will be used.
+func (c *Context) View(data any, options ...string) error {
 	var name string
-	if len(items) > 0 {
-		data = items[0]
+	if len(options) > 0 {
+		name = options[0]
 	}
 
-	if len(items) > 1 {
-		name, _ = items[1].(string)
-	}
+	v := c.getViewer(name)
 
-	if name != "" {
-		v, ok = c.app.viewers[name]
-		if ok {
-			mime := v.MimeType()
-			ok = false
-			for _, accept := range c.Accept() {
-				if mime == accept || mime == "*/*" || accept == "*/*" {
-					ok = true
+	if v == nil {
+		for _, accept := range c.Accept() {
+			for _, viewer := range c.Routing.Viewers {
+				if viewer.MimeType().Match(accept) {
+					v = viewer
 					break
 				}
 			}
 		}
-
-	} else {
-		for _, accept := range c.Accept() {
-			v, ok = c.Routing.Viewers[accept]
-			if ok {
-				break
-			}
-		}
 	}
-
-	if !ok {
-		v = c.Routing.Options.viewer
+	// no any viewer is matched
+	if v == nil {
+		v = c.Routing.Viewers[0] // pickup first viewer as default
 	}
 
 	if !c.writtenStatus {
@@ -104,6 +88,23 @@ func (c *Context) View(items ...any) error {
 	}
 
 	return v.Render(c.rw, c.req, data)
+}
+
+// getViewer get viewer by name
+func (c *Context) getViewer(name string) Viewer {
+	if name == "" {
+		return nil
+	}
+	v, ok := c.app.viewers[name]
+	if ok {
+		mime := v.MimeType()
+		for _, accept := range c.Accept() {
+			if mime.Match(accept) {
+				return v
+			}
+		}
+	}
+	return nil
 }
 
 // Redirect redirects the user to the given url.
@@ -147,7 +148,7 @@ func (c *Context) AcceptLanguage() (languages []string) {
 // Accept returns a slice of strings representing the media types
 // that the client accepts, in order of preference.
 // The media types are normalized to lowercase and whitespace is trimmed.
-func (c *Context) Accept() (types []string) {
+func (c *Context) Accept() (types []MimeType) {
 	accepted := c.req.Header.Get("Accept")
 	if accepted == "" {
 		return
@@ -157,13 +158,13 @@ func (c *Context) Accept() (types []string) {
 
 	options := strings.Split(accepted, ",")
 	l := len(options)
-	types = make([]string, l)
+	types = make([]MimeType, l)
 
 	for i := 0; i < l; i++ {
 		if n := strings.IndexByte(options[i], ';'); n >= 0 {
-			types[i] = strings.TrimSpace(options[i][:n])
+			types[i] = NewMimeType(strings.TrimSpace(options[i][:n]))
 		} else {
-			types[i] = strings.TrimSpace(options[i])
+			types[i] = NewMimeType(strings.TrimSpace(options[i]))
 		}
 	}
 	return

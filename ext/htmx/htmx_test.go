@@ -20,17 +20,17 @@ func TestHtmxWriteHeader(t *testing.T) {
 
 	app.Get("/string", func(c *xun.Context) error {
 		WriteHeader(c, HxTrigger, "string")
-		return c.View()
+		return c.View(nil)
 	})
 
 	app.Get("/int", func(c *xun.Context) error {
 		WriteHeader(c, HxTrigger, 100)
-		return c.View()
+		return c.View(nil)
 	})
 
 	app.Get("/header", func(c *xun.Context) error {
 		WriteHeader(c, HxTrigger, HxHeader[string]{"name": "message"})
-		return c.View()
+		return c.View(nil)
 	})
 
 	client := &http.Client{}

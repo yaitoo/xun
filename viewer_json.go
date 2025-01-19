@@ -10,11 +10,13 @@ import (
 type JsonViewer struct {
 }
 
+var jsonViewerMime = &MimeType{Type: "application", SubType: "json"}
+
 // MimeType returns the MIME type of the JSON content.
 //
 // It returns "application/json".
-func (*JsonViewer) MimeType() string {
-	return "application/json"
+func (*JsonViewer) MimeType() *MimeType {
+	return jsonViewerMime
 }
 
 // Render renders the given data as JSON to the http.ResponseWriter.
