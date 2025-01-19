@@ -4,17 +4,6 @@ import (
 	"net/http"
 )
 
-// BufPool is a pool of *bytes.Buffer for reuse to reduce memory alloc.
-//
-// It is used by the HtmlViewer to render the template.
-// The pool is created with a size of 100, but you can change it by setting the
-// BufPool variable before creating any HtmlViewer instances.
-var BufPool *BufferPool
-
-func init() {
-	BufPool = NewBufferPool(100)
-}
-
 // HtmlViewer is a viewer that renders a html template.
 //
 // It uses the `HtmlTemplate` type to render a template.

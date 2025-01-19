@@ -38,11 +38,11 @@ func WithFsys(fsys fs.FS) Option {
 	}
 }
 
-// WithViewer sets the default Viewer for the App.
+// WithHandlerViewers sets the Viewer for a route handler.
 // If not set, it will use JsonViewer.
-func WithViewer(v Viewer) Option {
+func WithHandlerViewers(v ...Viewer) Option {
 	return func(app *App) {
-		app.viewer = v
+		app.handlerViewers = v
 	}
 }
 
@@ -50,7 +50,7 @@ func WithViewer(v Viewer) Option {
 // If not set, it will use the default ViewEngines.
 func WithViewEngines(ve ...ViewEngine) Option {
 	return func(app *App) {
-		app.viewEngines = ve
+		app.engines = ve
 	}
 }
 

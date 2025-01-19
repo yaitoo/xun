@@ -138,7 +138,7 @@ func TestStatus(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithMux(mux), WithViewer(&JsonViewer{}))
+	app := New(WithMux(mux), WithHandlerViewers(&JsonViewer{}))
 
 	app.Start()
 	defer app.Close()

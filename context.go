@@ -83,10 +83,6 @@ func (c *Context) View(data any, options ...string) error {
 		v = c.Routing.Viewers[0] // pickup first viewer as default
 	}
 
-	if !c.writtenStatus {
-		c.rw.WriteHeader(http.StatusOK)
-	}
-
 	return v.Render(c.rw, c.req, data)
 }
 

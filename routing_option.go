@@ -3,7 +3,7 @@ package xun
 // RoutingOptions holds metadata and a viewer for routing configuration.
 type RoutingOptions struct {
 	metadata map[string]any
-	viewer   Viewer
+	viewers  []Viewer
 }
 
 // Get returns the value associated with the given name from the routing metadata.
@@ -78,5 +78,12 @@ func WithNavigation(name, icon, access string) RoutingOption {
 		ro.metadata[NavigationName] = name
 		ro.metadata[NavigationIcon] = icon
 		ro.metadata[NavigationAccess] = access
+	}
+}
+
+// WithViewer sets the viewer for the routing options.
+func WithViewer(v ...Viewer) RoutingOption {
+	return func(ro *RoutingOptions) {
+		ro.viewers = v
 	}
 }
