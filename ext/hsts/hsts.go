@@ -20,8 +20,8 @@ const defaultMaxAge = int64(365 * 24 * time.Hour / time.Second)
 func Enable(opts ...Option) xun.Middleware {
 	cfg := &Config{
 		MaxAge:            defaultMaxAge,
-		IncludeSubDomains: true,
-		Preload:           true,
+		IncludeSubDomains: false,
+		Preload:           false,
 	}
 
 	for _, opt := range opts {
