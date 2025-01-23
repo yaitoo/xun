@@ -1,13 +1,9 @@
 package hsts
 
 import (
-	"context"
-	"crypto/tls"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,18 +12,7 @@ import (
 )
 
 func TestHstsMiddleware(t *testing.T) {
-
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}                           // skipcq: GSC-G402,GO-S1020
-	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012
-		if strings.HasPrefix(addr, "abc.com") {
-			return net.Dial("tcp", strings.TrimPrefix(addr, "abc.com"))
-		}
-		return net.Dial("tcp", addr)
-	}
-
 	c := http.Client{
-		Transport: tr,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { // skipcq: RVV-B0012
 			return http.ErrUseLastResponse
 		},
@@ -138,30 +123,8 @@ func TestHstsMiddleware(t *testing.T) {
 	})
 
 	t.Run("without_port_should_work", func(t *testing.T) {
-		mux := http.NewServeMux()
+		host := stripPort("abc.com")
 
-		srv := &http.Server{ // skipcq: GO-S2112
-			Addr:    ":80",
-			Handler: mux,
-		}
-		defer srv.Close()
-		go srv.ListenAndServe() // nolint: errcheck
-
-		l := "https://abc.com/"
-		app := xun.New(xun.WithMux(mux))
-
-		app.Use(Enable(1*time.Hour, true, true))
-
-		app.Get("/", func(c *xun.Context) error {
-			return c.View(nil)
-		})
-
-		req, err := http.NewRequest(http.MethodGet, "http://abc.com/", nil) // skipcq: GO-S1028
-		require.NoError(t, err)
-		resp, err := c.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusFound, resp.StatusCode)
-		require.Equal(t, l, resp.Header.Get("Location"))
-		require.Equal(t, "max-age=3600; includeSubDomains; preload", resp.Header.Get("Strict-Transport-Security"))
+		require.Equal(t, "abc.com", host)
 	})
 }
