@@ -4,13 +4,10 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/yaitoo/xun"
 )
-
-var MaxAge = 365 * 24 * time.Hour
 
 // Enable sets the Strict-Transport-Security header with the given maxAge,
 // includeSubdomains and preload values.
@@ -36,11 +33,21 @@ func Enable(maxAge time.Duration, includeSubdomains, preload bool) xun.Middlewar
 		return func(c *xun.Context) error {
 			r := c.Request()
 
-			if strings.HasPrefix(r.Proto, "HTTP") && (r.Method == "GET" || r.Method == "HEAD") {
+			isHTTPS := false
+			// Check X-Forwarded-Proto header first
+			forwardedProto := r.Header.Get("X-Forwarded-Proto")
+			if forwardedProto != "" {
+				isHTTPS = forwardedProto == "https"
+			} else {
+				// Fall back to checking direct protocol
+				isHTTPS = r.TLS != nil
+			}
+
+			if isHTTPS && (r.Method == "GET" || r.Method == "HEAD") {
 				target := "https://" + stripPort(r.Host) + r.URL.RequestURI()
 
 				if maxAge <= 0 {
-					maxAge = MaxAge
+					maxAge = 365 * 24 * time.Hour
 				}
 
 				v := "max-age=" + strconv.FormatInt(int64(maxAge/time.Second), 10)

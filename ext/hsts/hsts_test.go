@@ -18,7 +18,7 @@ import (
 func TestHstsMiddleware(t *testing.T) {
 
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}                           // skipcq: GSC-G402,GO-S1020
 	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012
 		if strings.HasPrefix(addr, "abc.com") {
 			return net.Dial("tcp", strings.TrimPrefix(addr, "abc.com"))
@@ -140,7 +140,7 @@ func TestHstsMiddleware(t *testing.T) {
 	t.Run("without_port_should_work", func(t *testing.T) {
 		mux := http.NewServeMux()
 
-		srv := &http.Server{
+		srv := &http.Server{ // skipcq: GO-S2112
 			Addr:    ":80",
 			Handler: mux,
 		}
@@ -156,7 +156,7 @@ func TestHstsMiddleware(t *testing.T) {
 			return c.View(nil)
 		})
 
-		req, err := http.NewRequest(http.MethodGet, "http://abc.com/", nil)
+		req, err := http.NewRequest(http.MethodGet, "http://abc.com/", nil) // skipcq: GO-S1028
 		require.NoError(t, err)
 		resp, err := c.Do(req)
 		require.NoError(t, err)
