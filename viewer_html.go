@@ -28,7 +28,7 @@ func (*HtmlViewer) MimeType() *MimeType {
 // This implementation uses the `HtmlTemplate.Execute` method to render the template.
 // The rendered result is written to the http.ResponseWriter.
 func (v *HtmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
-	w.Header().Add("Content-Type", "text/html; charset=utf-8")
+
 	buf := BufPool.Get()
 	defer BufPool.Put(buf)
 
@@ -37,6 +37,7 @@ func (v *HtmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) er
 		return err
 	}
 
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, err = buf.WriteTo(w)
 	return err
 }

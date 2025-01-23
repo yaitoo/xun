@@ -31,7 +31,7 @@ func (*JsonViewer) Render(w http.ResponseWriter, r *http.Request, data any) erro
 		return err
 	}
 
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	_, err = buf.WriteTo(w)
 	return err
 }

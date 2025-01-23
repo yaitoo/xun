@@ -31,7 +31,7 @@ func (*XmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) error
 	if err != nil {
 		return err
 	}
-	w.Header().Add("Content-Type", "text/xml; charset=utf-8")
+	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	_, err = buf.WriteTo(w)
 	return err
 }

@@ -28,7 +28,7 @@ func (*StringViewer) Render(w http.ResponseWriter, r *http.Request, data any) er
 		return nil
 	}
 
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, err := fmt.Fprint(w, data)
 	return err
 }
