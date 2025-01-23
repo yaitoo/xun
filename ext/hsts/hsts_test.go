@@ -29,7 +29,7 @@ func TestHstsMiddleware(t *testing.T) {
 		l := "https://" + u.Hostname() + "/"
 		app := xun.New(xun.WithMux(mux))
 
-		app.Use(Enable(1*time.Hour, false, false))
+		app.Use(Enable(WithMaxAge(1*time.Hour), WithDomains(false), WithPreload(false)))
 
 		app.Get("/", func(c *xun.Context) error {
 			return c.View(nil)
@@ -55,7 +55,7 @@ func TestHstsMiddleware(t *testing.T) {
 		l := "https://" + u.Hostname() + "/"
 		app := xun.New(xun.WithMux(mux))
 
-		app.Use(Enable(0*time.Hour, false, false))
+		app.Use(Enable(WithDomains(false), WithPreload(false)))
 
 		app.Get("/", func(c *xun.Context) error {
 			return c.View(nil)
@@ -81,7 +81,7 @@ func TestHstsMiddleware(t *testing.T) {
 		l := "https://" + u.Hostname() + "/"
 		app := xun.New(xun.WithMux(mux))
 
-		app.Use(Enable(1*time.Hour, true, false))
+		app.Use(Enable(WithMaxAge(1*time.Hour), WithDomains(true), WithPreload(false)))
 
 		app.Get("/", func(c *xun.Context) error {
 			return c.View(nil)
@@ -107,7 +107,7 @@ func TestHstsMiddleware(t *testing.T) {
 		l := "https://" + u.Hostname() + "/"
 		app := xun.New(xun.WithMux(mux))
 
-		app.Use(Enable(1*time.Hour, true, true))
+		app.Use(Enable(WithMaxAge(1*time.Hour), WithDomains(true), WithPreload(true)))
 
 		app.Get("/", func(c *xun.Context) error {
 			return c.View(nil)

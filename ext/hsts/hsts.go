@@ -9,26 +9,25 @@ import (
 	"github.com/yaitoo/xun"
 )
 
+const defaultMaxAge = int64(365 * 24 * time.Hour / time.Second)
+
 // Enable sets the Strict-Transport-Security header with the given maxAge,
 // includeSubdomains and preload values.
 //
 // The Strict-Transport-Security header is used to inform browsers that the site
 // should only be accessed over HTTPS, and that any HTTP requests should be
 // automatically rewritten as HTTPS.
-//
-// maxAge is the maximum age of the header in seconds.
-//
-// includeSubdomains will include all subdomains of the current domain in the
-// header.
-//
-// preload will add the preload directive to the header, which allows the site
-// to be included in the HSTS preload list.
-//
-// The HSTS preload list is a list of sites that are known to be HTTPS-only, and
-// are included in the browser's HSTS list by default. This allows the browser to
-// immediately switch to HTTPS for these sites, without having to wait for the
-// first request to complete.
-func Enable(maxAge time.Duration, includeSubdomains, preload bool) xun.Middleware {
+func Enable(opts ...Option) xun.Middleware {
+	cfg := &Config{
+		MaxAge:            defaultMaxAge,
+		IncludeSubDomains: false,
+		Preload:           false,
+	}
+
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
 			r := c.Request()
@@ -36,15 +35,11 @@ func Enable(maxAge time.Duration, includeSubdomains, preload bool) xun.Middlewar
 			if r.TLS == nil && (r.Method == "GET" || r.Method == "HEAD") {
 				target := "https://" + stripPort(r.Host) + r.URL.RequestURI()
 
-				if maxAge <= 0 {
-					maxAge = 365 * 24 * time.Hour
-				}
-
-				v := "max-age=" + strconv.FormatInt(int64(maxAge/time.Second), 10)
-				if includeSubdomains {
+				v := "max-age=" + strconv.FormatInt(cfg.MaxAge, 10)
+				if cfg.IncludeSubDomains {
 					v += "; includeSubDomains"
 				}
-				if preload {
+				if cfg.Preload {
 					v += "; preload"
 				}
 				c.WriteHeader("Strict-Transport-Security", v)
