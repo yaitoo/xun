@@ -12,6 +12,8 @@ import (
 func TestStringViewer(t *testing.T) {
 	v := &StringViewer{}
 
+	require.Equal(t, "text/plain", v.MimeType().String())
+
 	t.Run("nil_should_be_skipped", func(t *testing.T) {
 
 		rw := httptest.NewRecorder()
