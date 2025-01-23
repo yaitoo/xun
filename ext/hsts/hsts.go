@@ -43,7 +43,7 @@ func Enable(maxAge time.Duration, includeSubdomains, preload bool) xun.Middlewar
 				isHTTPS = r.TLS != nil
 			}
 
-			if isHTTPS && (r.Method == "GET" || r.Method == "HEAD") {
+			if !isHTTPS && (r.Method == "GET" || r.Method == "HEAD") {
 				target := "https://" + stripPort(r.Host) + r.URL.RequestURI()
 
 				if maxAge <= 0 {
