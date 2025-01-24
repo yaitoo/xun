@@ -14,7 +14,7 @@ import (
 
 func TestWriteHeader(t *testing.T) {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // skipcq: GSC-G402,GO-S1020
 	c := http.Client{
 		Transport: tr,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { // skipcq: RVV-B0012
@@ -90,7 +90,7 @@ func TestWriteHeader(t *testing.T) {
 func TestRedirect(t *testing.T) {
 
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // skipcq: GSC-G402,GO-S1020
 	c := http.Client{
 		Transport: tr,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { // skipcq: RVV-B0012

@@ -60,11 +60,7 @@ func WriteHeader(opts ...Option) xun.Middleware {
 	}
 }
 
-// Redirect is a middleware that redirects all plain HTTP requests to HTTPS.
-//
-// This middleware assumes that the request is served over a secure connection.
-// It checks if the request is a GET or a HEAD request and redirects it to the
-// same path but with HTTPS if the request is not served over a secure connection.
+// Redirect is a middleware that redirects plain HTTP requests to HTTPS.
 func Redirect() xun.Middleware {
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
