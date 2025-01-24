@@ -26,25 +26,16 @@ func WithMaxAge(t time.Duration) Option {
 	}
 }
 
-// WithDomains sets whether the HSTS policy applies to subdomains.
-//
-// If true, the policy will also apply to subdomains of the current domain.
-// For example, if the current domain is "example.com", the policy will also
-// apply to subdomains such as "foo.example.com" and "bar.example.com".
-func WithDomains(b bool) Option {
+// WithIncludeSubDomains sets the HSTS policy applies to subdomains.
+func WithIncludeSubDomains() Option {
 	return func(c *Config) {
-		c.IncludeSubDomains = b
+		c.IncludeSubDomains = true
 	}
 }
 
-// WithPreload sets whether the domain should be preloaded into browsers' HSTS lists.
-//
-// If true, the domain will be added to the preload list, which allows the site
-// to be included in the HSTS preload list. This can help improve the security
-// of the site, as browsers will immediately switch to HTTPS for this domain,
-// without waiting for the first request to complete.
-func WithPreload(b bool) Option {
+// WithPreload sets the domain should be preloaded into browsers' HSTS lists.
+func WithPreload() Option {
 	return func(c *Config) {
-		c.Preload = b
+		c.Preload = true
 	}
 }

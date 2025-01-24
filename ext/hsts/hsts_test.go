@@ -1,6 +1,7 @@
 package hsts
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,14 +12,93 @@ import (
 	"github.com/yaitoo/xun"
 )
 
-func TestHstsMiddleware(t *testing.T) {
+func TestWriteHeader(t *testing.T) {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	c := http.Client{
+		Transport: tr,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { // skipcq: RVV-B0012
 			return http.ErrUseLastResponse
 		},
 	}
 
-	t.Run("max_age_should_work", func(t *testing.T) {
+	tests := []struct {
+		name           string
+		options        []Option
+		expectedHeader string
+	}{
+		{
+			name:           "default_should_work",
+			options:        []Option{},
+			expectedHeader: "max-age=31536000",
+		},
+		{
+			name:           "max_age_should_work",
+			options:        []Option{WithMaxAge(1 * time.Hour)},
+			expectedHeader: "max-age=3600",
+		},
+		{
+			name:           "invalid_max_age_should_work",
+			options:        []Option{WithMaxAge(0 * time.Hour)},
+			expectedHeader: "max-age=31536000",
+		},
+		{
+			name:           "includesubdomains_should_work",
+			options:        []Option{WithMaxAge(1 * time.Hour), WithIncludeSubDomains()},
+			expectedHeader: "max-age=3600; includeSubDomains",
+		},
+		{
+			name:           "preload_should_work",
+			options:        []Option{WithMaxAge(1 * time.Hour), WithPreload()},
+			expectedHeader: "max-age=3600; preload",
+		},
+		{
+			name:           "all_should_work",
+			options:        []Option{WithMaxAge(1 * time.Hour), WithIncludeSubDomains(), WithPreload()},
+			expectedHeader: "max-age=3600; includeSubDomains; preload",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			srv := httptest.NewTLSServer(mux)
+			defer srv.Close()
+
+			// u, err := url.Parse(srv.URL)
+			// require.NoError(t, err)
+			// l := "https://" + u.Hostname() + "/"
+
+			app := xun.New(xun.WithMux(mux))
+			app.Use(WriteHeader(test.options...))
+
+			app.Get("/", func(c *xun.Context) error {
+				return c.View(nil)
+			})
+
+			req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+			require.NoError(t, err)
+			resp, err := c.Do(req)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			require.Equal(t, test.expectedHeader, resp.Header.Get("Strict-Transport-Security")) // default MaxAge is 1 year
+
+		})
+	}
+}
+
+func TestRedirect(t *testing.T) {
+
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	c := http.Client{
+		Transport: tr,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { // skipcq: RVV-B0012
+			return http.ErrUseLastResponse
+		},
+	}
+
+	t.Run("http_should_be_redirected", func(t *testing.T) {
 		mux := http.NewServeMux()
 		srv := httptest.NewServer(mux)
 		defer srv.Close()
@@ -29,7 +109,7 @@ func TestHstsMiddleware(t *testing.T) {
 		l := "https://" + u.Hostname() + "/"
 		app := xun.New(xun.WithMux(mux))
 
-		app.Use(Enable(WithMaxAge(1*time.Hour), WithDomains(false), WithPreload(false)))
+		app.Use(Redirect())
 
 		app.Get("/", func(c *xun.Context) error {
 			return c.View(nil)
@@ -41,21 +121,15 @@ func TestHstsMiddleware(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusFound, resp.StatusCode)
 		require.Equal(t, l, resp.Header.Get("Location"))
-		require.Equal(t, "max-age=3600", resp.Header.Get("Strict-Transport-Security")) // default MaxAge is 1 year
+		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
 	})
 
-	t.Run("invalid_max_age_should_work", func(t *testing.T) {
+	t.Run("https_should_not_be_redirected", func(t *testing.T) {
 		mux := http.NewServeMux()
-		srv := httptest.NewServer(mux)
+		srv := httptest.NewTLSServer(mux)
 		defer srv.Close()
-
-		u, err := url.Parse(srv.URL)
-		require.NoError(t, err)
-
-		l := "https://" + u.Hostname() + "/"
 		app := xun.New(xun.WithMux(mux))
-
-		app.Use(Enable(WithDomains(false), WithPreload(false)))
+		app.Use(Redirect())
 
 		app.Get("/", func(c *xun.Context) error {
 			return c.View(nil)
@@ -65,66 +139,36 @@ func TestHstsMiddleware(t *testing.T) {
 		require.NoError(t, err)
 		resp, err := c.Do(req)
 		require.NoError(t, err)
-		require.Equal(t, http.StatusFound, resp.StatusCode)
-		require.Equal(t, l, resp.Header.Get("Location"))
-		require.Equal(t, "max-age=31536000", resp.Header.Get("Strict-Transport-Security"))
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, "", resp.Header.Get("Location"))
+		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
 	})
 
-	t.Run("max_age_includesubdomains_should_work", func(t *testing.T) {
-		mux := http.NewServeMux()
-		srv := httptest.NewServer(mux)
-		defer srv.Close()
+}
 
-		u, err := url.Parse(srv.URL)
-		require.NoError(t, err)
+func TestStripPort(t *testing.T) {
+	tests := []struct {
+		name         string
+		hostPort     string
+		expectedHost string
+	}{
+		{
+			name:         "host_port_should_work",
+			hostPort:     "127.0.0.1:8080",
+			expectedHost: "127.0.0.1",
+		},
+		{
+			name:         "host_should_work",
+			hostPort:     "127.0.0.1",
+			expectedHost: "127.0.0.1",
+		},
+	}
 
-		l := "https://" + u.Hostname() + "/"
-		app := xun.New(xun.WithMux(mux))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			host := stripPort(test.hostPort)
 
-		app.Use(Enable(WithMaxAge(1*time.Hour), WithDomains(true), WithPreload(false)))
-
-		app.Get("/", func(c *xun.Context) error {
-			return c.View(nil)
+			require.Equal(t, test.expectedHost, host)
 		})
-
-		req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
-		require.NoError(t, err)
-		resp, err := c.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusFound, resp.StatusCode)
-		require.Equal(t, l, resp.Header.Get("Location"))
-		require.Equal(t, "max-age=3600; includeSubDomains", resp.Header.Get("Strict-Transport-Security"))
-	})
-
-	t.Run("max_age_includesubdomains_preload_should_work", func(t *testing.T) {
-		mux := http.NewServeMux()
-		srv := httptest.NewServer(mux)
-		defer srv.Close()
-
-		u, err := url.Parse(srv.URL)
-		require.NoError(t, err)
-
-		l := "https://" + u.Hostname() + "/"
-		app := xun.New(xun.WithMux(mux))
-
-		app.Use(Enable(WithMaxAge(1*time.Hour), WithDomains(true), WithPreload(true)))
-
-		app.Get("/", func(c *xun.Context) error {
-			return c.View(nil)
-		})
-
-		req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
-		require.NoError(t, err)
-		resp, err := c.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusFound, resp.StatusCode)
-		require.Equal(t, l, resp.Header.Get("Location"))
-		require.Equal(t, "max-age=3600; includeSubDomains; preload", resp.Header.Get("Strict-Transport-Security"))
-	})
-
-	t.Run("without_port_should_work", func(t *testing.T) {
-		host := stripPort("abc.com")
-
-		require.Equal(t, "abc.com", host)
-	})
+	}
 }
