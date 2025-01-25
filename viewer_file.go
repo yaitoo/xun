@@ -1,7 +1,7 @@
 package xun
 
 import (
-	"crypto/sha1"
+	"crypto/sha512"
 	"fmt"
 	"io"
 	"io/fs"
@@ -22,7 +22,7 @@ func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
 		}
 		defer f.Close()
 
-		hash := sha1.New()
+		hash := sha512.New()
 		if _, err := io.Copy(hash, f); err != nil {
 			return v
 		}
