@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"strings"
 )
 
 // NewFileViewer creates a new FileViewer instance.
@@ -76,10 +77,13 @@ func (v *FileViewer) Render(w http.ResponseWriter, r *http.Request, data any) er
 
 	w.Header().Set("ETag", v.etag)
 	if match := r.Header.Get("If-None-Match"); match != "" {
-		if match == v.etag {
-			w.WriteHeader(http.StatusNotModified)
-			return nil
+		for _, it := range strings.Split(match, ",") {
+			if strings.TrimSpace(it) == v.etag {
+				w.WriteHeader(http.StatusNotModified)
+				return nil
+			}
 		}
+
 	}
 
 	return v.serveContent(w, r)
