@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"embed"
 	"errors"
 	"io/fs"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 // StaticViewEngine is a view engine that serves static files from a file system.
 type StaticViewEngine struct {
+	isEmbedFsys bool
 }
 
 // Load loads all static files from the given file system and registers them with the application.
@@ -18,6 +20,8 @@ type StaticViewEngine struct {
 // with the application. It also handles file changes for the "public" directory
 // and updates the application accordingly.
 func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
+
+	_, ve.isEmbedFsys = fsys.(embed.FS)
 
 	err := fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -65,8 +69,5 @@ func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 
 	name = strings.TrimPrefix(name, "public/")
 
-	app.HandleFile(name, &FileViewer{
-		fsys: fsys,
-		path: path,
-	})
+	app.HandleFile(name, NewFileViewer(fsys, path, ve.isEmbedFsys))
 }
