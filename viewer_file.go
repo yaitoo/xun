@@ -11,12 +11,11 @@ import (
 // NewFileViewer creates a new FileViewer instance.
 func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
 	v := &FileViewer{
-		fsys:    fsys,
-		path:    path,
-		isEmbed: isEmbed,
+		fsys: fsys,
+		path: path,
 	}
 
-	if v.isEmbed {
+	if isEmbed {
 		f, err := fsys.Open(path)
 		if err != nil {
 			return v
@@ -27,6 +26,7 @@ func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
 		if _, err := io.Copy(hash, f); err != nil {
 			return v
 		}
+		v.isEmbed = true
 		v.etag = fmt.Sprintf(`"%x"`, hash.Sum(nil))
 	}
 
