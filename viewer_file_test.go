@@ -1,6 +1,8 @@
 package xun
 
 import (
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +16,7 @@ func TestFileViewer(t *testing.T) {
 	now := time.Now()
 	fsys := &fstest.MapFS{
 		"public/index.html": {Data: []byte(`<!DOCTYPE html><html><body>Hello, world!</body></html>`), ModTime: time.Now()},
+		"public/home.html":  {},
 	}
 
 	// https://github.com/yaitoo/xun/issues/32
@@ -93,4 +96,75 @@ func TestFileViewer(t *testing.T) {
 
 	})
 
+	t.Run("fails_etag_should_work", func(t *testing.T) {
+		mfs := &MockFs{
+			CanOpen: true,
+			CanRead: false,
+		}
+		v := NewFileViewer(mfs, "public/home.html", true)
+		require.Empty(t, v.etag)
+	})
+
+	t.Run("fails_stat_should_work", func(t *testing.T) {
+		mfs := &MockFs{
+			CanOpen: true,
+			CanRead: false,
+			CanStat: false,
+		}
+		v := NewFileViewer(mfs, "public/home.html", true)
+		require.Empty(t, v.etag)
+
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		w := httptest.NewRecorder()
+
+		err := v.Render(w, r, nil)
+
+		require.ErrorIs(t, err, errCannotStat)
+	})
+
+}
+
+type MockFs struct {
+	fstest.MapFS
+	CanOpen bool
+	CanRead bool
+	CanStat bool
+}
+
+func (m *MockFs) Open(name string) (fs.File, error) {
+	if m.CanOpen {
+		return &MockFile{
+			CanRead: m.CanRead,
+			CanStat: m.CanStat,
+		}, nil
+	}
+
+	return nil, errors.New("mock: can't open file")
+}
+
+type MockFile struct {
+	*fstest.MapFile
+	CanRead bool
+	CanStat bool
+}
+
+var errCannotStat = errors.New("mock: can't stat")
+
+func (f *MockFile) Stat() (fs.FileInfo, error) {
+	if f.CanStat {
+		return nil, nil
+	}
+
+	return nil, errCannotStat
+
+}
+func (f *MockFile) Read([]byte) (int, error) {
+	if f.CanRead {
+		return 1, nil
+	}
+
+	return 0, errors.New("mock: can't read")
+}
+func (f *MockFile) Close() error {
+	return nil
 }
