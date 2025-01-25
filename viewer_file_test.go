@@ -131,7 +131,7 @@ type MockFs struct {
 	CanStat bool
 }
 
-func (m *MockFs) Open(name string) (fs.File, error) {
+func (m *MockFs) Open(name string) (fs.File, error) { // skipcq: RVV-B0012
 	if m.CanOpen {
 		return &MockFile{
 			CanRead: m.CanRead,
@@ -165,6 +165,6 @@ func (f *MockFile) Read([]byte) (int, error) {
 
 	return 0, errors.New("mock: can't read")
 }
-func (f *MockFile) Close() error {
+func (*MockFile) Close() error {
 	return nil
 }
