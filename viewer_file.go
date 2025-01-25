@@ -1,8 +1,8 @@
 package xun
 
 import (
-	"crypto/sha512"
-	"fmt"
+	"crypto/md5"
+	"encoding/hex"
 	"io"
 	"io/fs"
 	"net/http"
@@ -23,12 +23,12 @@ func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
 		}
 		defer f.Close()
 
-		hash := sha512.New()
+		hash := md5.New()
 		if _, err := io.Copy(hash, f); err != nil {
 			return v
 		}
 		v.isEmbed = true
-		v.etag = fmt.Sprintf(`"%x"`, hash.Sum(nil))
+		v.etag = `"` + hex.EncodeToString(hash.Sum(nil)) + `"`
 	}
 
 	return v

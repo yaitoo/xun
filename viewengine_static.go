@@ -1,9 +1,9 @@
 package xun
 
 import (
-	"embed"
 	"errors"
 	"io/fs"
+	"reflect"
 	"strings"
 
 	"github.com/yaitoo/xun/fsnotify"
@@ -20,10 +20,15 @@ type StaticViewEngine struct {
 // with the application. It also handles file changes for the "public" directory
 // and updates the application accordingly.
 func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
+	root, err := fsys.Open(".")
+	if err == nil {
+		t := reflect.TypeOf(root)
+		if t.Kind() == reflect.Ptr {
+			ve.isEmbedFsys = t.Elem().PkgPath() == "embed"
+		}
+	}
 
-	_, ve.isEmbedFsys = fsys.(embed.FS)
-
-	err := fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
