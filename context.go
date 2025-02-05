@@ -77,6 +77,10 @@ func (c *Context) View(data any, options ...string) error {
 					break
 				}
 			}
+
+			if ok {
+				break
+			}
 		}
 	}
 	// no any viewer is matched
