@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/yaitoo/xun"
 )
@@ -31,6 +32,9 @@ var (
 	ErrInvalidValue = errors.New("invalid cookie value")
 )
 
+// Set sets a cookie value using base64 encoding
+//
+// If the length of the resulting cookie is longer than 4096 bytes, an ErrValueTooLong error is returned.
 func Set(ctx *xun.Context, v http.Cookie) error {
 	// Encode the cookie value using base64.
 	v.Value = base64.URLEncoding.EncodeToString([]byte(v.Value))
@@ -42,14 +46,17 @@ func Set(ctx *xun.Context, v http.Cookie) error {
 	}
 
 	// Write the cookie as normal.
-	http.SetCookie(ctx.Writer(), &v)
+	http.SetCookie(ctx.Response, &v)
 
 	return nil
 }
 
+// Get retrieves a cookie value using base64 decoding
+//
+// If the length of the resulting cookie is longer than 4096 bytes, an ErrValueTooLong error is returned.
 func Get(ctx *xun.Context, name string) (string, error) {
 	// Read the v as normal.
-	v, err := ctx.Request().Cookie(name)
+	v, err := ctx.Request.Cookie(name)
 	if err != nil {
 		return "", err
 	}
@@ -66,34 +73,60 @@ func Get(ctx *xun.Context, name string) (string, error) {
 	return string(value), nil
 }
 
-func Del(ctx *xun.Context, v http.Cookie) {
+// Delete deletes a cookie by setting the MaxAge to -1 and setting the value to an empty string.
+func Delete(ctx *xun.Context, v http.Cookie) {
 	v.MaxAge = -1
 	v.Value = ""
-	http.SetCookie(ctx.Writer(), &v)
+	http.SetCookie(ctx.Response, &v)
 }
 
-func SetSigned(ctx *xun.Context, v http.Cookie, secretKey []byte) error {
+// SetSigned sets a cookie value using HMAC-SHA256 and appends the signature to
+// the value.
+//
+// This function takes a secret key as an argument and uses it to calculate a
+// HMAC signature of the cookie name and value. This signature is prepended to
+// the value before setting the cookie.
+//
+// If the length of the resulting cookie value is longer than 4096 bytes, an
+// ErrValueTooLong error is returned.
+func SetSigned(ctx *xun.Context, v http.Cookie, secretKey []byte) (time.Time, error) {
+	ts := time.Now()
+
 	// Calculate a HMAC signature of the cookie name and value, using SHA256 and
 	// a secret key (which we will create in a moment).
-	mac := hmac.New(sha256.New, secretKey)
-	mac.Write([]byte(v.Name))
-	mac.Write([]byte(v.Value))
-	signature := mac.Sum(nil)
-
 	// Prepend the cookie value with the HMAC signature.
-	v.Value = string(signature) + v.Value
+	v.Value = WithSignature(secretKey, v.Name, v.Value, ts)
 
 	// Call our Set() helper to base64-encode the new cookie value and write
 	// the cookie.
-	return Set(ctx, v)
+	return ts, Set(ctx, v)
 }
 
-func GetSigned(ctx *xun.Context, name string, secretKey []byte) (string, error) {
+func WithSignature(secretKey []byte, name, value string, ts time.Time) string {
+	mac := hmac.New(sha256.New, secretKey)
+	mac.Write([]byte(name))
+	mac.Write([]byte(ts.Format(time.RFC3339)))
+	mac.Write([]byte(value))
+	signature := mac.Sum(nil)
+
+	return string(signature) + ts.Format(time.RFC3339) + value
+}
+
+// GetSigned retrieves a cookie value using HMAC-SHA256 verification
+//
+// This function takes a secret key as an argument and uses it to calculate a
+// HMAC signature of the cookie name and value. This signature is compared to the
+// signature stored in the cookie. If the two signatures match, the original
+// cookie value is returned. Otherwise, an ErrInvalidValue error is returned.
+//
+// If the length of the resulting cookie value is longer than 4096 bytes, an
+// ErrValueTooLong error is returned.
+func GetSigned(ctx *xun.Context, name string, secretKey []byte) (string, *time.Time, error) {
 	// Get in the signed value from the cookie. This should be in the format
 	// "{signature}{original value}".
 	signedValue, err := Get(ctx, name)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	// A SHA256 HMAC signature has a fixed length of 32 bytes. To avoid a potential
@@ -102,16 +135,18 @@ func GetSigned(ctx *xun.Context, name string, secretKey []byte) (string, error) 
 	// sha256.Size constant here, rather than 32, just because it makes our code
 	// a bit more understandable at a glance.
 	if len(signedValue) < sha256.Size {
-		return "", ErrInvalidValue
+		return "", nil, ErrInvalidValue
 	}
 
 	// Split apart the signature and original cookie value.
 	signature := signedValue[:sha256.Size]
-	value := signedValue[sha256.Size:]
+	tv := signedValue[sha256.Size : sha256.Size+25]
+	value := signedValue[sha256.Size+25:]
 
 	// Recalculate the HMAC signature of the cookie name and original value.
 	mac := hmac.New(sha256.New, secretKey)
 	mac.Write([]byte(name))
+	mac.Write([]byte(tv))
 	mac.Write([]byte(value))
 	expectedSignature := mac.Sum(nil)
 
@@ -119,13 +154,26 @@ func GetSigned(ctx *xun.Context, name string, secretKey []byte) (string, error) 
 	// in the cookie. If they match, we can be confident that the cookie name
 	// and value haven't been edited by the client.
 	if !hmac.Equal([]byte(signature), expectedSignature) {
-		return "", ErrInvalidValue
+		return "", nil, ErrInvalidValue
+	}
+
+	ts, err := time.Parse(time.RFC3339, tv)
+	if err != nil {
+		return "", nil, ErrInvalidValue
 	}
 
 	// Return the original cookie value.
-	return value, nil
+	return value, &ts, nil
 }
 
+// SetEncrypted sets a cookie value using AES-GCM encryption
+//
+// This function takes a secret key as an argument and uses it to create an AES
+// cipher block. The cookie value is then encrypted using AES-GCM and the
+// resulting ciphertext is written to the cookie.
+//
+// If the length of the resulting cookie is longer than 4096 bytes, an
+// ErrValueTooLong error is returned.
 func SetEncrypted(ctx *xun.Context, cookie http.Cookie, secretKey []byte) error {
 	// Create a new AES cipher block from the secret key.
 	block, err := aes.NewCipher(secretKey)
@@ -166,6 +214,10 @@ func SetEncrypted(ctx *xun.Context, cookie http.Cookie, secretKey []byte) error 
 	return Set(ctx, cookie)
 }
 
+// GetEncrypted retrieves a cookie value by first decrypting it using AES-GCM.
+// The secretKey parameter is used to decrypt the cookie value.
+//
+// If the length of the resulting cookie is longer than 4096 bytes, an ErrValueTooLong error is returned.
 func GetEncrypted(ctx *xun.Context, name string, secretKey []byte) (string, error) {
 	// Read the encrypted value from the cookie as normal.
 	encryptedValue, err := Get(ctx, name)

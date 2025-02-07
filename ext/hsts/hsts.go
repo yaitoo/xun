@@ -42,7 +42,7 @@ func WriteHeader(opts ...Option) xun.Middleware {
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
-			r := c.Request()
+			r := c.Request
 
 			if r.TLS != nil && (r.Method == "GET" || r.Method == "HEAD") {
 				v := "max-age=" + strconv.FormatInt(cfg.MaxAge, 10)
@@ -64,7 +64,7 @@ func WriteHeader(opts ...Option) xun.Middleware {
 func Redirect() xun.Middleware {
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
-			r := c.Request()
+			r := c.Request
 
 			if r.TLS == nil && (r.Method == "GET" || r.Method == "HEAD") {
 				target := "https://" + stripPort(r.Host) + r.URL.RequestURI()

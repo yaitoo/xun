@@ -202,7 +202,7 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 	app.viewers[name] = v
 
 	hf := func(c *Context) error {
-		return v.Render(c.rw, c.req, nil)
+		return v.Render(c.Response, c.Request, nil)
 	}
 
 	r = &Routing{
@@ -221,10 +221,10 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 		defer rw.Close()
 
 		ctx := &Context{
-			req:     req,
-			rw:      rw,
-			Routing: *r,
-			app:     app,
+			Request:  req,
+			Response: rw,
+			Routing:  *r,
+			app:      app,
 		}
 
 		err := r.Next(ctx)
@@ -260,7 +260,7 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	app.viewers[viewName] = v
 
 	hf := func(c *Context) error {
-		return v.Render(c.rw, c.req, nil)
+		return v.Render(c.Response, c.Request, nil)
 	}
 
 	r = &Routing{
@@ -279,10 +279,10 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 		defer rw.Close()
 
 		ctx := &Context{
-			req:     req,
-			rw:      rw,
-			Routing: *r,
-			app:     app,
+			Request:  req,
+			Response: rw,
+			Routing:  *r,
+			app:      app,
 		}
 
 		err := r.Next(ctx)
@@ -377,10 +377,10 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 		defer rw.Close()
 
 		ctx := &Context{
-			req:     req,
-			rw:      rw,
-			Routing: *r,
-			app:     app,
+			Request:  req,
+			Response: rw,
+			Routing:  *r,
+			app:      app,
 		}
 
 		err := r.Next(ctx)

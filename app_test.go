@@ -659,7 +659,7 @@ func TestDataBindOnHtml(t *testing.T) {
 	})
 
 	app.Get("/user/{id}", func(c *Context) error {
-		id := c.Request().PathValue("id")
+		id := c.Request.PathValue("id")
 		for _, user := range users {
 			if strconv.Itoa(user.ID) == id {
 				return c.View(user)
@@ -763,9 +763,9 @@ func TestUnhandledError(t *testing.T) {
 
 	app.Use(func(next HandleFunc) HandleFunc {
 		return func(c *Context) error {
-			if c.Request().URL.Path == "/skin.css" {
+			if c.Request.URL.Path == "/skin.css" {
 				return errors.New("file: file is in use by another process")
-			} else if c.Request().URL.Path == "/user" {
+			} else if c.Request.URL.Path == "/user" {
 				return errors.New("file: file is in use by another process")
 			}
 

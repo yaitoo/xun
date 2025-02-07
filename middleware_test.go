@@ -37,7 +37,7 @@ func TestMiddleware(t *testing.T) {
 		return func(c *Context) error {
 			i++
 			c.WriteHeader("X-M3", strconv.Itoa(i))
-			user := c.Request().Header.Get("X-User")
+			user := c.Request.Header.Get("X-User")
 			if user == "" {
 				c.WriteStatus(http.StatusUnauthorized)
 				return ErrCancelled
