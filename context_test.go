@@ -235,3 +235,19 @@ func TestMixedViewers(t *testing.T) {
 	})
 
 }
+
+func TestDeleteHeader(t *testing.T) {
+	ctx := &Context{
+		Response: httptest.NewRecorder(),
+	}
+
+	ctx.WriteHeader("test", "value")
+
+	v := ctx.Response.Header().Get("test")
+	require.Equal(t, "value", v)
+
+	ctx.WriteHeader("test", "")
+
+	v = ctx.Response.Header().Get("test")
+	require.Empty(t, v)
+}
