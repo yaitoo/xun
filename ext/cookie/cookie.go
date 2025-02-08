@@ -11,17 +11,11 @@
 package cookie
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/yaitoo/xun"
@@ -95,21 +89,23 @@ func SetSigned(ctx *xun.Context, v http.Cookie, secretKey []byte) (time.Time, er
 	// Calculate a HMAC signature of the cookie name and value, using SHA256 and
 	// a secret key (which we will create in a moment).
 	// Prepend the cookie value with the HMAC signature.
-	v.Value = WithSignature(secretKey, v.Name, v.Value, ts)
+	_, v.Value = signValue(secretKey, v.Name, v.Value, ts)
 
 	// Call our Set() helper to base64-encode the new cookie value and write
 	// the cookie.
 	return ts, Set(ctx, v)
 }
 
-func WithSignature(secretKey []byte, name, value string, ts time.Time) string {
+func signValue(secretKey []byte, name, value string, ts time.Time) (string, string) {
+	v := ts.UTC().Format(time.RFC3339)
+
 	mac := hmac.New(sha256.New, secretKey)
 	mac.Write([]byte(name))
-	mac.Write([]byte(ts.Format(time.RFC3339)))
+	mac.Write([]byte(v))
 	mac.Write([]byte(value))
 	signature := mac.Sum(nil)
 
-	return string(signature) + ts.Format(time.RFC3339) + value
+	return string(signature), string(signature) + v + value
 }
 
 // GetSigned retrieves a cookie value using HMAC-SHA256 verification
@@ -140,136 +136,24 @@ func GetSigned(ctx *xun.Context, name string, secretKey []byte) (string, *time.T
 
 	// Split apart the signature and original cookie value.
 	signature := signedValue[:sha256.Size]
-	tv := signedValue[sha256.Size : sha256.Size+25]
-	value := signedValue[sha256.Size+25:]
-
-	// Recalculate the HMAC signature of the cookie name and original value.
-	mac := hmac.New(sha256.New, secretKey)
-	mac.Write([]byte(name))
-	mac.Write([]byte(tv))
-	mac.Write([]byte(value))
-	expectedSignature := mac.Sum(nil)
-
-	// Check that the recalculated signature matches the signature we received
-	// in the cookie. If they match, we can be confident that the cookie name
-	// and value haven't been edited by the client.
-	if !hmac.Equal([]byte(signature), expectedSignature) {
-		return "", nil, ErrInvalidValue
-	}
+	tv := signedValue[sha256.Size : sha256.Size+20]
+	value := signedValue[sha256.Size+20:]
 
 	ts, err := time.Parse(time.RFC3339, tv)
 	if err != nil {
 		return "", nil, ErrInvalidValue
 	}
 
+	// Recalculate the HMAC signature of the cookie name and original value.
+	expectedSignature, _ := signValue(secretKey, name, value, ts)
+
+	// Check that the recalculated signature matches the signature we received
+	// in the cookie. If they match, we can be confident that the cookie name
+	// and value haven't been edited by the client.
+	if !hmac.Equal([]byte(signature), []byte(expectedSignature)) {
+		return "", nil, ErrInvalidValue
+	}
+
 	// Return the original cookie value.
 	return value, &ts, nil
-}
-
-// SetEncrypted sets a cookie value using AES-GCM encryption
-//
-// This function takes a secret key as an argument and uses it to create an AES
-// cipher block. The cookie value is then encrypted using AES-GCM and the
-// resulting ciphertext is written to the cookie.
-//
-// If the length of the resulting cookie is longer than 4096 bytes, an
-// ErrValueTooLong error is returned.
-func SetEncrypted(ctx *xun.Context, cookie http.Cookie, secretKey []byte) error {
-	// Create a new AES cipher block from the secret key.
-	block, err := aes.NewCipher(secretKey)
-	if err != nil {
-		return err
-	}
-
-	// Wrap the cipher block in Galois Counter Mode.
-	aesGCM, err := cipher.NewGCM(block)
-	if err != nil {
-		return err
-	}
-
-	// Create a unique nonce containing 12 random bytes.
-	nonce := make([]byte, aesGCM.NonceSize())
-	_, err = io.ReadFull(rand.Reader, nonce)
-	if err != nil {
-		return err
-	}
-
-	// Prepare the plaintext input for encryption. Because we want to
-	// authenticate the cookie name as well as the value, we make this plaintext
-	// in the format "{cookie name}:{cookie value}". We use the : character as a
-	// separator because it is an invalid character for cookie names and
-	// therefore shouldn't appear in them.
-	plaintext := fmt.Sprintf("%s:%s", cookie.Name, cookie.Value)
-
-	// Encrypt the data using aesGCM.Seal(). By passing the nonce as the first
-	// parameter, the encrypted data will be appended to the nonce — meaning
-	// that the returned encryptedValue variable will be in the format
-	// "{nonce}{encrypted plaintext data}".
-	encryptedValue := aesGCM.Seal(nonce, nonce, []byte(plaintext), nil)
-
-	// Set the cookie value to the encryptedValue.
-	cookie.Value = string(encryptedValue)
-
-	// Write the cookie as normal.
-	return Set(ctx, cookie)
-}
-
-// GetEncrypted retrieves a cookie value by first decrypting it using AES-GCM.
-// The secretKey parameter is used to decrypt the cookie value.
-//
-// If the length of the resulting cookie is longer than 4096 bytes, an ErrValueTooLong error is returned.
-func GetEncrypted(ctx *xun.Context, name string, secretKey []byte) (string, error) {
-	// Read the encrypted value from the cookie as normal.
-	encryptedValue, err := Get(ctx, name)
-	if err != nil {
-		return "", err
-	}
-
-	// Create a new AES cipher block from the secret key.
-	block, err := aes.NewCipher(secretKey)
-	if err != nil {
-		return "", err
-	}
-
-	// Wrap the cipher block in Galois Counter Mode.
-	aesGCM, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-
-	// Get the nonce size.
-	nonceSize := aesGCM.NonceSize()
-
-	// To avoid a potential 'index out of range' panic in the next step, we
-	// check that the length of the encrypted value is at least the nonce
-	// size.
-	if len(encryptedValue) < nonceSize {
-		return "", ErrInvalidValue
-	}
-
-	// Split apart the nonce from the actual encrypted data.
-	nonce := encryptedValue[:nonceSize]
-	cipherText := encryptedValue[nonceSize:]
-
-	// Use aesGCM.Open() to decrypt and authenticate the data. If this fails,
-	// return a ErrInvalidValue error.
-	plaintext, err := aesGCM.Open(nil, []byte(nonce), []byte(cipherText), nil)
-	if err != nil {
-		return "", ErrInvalidValue
-	}
-
-	// The plaintext value is in the format "{cookie name}:{cookie value}". We
-	// use strings.Cut() to split it on the first ":" character.
-	expectedName, value, ok := strings.Cut(string(plaintext), ":")
-	if !ok {
-		return "", ErrInvalidValue
-	}
-
-	// Check that the cookie name is the expected one and hasn't been changed.
-	if expectedName != name {
-		return "", ErrInvalidValue
-	}
-
-	// Return the plaintext cookie value.
-	return value, nil
 }
