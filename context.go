@@ -11,11 +11,10 @@ import (
 type Context struct {
 	Routing  Routing
 	app      *App
-	Response http.ResponseWriter
+	Response ResponseWriter
 	Request  *http.Request
 
-	writtenStatus bool
-	values        map[string]any
+	values map[string]any
 }
 
 // WriteStatus sets the HTTP status code for the response.
@@ -23,10 +22,7 @@ type Context struct {
 // The status code will be sent to the client only once the response body is closed.
 // If a status code is not set, the default status code is 200 (OK).
 func (c *Context) WriteStatus(code int) {
-	if !c.writtenStatus {
-		c.Response.WriteHeader(code)
-		c.writtenStatus = true
-	}
+	c.Response.WriteHeader(code)
 }
 
 // WriteHeader sets a response header.

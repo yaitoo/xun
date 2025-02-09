@@ -74,8 +74,6 @@ func (v *FileViewer) Render(w http.ResponseWriter, r *http.Request, data any) er
 	if !v.isEmbed {
 		return v.serveContent(w, r)
 	}
-
-	w.Header().Set("ETag", v.etag)
 	if match := r.Header.Get("If-None-Match"); match != "" {
 		for _, it := range strings.Split(match, ",") {
 			if strings.TrimSpace(it) == v.etag {
@@ -83,9 +81,9 @@ func (v *FileViewer) Render(w http.ResponseWriter, r *http.Request, data any) er
 				return nil
 			}
 		}
-
 	}
 
+	w.Header().Set("ETag", v.etag)
 	return v.serveContent(w, r)
 }
 
