@@ -21,8 +21,10 @@ func (c *GzipCompressor) New(rw http.ResponseWriter) ResponseWriter {
 	rw.Header().Set("Content-Encoding", "gzip")
 
 	return &gzipResponseWriter{
-		w:              gzip.NewWriter(rw),
-		ResponseWriter: rw,
+		w: gzip.NewWriter(rw),
+		stdResponseWriter: &stdResponseWriter{
+			ResponseWriter: rw,
+		},
 	}
 
 }

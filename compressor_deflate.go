@@ -23,7 +23,9 @@ func (c *DeflateCompressor) New(rw http.ResponseWriter) ResponseWriter {
 	w, _ := flate.NewWriter(rw, flate.DefaultCompression) //nolint: errcheck because flate.DefaultCompression is a valid compression level
 
 	return &deflateResponseWriter{
-		w:              w,
-		ResponseWriter: rw,
+		w: w,
+		stdResponseWriter: &stdResponseWriter{
+			ResponseWriter: rw,
+		},
 	}
 }
