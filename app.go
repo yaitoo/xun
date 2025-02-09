@@ -389,6 +389,12 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 			return
 		}
 
+		if errors.Is(err, ErrViewNotFound) {
+			ctx.WriteStatus(http.StatusNotFound)
+			ctx.Response.Write([]byte("View Not Found")) // nolint: errcheck
+			return
+		}
+
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)

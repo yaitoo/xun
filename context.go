@@ -74,6 +74,9 @@ func (c *Context) View(data any, options ...string) error {
 	// no any viewer is matched
 	if !ok {
 		if v == nil {
+			if len(c.Routing.Viewers) == 0 {
+				return ErrViewNotFound
+			}
 			v = c.Routing.Viewers[0] // use the first viewer as a fallback when no viewer is matched or specified by name
 		}
 	}
