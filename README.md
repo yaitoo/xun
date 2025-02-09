@@ -520,31 +520,34 @@ Use `autotls.Configure` to set up servers for automatic obtaining and renewing o
 ```
 
 #### Cookie
-> Write cookie with base64.URLEncoding to client
+Cookies are a way to store information at the client end. see [more examples](./ext/cookie/cookie_test.go)
+> Write cookie with base64 URLEncoding to client
 ```go
-xun.Set(ctx,  http.Cookie{Name: "test", Value: "value"}) // Set-Cookie: test=dmFsdWU=
+cookie.Set(ctx,  http.Cookie{Name: "test", Value: "value"}) // Set-Cookie: test=dmFsdWU=
 ```
 
-> Read and decoded from request
+> Read and decoded cookie from client's request
 ```go
-v, err := xun.Get(ctx,"test")
+v, err := cookie.Get(ctx,"test")
 
 fmt.Println(v) // value
 ```
 
 When signed, the cookies can't be forged, because their values are validated using HMAC. 
 ```go
-xun.SetSigned(ctx,http.Cookie{Name: "test", Value: "value"},[]byte("secret"))
+ts, err := cookie.SetSigned(ctx,http.Cookie{Name: "test", Value: "value"},[]byte("secret")) // ts is current timestamp
 
-v, ts, err := xun.GetSigned(ctx, "test") // v is value, ts is the time that was signed on server
+v, ts, err := cookie.GetSigned(ctx, "test",[]byte("secret")) // v is value, ts is the timestamp that was signed
+```
+
+> Delete a cookie 
+```go
+	cookie.Delete(ctx, http.Cookie{Name: "test", Value: "dmFsdWU="}) // Set-Cookie: test=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0
 ```
 
 #### HSTS
 HTTP Strict Transport Security (HSTS) is a simple and widely supported standard to protect visitors by ensuring that their browsers always connect to a website over HTTPS.
 
-```go
-app.Use(hsts.Redirect(), hsts.WriterHeader())
-```
 
 > Redirect redirects plain HTTP requests to HTTPS.
 ```go
