@@ -114,7 +114,7 @@ func TestMixedViewers(t *testing.T) {
 
 	app.Get("/view404", func(c *Context) error {
 		return c.View(nil)
-	}, WithViewer()) //deleted default viewer
+	}, WithViewer()) // delete default viewer
 
 	app.Start()
 	defer app.Close()
