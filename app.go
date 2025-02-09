@@ -233,6 +233,12 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 			return
 		}
 
+		if errors.Is(err, ErrViewNotFound) {
+			ctx.WriteStatus(http.StatusNotFound)
+			ctx.Response.Write([]byte("View Not Found")) // nolint: errcheck
+			return
+		}
+
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
