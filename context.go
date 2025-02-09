@@ -14,8 +14,8 @@ type Context struct {
 	Response http.ResponseWriter
 	Request  *http.Request
 
-	writtenStatus bool
-	values        map[string]any
+	statusCode int
+	values     map[string]any
 }
 
 // WriteStatus sets the HTTP status code for the response.
@@ -23,10 +23,19 @@ type Context struct {
 // The status code will be sent to the client only once the response body is closed.
 // If a status code is not set, the default status code is 200 (OK).
 func (c *Context) WriteStatus(code int) {
-	if !c.writtenStatus {
+	if c.statusCode == 0 {
 		c.Response.WriteHeader(code)
-		c.writtenStatus = true
+		c.statusCode = code
 	}
+}
+
+// StatusCode returns the current HTTP status code for the response.
+// If no status code has been explicitly set, it defaults to 200 (OK).
+func (c *Context) StatusCode() int {
+	if c.statusCode == 0 {
+		return http.StatusOK
+	}
+	return c.statusCode
 }
 
 // WriteHeader sets a response header.
