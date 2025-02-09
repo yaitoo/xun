@@ -542,19 +542,19 @@ v, ts, err := cookie.GetSigned(ctx, "test",[]byte("secret")) // v is value, ts i
 
 > Delete a cookie 
 ```go
-	cookie.Delete(ctx, http.Cookie{Name: "test", Value: "dmFsdWU="}) // Set-Cookie: test=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0
+cookie.Delete(ctx, http.Cookie{Name: "test", Value: "dmFsdWU="}) // Set-Cookie: test=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0
 ```
 
 #### HSTS
 HTTP Strict Transport Security (HSTS) is a simple and widely supported standard to protect visitors by ensuring that their browsers always connect to a website over HTTPS.
 
 
-> Redirect redirects plain HTTP requests to HTTPS.
+> Redirect redirects plain HTTP requests to HTTPS. **DON'T use it if https is unsupported on your server.**
 ```go
 app.Use(hsts.Redirect())
 ```
 
-> Write HSTS header if it is a HTTPs request
+> Write HSTS header if it is a HTTPs request. **It is only applied in https request.**
 ```go
 app.Use(hsts.WriteHeader())
 ```
