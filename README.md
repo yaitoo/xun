@@ -493,30 +493,29 @@ app := xun.New(WithCompressor(&GzipCompressor{}, &DeflateCompressor{}))
 Use `autotls.Configure` to set up servers for automatic obtaining and renewing of TLS certificates from Let's Encrypt.
 
 ```go
+mux := http.NewServeMux()
 
-	mux := http.NewServeMux()
+app := xun.New(xun.WithMux(mux))
 
-	app := xun.New(xun.WithMux(mux))
+//...
 
+httpServer := &http.Server{
+	Addr: ":http",
 	//...
+}
 
-	httpServer := &http.Server{
-		Addr: ":http",
-		//...
-	}
+httpsServer := &http.Server{
+	Addr: ":https",
+	//...
+}
 
-	httpsServer := &http.Server{
-		Addr: ":https",
-		//...
-	}
+autotls.
+	New(autotls.WithCache(autocert.DirCache("./certs")),
+		autotls.WithHosts("abc.com", "123.com")).
+	Configure(httpServer, httpsServer)
 
-	autotls.
-		New(autotls.WithCache(autocert.DirCache("./certs")),
-			autotls.WithHosts("abc.com", "123.com")).
-		Configure(httpServer, httpsServer)
-
-	go httpServer.ListenAndServe()
-	go httpsServer.ListenAndServeTLS("", "")
+go httpServer.ListenAndServe()
+go httpsServer.ListenAndServeTLS("", "")
 ```
 
 #### Cookie
@@ -560,6 +559,8 @@ app.Use(hsts.WriteHeader())
 ```
 
 #### Proxy Protocol
+The PROXY protocol enables our application to receive client connection information passed through proxy servers and load balancers.V1 and V2 Proxy Protocol are both supported.
+
 
 
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
