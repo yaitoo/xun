@@ -233,12 +233,6 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 			return
 		}
 
-		if errors.Is(err, ErrViewNotFound) {
-			ctx.WriteStatus(http.StatusNotFound)
-			ctx.Response.Write([]byte("View Not Found")) // nolint: errcheck
-			return
-		}
-
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)
@@ -392,6 +386,12 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 		err := r.Next(ctx)
 
 		if err == nil || errors.Is(err, ErrCancelled) {
+			return
+		}
+
+		if errors.Is(err, ErrViewNotFound) {
+			ctx.WriteStatus(http.StatusNotFound)
+			ctx.Response.Write([]byte("View Not Found")) // nolint: errcheck
 			return
 		}
 

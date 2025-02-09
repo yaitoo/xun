@@ -112,6 +112,10 @@ func TestMixedViewers(t *testing.T) {
 		})
 	})
 
+	app.Get("/view404", func(c *Context) error {
+		return c.View(nil)
+	}, WithViewer()) //deleted default viewer
+
 	app.Start()
 	defer app.Close()
 
@@ -132,6 +136,16 @@ func TestMixedViewers(t *testing.T) {
 
 	t.Run("not_found_should_be_used", func(t *testing.T) {
 		req, err := http.NewRequest("GET", srv.URL+"/404", nil)
+		req.Header.Set("Accept", "text/html")
+		require.NoError(t, err)
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNotFound, resp.StatusCode)
+		resp.Body.Close()
+	})
+
+	t.Run("view_not_found", func(t *testing.T) {
+		req, err := http.NewRequest("GET", srv.URL+"/view404", nil)
 		req.Header.Set("Accept", "text/html")
 		require.NoError(t, err)
 		resp, err := client.Do(req)
