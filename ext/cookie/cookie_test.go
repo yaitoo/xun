@@ -54,7 +54,7 @@ func TestDelete(t *testing.T) {
 	Delete(ctx, c)
 
 	result := ctx.Response.Header().Get("Set-Cookie")
-	require.Equal(t, "test=; Max-Age=0", result)
+	require.Equal(t, "test=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0", result)
 }
 
 func TestSignedCookie(t *testing.T) {

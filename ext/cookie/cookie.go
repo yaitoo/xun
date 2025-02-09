@@ -69,6 +69,7 @@ func Get(ctx *xun.Context, name string) (string, error) {
 
 // Delete deletes a cookie by setting the MaxAge to -1 and setting the value to an empty string.
 func Delete(ctx *xun.Context, v http.Cookie) {
+	v.Expires = time.Unix(0, 0)
 	v.MaxAge = -1
 	v.Value = ""
 	http.SetCookie(ctx.Response, &v)
