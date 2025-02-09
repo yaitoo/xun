@@ -60,7 +60,7 @@ func Get(ctx *xun.Context, name string) (string, error) {
 	// ErrInvalidValue error.
 	value, err := base64.URLEncoding.DecodeString(v.Value)
 	if err != nil {
-		return "", err
+		return "", ErrInvalidValue
 	}
 
 	// Return the decoded cookie value.
@@ -130,7 +130,7 @@ func GetSigned(ctx *xun.Context, name string, secretKey []byte) (string, *time.T
 	// length of the signed cookie value is at least this long. We'll use the
 	// sha256.Size constant here, rather than 32, just because it makes our code
 	// a bit more understandable at a glance.
-	if len(signedValue) < sha256.Size {
+	if len(signedValue) < sha256.Size+20 {
 		return "", nil, ErrInvalidValue
 	}
 

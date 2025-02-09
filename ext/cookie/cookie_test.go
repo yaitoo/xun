@@ -1,9 +1,11 @@
 package cookie
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,6 +95,141 @@ func TestSignedCookie(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "value", actualValue)
 		require.Equal(t, ts.UTC().Format(time.RFC3339), actualTs.UTC().Format(time.RFC3339))
+	})
+
+}
+
+func TestInvalidCookie(t *testing.T) {
+	t.Run("too_long_value", func(t *testing.T) {
+		ctx := &xun.Context{
+			Response: httptest.NewRecorder(),
+		}
+
+		err := Set(ctx, http.Cookie{
+			Name:  "test",
+			Value: strings.Repeat("a", 5000),
+		})
+
+		require.ErrorIs(t, err, ErrValueTooLong)
+	})
+
+	t.Run("invalid_base64", func(t *testing.T) {
+		ctx := &xun.Context{
+			Request: httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  "test",
+			Value: "aGV sbG8",
+		})
+
+		_, err := Get(ctx, "test")
+
+		require.ErrorIs(t, err, ErrInvalidValue)
+	})
+
+	t.Run("not_exists", func(t *testing.T) {
+		ctx := &xun.Context{
+			Request: httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+
+		_, err := Get(ctx, "test")
+
+		require.ErrorIs(t, err, http.ErrNoCookie)
+	})
+
+}
+
+func TestInvalidSigned(t *testing.T) {
+	t.Run("too_long_value", func(t *testing.T) {
+		ctx := &xun.Context{
+			Response: httptest.NewRecorder(),
+		}
+
+		_, err := SetSigned(ctx, http.Cookie{
+			Name:  "test",
+			Value: strings.Repeat("a", 5000),
+		}, []byte("secret"))
+
+		require.ErrorIs(t, err, ErrValueTooLong)
+	})
+
+	t.Run("invalid_base64", func(t *testing.T) {
+		ctx := &xun.Context{
+			Request: httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  "test",
+			Value: "aGV sbG8",
+		})
+
+		_, _, err := GetSigned(ctx, "test", []byte("secret"))
+
+		require.ErrorIs(t, err, ErrInvalidValue)
+	})
+
+	t.Run("not_exists", func(t *testing.T) {
+		ctx := &xun.Context{
+			Request: httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+
+		_, _, err := GetSigned(ctx, "test", []byte("secret"))
+
+		require.ErrorIs(t, err, http.ErrNoCookie)
+	})
+
+	t.Run("too_less_value", func(t *testing.T) {
+		ctx := &xun.Context{
+			Request: httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  "test",
+			Value: base64.URLEncoding.EncodeToString([]byte("aaa")),
+		})
+
+		_, _, err := GetSigned(ctx, "test", []byte("secret"))
+
+		require.ErrorIs(t, err, ErrInvalidValue)
+	})
+
+	t.Run("invalid_timestamp", func(t *testing.T) {
+		ctx := &xun.Context{
+			Request: httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+
+		_, signedValue := signValue([]byte("secret"), "test", "value", time.Now())
+
+		invalidValue := signedValue[:sha256.Size] + strings.Repeat("a", 20) + signedValue[sha256.Size+20:]
+
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  "test",
+			Value: base64.URLEncoding.EncodeToString([]byte(invalidValue)),
+		})
+
+		_, _, err := GetSigned(ctx, "test", []byte("secret"))
+
+		require.ErrorIs(t, err, ErrInvalidValue)
+	})
+
+	t.Run("invalid_signature", func(t *testing.T) {
+		ctx := &xun.Context{
+			Request: httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+
+		_, signedValue := signValue([]byte("secret"), "test", "value", time.Now())
+
+		invalidValue := strings.Repeat("a", sha256.Size) + signedValue[sha256.Size:]
+
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  "test",
+			Value: base64.URLEncoding.EncodeToString([]byte(invalidValue)),
+		})
+
+		_, _, err := GetSigned(ctx, "test", []byte("secret"))
+
+		require.ErrorIs(t, err, ErrInvalidValue)
 	})
 
 }
