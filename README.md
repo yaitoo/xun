@@ -519,6 +519,46 @@ Use `autotls.Configure` to set up servers for automatic obtaining and renewing o
 	go httpsServer.ListenAndServeTLS("", "")
 ```
 
+#### Cookie
+> Write cookie with base64.URLEncoding to client
+```go
+xun.Set(ctx,  http.Cookie{Name: "test", Value: "value"}) // Set-Cookie: test=dmFsdWU=
+```
+
+> Read and decoded from request
+```go
+v, err := xun.Get(ctx,"test")
+
+fmt.Println(v) // value
+```
+
+When signed, the cookies can't be forged, because their values are validated using HMAC. 
+```go
+xun.SetSigned(ctx,http.Cookie{Name: "test", Value: "value"},[]byte("secret"))
+
+v, ts, err := xun.GetSigned(ctx, "test") // v is value, ts is the time that was signed on server
+```
+
+#### HSTS
+HTTP Strict Transport Security (HSTS) is a simple and widely supported standard to protect visitors by ensuring that their browsers always connect to a website over HTTPS.
+
+```go
+app.Use(hsts.Redirect(), hsts.WriterHeader())
+```
+
+> Redirect redirects plain HTTP requests to HTTPS.
+```go
+app.Use(hsts.Redirect())
+```
+
+> Write HSTS header if it is a HTTPs request
+```go
+app.Use(hsts.WriteHeader())
+```
+
+#### Proxy Protocol
+
+
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
 #### Install Tailwind CSS
 Install tailwindcss via npm, and create your tailwind.config.js file.
