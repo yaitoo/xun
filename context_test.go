@@ -252,7 +252,7 @@ func TestMixedViewers(t *testing.T) {
 
 func TestDeleteHeader(t *testing.T) {
 	ctx := &Context{
-		Response: httptest.NewRecorder(),
+		Response: NewResponseWriter(httptest.NewRecorder()),
 	}
 
 	ctx.WriteHeader("test", "value")

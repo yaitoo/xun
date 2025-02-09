@@ -8,17 +8,32 @@ import (
 // gzipResponseWriter is a custom http.ResponseWriter that wraps the standard
 // ResponseWriter and compresses the response using gzip.
 type gzipResponseWriter struct {
-	w *gzip.Writer
 	http.ResponseWriter
+	w          *gzip.Writer
+	statusCode int
 }
 
 // Write writes the data to the underlying gzip writer.
 // It implements the io.Writer interface.
-func (w *gzipResponseWriter) Write(p []byte) (int, error) {
-	return w.w.Write(p)
+func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
+	return rw.w.Write(p)
 }
 
 // Close closes the gzipResponseWriter, ensuring that the underlying writer is also closed.
-func (w *gzipResponseWriter) Close() {
-	w.w.Close()
+func (rw *gzipResponseWriter) Close() {
+	rw.w.Close()
+}
+
+func (rw *gzipResponseWriter) WriteHeader(statusCode int) {
+	if rw.statusCode == 0 {
+		rw.statusCode = statusCode
+		rw.ResponseWriter.WriteHeader(statusCode)
+	}
+}
+
+func (rw *gzipResponseWriter) StatusCode() int {
+	if rw.statusCode == 0 {
+		return http.StatusOK
+	}
+	return rw.statusCode
 }

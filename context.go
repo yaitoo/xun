@@ -11,7 +11,7 @@ import (
 type Context struct {
 	Routing  Routing
 	app      *App
-	Response http.ResponseWriter
+	Response ResponseWriter
 	Request  *http.Request
 
 	statusCode int

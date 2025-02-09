@@ -18,7 +18,7 @@ func TestCookie(t *testing.T) {
 	t.Run("set", func(t *testing.T) {
 		ctx := &xun.Context{
 			Request:  httptest.NewRequest(http.MethodGet, "/", nil),
-			Response: httptest.NewRecorder(),
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 		c := http.Cookie{Name: "test", Value: "value"}
 
@@ -33,7 +33,7 @@ func TestCookie(t *testing.T) {
 	t.Run("get", func(t *testing.T) {
 		ctx := &xun.Context{
 			Request:  httptest.NewRequest(http.MethodGet, "/", nil),
-			Response: httptest.NewRecorder(),
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 		c := http.Cookie{Name: "test", Value: "dmFsdWU="} // base64 encoded "value"
 		ctx.Request.Header.Set("Cookie", c.String())
@@ -48,7 +48,7 @@ func TestCookie(t *testing.T) {
 func TestDelete(t *testing.T) {
 	ctx := &xun.Context{
 		Request:  httptest.NewRequest(http.MethodGet, "/", nil),
-		Response: httptest.NewRecorder(),
+		Response: xun.NewResponseWriter(httptest.NewRecorder()),
 	}
 	c := http.Cookie{Name: "test", Value: "dmFsdWU="} // base64 encoded "value"
 	Delete(ctx, c)
@@ -62,7 +62,7 @@ func TestSignedCookie(t *testing.T) {
 		cookie := http.Cookie{Name: "test", Value: "value"}
 		ctx := &xun.Context{
 			Request:  httptest.NewRequest(http.MethodGet, "/", nil),
-			Response: httptest.NewRecorder(),
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 
 		ts, err := SetSigned(ctx, cookie, []byte("secret"))
@@ -79,7 +79,7 @@ func TestSignedCookie(t *testing.T) {
 	t.Run("get", func(t *testing.T) {
 		ctx := &xun.Context{
 			Request:  httptest.NewRequest(http.MethodGet, "/", nil),
-			Response: httptest.NewRecorder(),
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 
 		ts := time.Now()
@@ -102,7 +102,7 @@ func TestSignedCookie(t *testing.T) {
 func TestInvalidCookie(t *testing.T) {
 	t.Run("too_long_value", func(t *testing.T) {
 		ctx := &xun.Context{
-			Response: httptest.NewRecorder(),
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 
 		err := Set(ctx, http.Cookie{
@@ -143,7 +143,7 @@ func TestInvalidCookie(t *testing.T) {
 func TestInvalidSigned(t *testing.T) {
 	t.Run("too_long_value", func(t *testing.T) {
 		ctx := &xun.Context{
-			Response: httptest.NewRecorder(),
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 
 		_, err := SetSigned(ctx, http.Cookie{

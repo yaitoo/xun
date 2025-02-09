@@ -10,5 +10,6 @@ import (
 type ResponseWriter interface {
 	http.ResponseWriter
 
+	StatusCode() int
 	Close()
 }
