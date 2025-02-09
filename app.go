@@ -222,7 +222,7 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 
 		ctx := &Context{
 			Request:  req,
-			Response: NewResponseWriter(rw),
+			Response: rw,
 			Routing:  *r,
 			app:      app,
 		}
@@ -280,7 +280,7 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 
 		ctx := &Context{
 			Request:  req,
-			Response: NewResponseWriter(rw),
+			Response: rw,
 			Routing:  *r,
 			app:      app,
 		}
@@ -378,7 +378,7 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 
 		ctx := &Context{
 			Request:  req,
-			Response: NewResponseWriter(rw),
+			Response: rw,
 			Routing:  *r,
 			app:      app,
 		}
