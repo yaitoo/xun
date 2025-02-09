@@ -31,11 +31,11 @@ func TestContextRequestReferer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := &Context{
-				app: &App{},
-				req: httptest.NewRequest(http.MethodGet, "/", nil),
+				app:     &App{},
+				Request: httptest.NewRequest(http.MethodGet, "/", nil),
 			}
 
-			ctx.req.Header.Set("Referer", test.referer)
+			ctx.Request.Header.Set("Referer", test.referer)
 
 			require.Equal(t, test.expected, ctx.RequestReferer())
 		})
@@ -91,9 +91,9 @@ func TestMixedViewers(t *testing.T) {
 	app := New(WithMux(mux), WithFsys(fsys))
 
 	app.Get("/", func(c *Context) error {
-		if c.Request().URL.Path == "/index" {
+		if c.Request.URL.Path == "/index" {
 			return c.View(nil, "index")
-		} else if c.Request().URL.Path == "/robots.txt" {
+		} else if c.Request.URL.Path == "/robots.txt" {
 			return c.View(nil, "text/robots.txt")
 		}
 
@@ -234,4 +234,20 @@ func TestMixedViewers(t *testing.T) {
 		require.Equal(t, fsys["text/robots.txt"].Data, buf)
 	})
 
+}
+
+func TestDeleteHeader(t *testing.T) {
+	ctx := &Context{
+		Response: httptest.NewRecorder(),
+	}
+
+	ctx.WriteHeader("test", "value")
+
+	v := ctx.Response.Header().Get("test")
+	require.Equal(t, "value", v)
+
+	ctx.WriteHeader("test", "")
+
+	v = ctx.Response.Header().Get("test")
+	require.Empty(t, v)
 }

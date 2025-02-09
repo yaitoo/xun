@@ -271,7 +271,7 @@ For examples, below patterns will be generated automatically, and registered in 
 > main.go
 ```go
 	app.Get("/user/{id}", func(c *xun.Context) error {
-		id := c.Request().PathValue("id")
+		id := c.Request.PathValue("id")
 		user := getUserById(id)
 		return c.View(user)
 	})
@@ -344,7 +344,7 @@ Integrating Middleware into your application can lead to significant improvement
 
 	admin.Use(func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
-			token := c.Request().Header.Get("X-Token")
+			token := c.Request.Header.Get("X-Token")
 			if !checkToken(token) {
 				c.WriteStatus(http.StatusUnauthorized)
 				return xun.ErrCancelled
@@ -415,7 +415,7 @@ type Login struct {
 #### BindQuery
 ```go
 	app.Get("/login", func(c *Context) error {
-		it, err := xun.BindQuery[Login](c.Request())
+		it, err := xun.BindQuery[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -432,7 +432,7 @@ type Login struct {
 #### BindForm
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := xun.BindForm[Login](c.Request())
+		it, err := xun.BindForm[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -449,7 +449,7 @@ app.Post("/login", func(c *Context) error {
 #### BindJson
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := xun.BindJson[Login](c.Request())
+		it, err := xun.BindJson[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -691,9 +691,9 @@ admin := app.Group("/admin")
 
 	admin.Use(func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
-			s, err := c.Request().Cookie("session")
+			s, err := c.Request.Cookie("session")
 			if err != nil || s == nil || s.Value == "" {
-				c.Redirect("/login?return=" + c.Request().URL.String())
+				c.Redirect("/login?return=" + c.Request.URL.String())
 				return xun.ErrCancelled
 			}
 
@@ -710,7 +710,7 @@ admin := app.Group("/admin")
 
 	app.Post("/login", func(c *xun.Context) error {
 
-		it, err := xun.BindForm[Login](c.Request())
+		it, err := xun.BindForm[Login](c.Request)
 
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)

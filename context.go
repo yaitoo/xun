@@ -9,25 +9,13 @@ import (
 // It encapsulates the request, response, routing information, and application context.
 // It offers various methods to work with request data, manipulate responses, and manage routing.
 type Context struct {
-	Routing Routing
-	app     *App
-	rw      http.ResponseWriter
-	req     *http.Request
+	Routing  Routing
+	app      *App
+	Response http.ResponseWriter
+	Request  *http.Request
 
 	writtenStatus bool
 	values        map[string]any
-}
-
-// Writer returns the http.ResponseWriter associated with the current context.
-// It allows writing to the HTTP response body and setting response headers.
-func (c *Context) Writer() http.ResponseWriter {
-	return c.rw
-}
-
-// Request returns the HTTP request associated with the current context.
-// It allows access to the request data and headers.
-func (c *Context) Request() *http.Request {
-	return c.req
 }
 
 // WriteStatus sets the HTTP status code for the response.
@@ -36,7 +24,7 @@ func (c *Context) Request() *http.Request {
 // If a status code is not set, the default status code is 200 (OK).
 func (c *Context) WriteStatus(code int) {
 	if !c.writtenStatus {
-		c.rw.WriteHeader(code)
+		c.Response.WriteHeader(code)
 		c.writtenStatus = true
 	}
 }
@@ -46,11 +34,11 @@ func (c *Context) WriteStatus(code int) {
 // If the value is an empty string, the header will be deleted.
 func (c *Context) WriteHeader(key string, value string) {
 	if value == "" {
-		c.rw.Header().Del(key)
+		c.Response.Header().Del(key)
 		return
 	}
 
-	c.rw.Header().Set(key, value)
+	c.Response.Header().Set(key, value)
 }
 
 // View renders the specified data as a response to the client.
@@ -90,7 +78,7 @@ func (c *Context) View(data any, options ...string) error {
 		}
 	}
 
-	return v.Render(c.rw, c.req, data)
+	return v.Render(c.Response, c.Request, data)
 }
 
 // getViewer get viewer by name
@@ -133,7 +121,7 @@ func (c *Context) Redirect(url string, statusCode ...int) {
 // that the client accepts, in order of preference.
 // The languages are normalized to lowercase and whitespace is trimmed.
 func (c *Context) AcceptLanguage() (languages []string) {
-	accepted := c.req.Header.Get("Accept-Language")
+	accepted := c.Request.Header.Get("Accept-Language")
 	if accepted == "" {
 		return
 	}
@@ -152,7 +140,7 @@ func (c *Context) AcceptLanguage() (languages []string) {
 // that the client accepts, in order of preference.
 // The media types are normalized to lowercase and whitespace is trimmed.
 func (c *Context) Accept() (types []MimeType) {
-	accepted := c.req.Header.Get("Accept")
+	accepted := c.Request.Header.Get("Accept")
 	if accepted == "" {
 		return
 	}
@@ -181,7 +169,7 @@ func (c *Context) RequestReferer() string {
 	}
 
 	if v == "" {
-		v = c.req.Header.Get("Referer")
+		v = c.Request.Header.Get("Referer")
 	}
 
 	return v

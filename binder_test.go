@@ -30,7 +30,7 @@ func TestBinder(t *testing.T) {
 	AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslations)
 
 	app.Get("/login", func(c *Context) error {
-		it, err := BindQuery[Login](c.Request())
+		it, err := BindQuery[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -46,7 +46,7 @@ func TestBinder(t *testing.T) {
 	})
 
 	app.Post("/login", func(c *Context) error {
-		it, err := BindForm[Login](c.Request())
+		it, err := BindForm[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -62,7 +62,7 @@ func TestBinder(t *testing.T) {
 	})
 
 	app.Put("/login", func(c *Context) error {
-		it, err := BindJson[Login](c.Request())
+		it, err := BindJson[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
