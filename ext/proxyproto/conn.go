@@ -6,32 +6,41 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync"
 )
 
 type conn struct {
 	net.Conn
 	r *bufio.Reader
 	h *Header
+
+	isProxied bool
+	once      sync.Once
 }
 
 // NewConn wraps a net.Conn and returns a new proxyproto.Conn that reads the
 // PROXY protocol header from the connection. If the connection is not a
 // PROXY protocol connection, it returns the original connection.
 func NewConn(nc net.Conn) (net.Conn, error) {
-	c := &conn{Conn: nc, r: bufio.NewReader(nc)}
-	c.Proxy()
-	return c, nil
+	return &conn{Conn: nc, r: bufio.NewReader(nc)}, nil
 }
 
 // Read reads data from the connection.
 // Read can be made to time out and return an error after a fixed
 // time limit; see SetDeadline and SetReadDeadline.
 func (c *conn) Read(b []byte) (n int, err error) {
+	if !c.isProxied {
+		c.once.Do(c.Proxy)
+	}
 	return c.r.Read(b)
 }
 
 // LocalAddr returns the local network address, if known.
 func (c *conn) LocalAddr() net.Addr {
+	if !c.isProxied {
+		c.once.Do(c.Proxy)
+	}
+
 	if c.h != nil {
 		return c.h.LocalAddr
 	}
@@ -40,6 +49,9 @@ func (c *conn) LocalAddr() net.Addr {
 
 // RemoteAddr returns the remote network address, if known.
 func (c *conn) RemoteAddr() net.Addr {
+	if !c.isProxied {
+		c.once.Do(c.Proxy)
+	}
 	if c.h != nil {
 		return c.h.RemoteAddr
 	}
@@ -47,6 +59,9 @@ func (c *conn) RemoteAddr() net.Addr {
 }
 
 func (c *conn) Proxy() {
+	defer func() {
+		c.isProxied = true
+	}()
 	// For v1 the header length is at most 108 bytes.
 	// For v2 the header length is at most 52 bytes plus the length of the TLVs.
 	// We use 256 bytes to be safe.

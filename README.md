@@ -559,9 +559,45 @@ app.Use(hsts.WriteHeader())
 ```
 
 #### Proxy Protocol
-The PROXY protocol enables our application to receive client connection information passed through proxy servers and load balancers.V1 and V2 Proxy Protocol are both supported.
+The PROXY protocol allows our application to receive client connection information that is passed through proxy servers and load balancers. Both PROXY protocol versions 1 and 2 are supported.
 
+[How to use the Proxy Protocol to preserve a client's ip address?](https://www.haproxy.com/blog/use-the-proxy-protocol-to-preserve-a-clients-ip-address)
 
+**Security Note: Do not enable the PROXY protocol on your servers unless they are located behind a proxy server or load balancer. If the PROXY protocol is enabled without such intermediaries, any client could potentially send fake IP addresses or other misleading information, posing a security risk.**
+
+> ListenAndServe
+
+```go
+	mux := http.NewServeMux()
+
+	srv := &http.Server{
+		Addr:    ":80",
+		Handler: mux,
+	}
+
+	app := xun.New(WithMux(mux))
+	app.Start()
+	defer app.Close()
+
+	//   srv.ListenAndServe() 
+	proxyproto.ListenAndServe(srv)
+```
+
+> ListenAndServeTLS
+
+```go
+	httpsServer := &http.Server{
+		Addr:    ":443",
+		Handler: mux,
+	}
+
+	autotls.New(autotls.WithCache(autocert.DirCache("./certs")),
+		autotls.WithHosts("getfreeproxy.com", "www.getfreeproxy.com")).
+		Configure(srv, httpsServer)
+
+  // httpsServer.ListenAndServeTLS( "", "") 
+	proxyproto.ListenAndServeTLS(httpsServer, "", "") 
+```
 
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
 #### Install Tailwind CSS
