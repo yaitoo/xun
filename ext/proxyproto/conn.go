@@ -2,73 +2,48 @@ package proxyproto
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
-	"io"
 	"net"
-	"strings"
-	"time"
 )
 
 type conn struct {
-	cn      net.Conn
-	r       *bufio.Reader
-	local   net.Addr
-	remote  net.Addr
-	proxied bool
+	net.Conn
+
+	r *bufio.Reader
+
+	h *Header
 }
 
-func NewProxyConn(cn net.Conn) (net.Conn, error) {
-	c := &conn{cn: cn, r: bufio.NewReader(cn)}
-	if err := c.Init(); err != nil {
+func NewConn(nc net.Conn) (net.Conn, error) {
+	c := &conn{Conn: nc, r: bufio.NewReader(nc)}
+	if err := c.Proxy(); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (c *conn) Close() error                { return c.cn.Close() }
-func (c *conn) Write(b []byte) (int, error) { return c.cn.Write(b) }
-
-func (c *conn) SetDeadline(t time.Time) error      { return c.cn.SetDeadline(t) }
-func (c *conn) SetReadDeadline(t time.Time) error  { return c.cn.SetReadDeadline(t) }
-func (c *conn) SetWriteDeadline(t time.Time) error { return c.cn.SetWriteDeadline(t) }
-
-func (c *conn) LocalAddr() net.Addr  { return c.local }
-func (c *conn) RemoteAddr() net.Addr { return c.remote }
-
-func (c *conn) Read(b []byte) (int, error) { return c.r.Read(b) }
-
-func (c *conn) Init() error {
-	buf, err := c.r.Peek(5)
-	if err != io.EOF && err != nil {
-		return err
+func (c *conn) LocalAddr() net.Addr {
+	if c.h != nil {
+		return c.h.Source
 	}
-
-	if err == nil && bytes.Equal([]byte(`PROXY`), buf) {
-		c.proxied = true
-		proxyLine, err := c.r.ReadString('\n')
-		if err != nil {
-			return err
-		}
-		fields := strings.Fields(proxyLine)
-		c.remote = &addr{net.JoinHostPort(fields[2], fields[4])}
-		c.local = &addr{net.JoinHostPort(fields[3], fields[5])}
-	} else {
-		c.local = c.cn.LocalAddr()
-		c.remote = c.cn.RemoteAddr()
+	return c.Conn.LocalAddr()
+}
+func (c *conn) RemoteAddr() net.Addr {
+	if c.h != nil {
+		return c.h.Destination
 	}
+	return c.Conn.RemoteAddr()
+}
 
-	return nil
+func (c *conn) Proxy() error {
+	var err error
+	c.h, err = ReadHeader(c.r)
+	return err
 }
 
 func (c *conn) String() string {
-	if c.proxied {
-		return fmt.Sprintf("proxied connection %v", c.cn)
+	if c.h != nil {
+		return fmt.Sprintf("proxied connection %v", c.Conn)
 	}
-	return fmt.Sprintf("%v", c.cn)
+	return fmt.Sprintf("%v", c.Conn)
 }
-
-type addr struct{ hp string }
-
-func (a addr) Network() string { return "tcp" }
-func (a addr) String() string  { return a.hp }
