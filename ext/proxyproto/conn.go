@@ -6,32 +6,27 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"sync"
 )
 
 type conn struct {
 	net.Conn
-	r         *bufio.Reader
-	h         *Header
-	isProxied bool
-	once      sync.Once
+	r *bufio.Reader
+	h *Header
 }
 
 // NewConn wraps a net.Conn and returns a new proxyproto.Conn that reads the
 // PROXY protocol header from the connection. If the connection is not a
 // PROXY protocol connection, it returns the original connection.
 func NewConn(nc net.Conn) (net.Conn, error) {
-	return &conn{Conn: nc, r: bufio.NewReader(nc)}, nil
+	c := &conn{Conn: nc, r: bufio.NewReader(nc)}
+	c.Proxy()
+	return c, nil
 }
 
 // Read reads data from the connection.
 // Read can be made to time out and return an error after a fixed
 // time limit; see SetDeadline and SetReadDeadline.
 func (c *conn) Read(b []byte) (n int, err error) {
-	if !c.isProxied {
-		c.once.Do(c.Proxy)
-		c.isProxied = true
-	}
 	return c.r.Read(b)
 }
 
