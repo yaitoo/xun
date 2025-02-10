@@ -4,32 +4,26 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"net"
 	"strings"
 )
 
 type Header struct {
-	// Source is the ip address of the party that initiated the connection
-	Source net.Addr
-	// Destination is the ip address the remote party connected to; aka the address
+	// LocalAddr is the ip address of the party that initiated the connection
+	LocalAddr net.Addr
+	// RemoteAddr is the ip address the remote party connected to; aka the address
 	// the proxy was listening for connections on.
-	Destination net.Addr
-	// True if the proxy header was UNKNOWN (v1) or if proto was set to LOCAL (v2)
-	// In which case Header.Source and Header.Destination will both be nil. TLVs still
-	// maybe available if v2, and Header.Unknown will be populated if v1.
-	IsLocal bool
+	RemoteAddr net.Addr
 	// The version of the proxy protocol parsed
 	Version int
 
-	Network string
+	// V2
+	Command  Command
+	Protocol Protocol
 	// The unparsed TLVs (Type-Length-Value) that were appended to the end of
 	// the v2 proto proxy header.
 	RawTLVs []byte
-
-	Command           Command
-	TransportProtocol Protocol
 }
 
 var (
@@ -40,13 +34,13 @@ var (
 )
 
 func (header *Header) validateLength(length uint16) bool {
-	if header.TransportProtocol.IsIPv4() {
+	if header.Protocol.IsIPv4() {
 		return length >= lengthV4
-	} else if header.TransportProtocol.IsIPv6() {
+	} else if header.Protocol.IsIPv6() {
 		return length >= lengthV6
-	} else if header.TransportProtocol.IsUnix() {
+	} else if header.Protocol.IsUnix() {
 		return length >= lengthUnix
-	} else if header.TransportProtocol.IsUnspec() {
+	} else if header.Protocol.IsUnspec() {
 		return length >= lengthUnspec
 	}
 	return false
@@ -58,34 +52,10 @@ var (
 )
 
 const (
-	v1_Unknown   = "UNKNOWN"
-	v1_TCP6      = "TCP6"
-	v1_TCP4      = "TCP4"
-	cRLF         = "\r\n"
-	tlvHeaderLen = 3
+	v1_Unknown = "UNKNOWN"
+	v1_TCP6    = "TCP6"
+	v1_TCP4    = "TCP4"
 )
-
-// ParseTLVs parses the Header.RawTLVS byte string into a TLV map
-func (h Header) ParseTLVs() (map[byte][]byte, error) {
-	tlv := make(map[byte][]byte)
-
-	var offset int
-	for offset+tlvHeaderLen < len(h.RawTLVs) {
-		length := int(binary.BigEndian.Uint16(h.RawTLVs[offset+1 : offset+3]))
-
-		// Begin points to the beginning of the value
-		begin := offset + tlvHeaderLen
-		// End points to the end of the value
-		end := begin + length
-		if end > len(h.RawTLVs) {
-			return nil, fmt.Errorf("TLV '0x%X' length '%d' is larger than trailing header", h.RawTLVs[offset], length)
-		}
-
-		tlv[h.RawTLVs[offset]] = h.RawTLVs[begin:end]
-		offset = offset + end
-	}
-	return tlv, nil
-}
 
 func ReadHeader(r *bufio.Reader) (*Header, error) {
 	// For v1 the header length is at most 108 bytes.
@@ -130,14 +100,13 @@ func readV1Header(r *bufio.Reader) (*Header, error) {
 	if fields[1] == v1_TCP4 || fields[1] == v1_TCP6 {
 		h := &Header{}
 		h.Version = 1
-		h.Network = "tcp"
 
 		var err error
-		h.Source, err = net.ResolveTCPAddr("tcp", fields[2]+":"+fields[4])
+		h.RemoteAddr, err = net.ResolveTCPAddr("tcp", fields[2]+":"+fields[4])
 		if err != nil {
 			return nil, ErrInvalidProxyHeader
 		}
-		h.Destination, err = net.ResolveTCPAddr("tcp", fields[3]+":"+fields[5])
+		h.LocalAddr, err = net.ResolveTCPAddr("tcp", fields[3]+":"+fields[5])
 		if err != nil {
 			return nil, ErrInvalidProxyHeader
 		}
@@ -147,27 +116,23 @@ func readV1Header(r *bufio.Reader) (*Header, error) {
 	return nil, ErrUnknownProtocol
 }
 
-type _ports struct {
-	SrcPort uint16
-	DstPort uint16
-}
-
 type _addr4 struct {
-	Src     [4]byte
-	Dst     [4]byte
+	Remote  [4]byte
+	Local   [4]byte
 	SrcPort uint16
 	DstPort uint16
 }
 
 type _addr6 struct {
-	Src [16]byte
-	Dst [16]byte
-	_ports
+	Remote  [16]byte
+	Local   [16]byte
+	SrcPort uint16
+	DstPort uint16
 }
 
 type _addrUnix struct {
-	Src [108]byte
-	Dst [108]byte
+	Remote [108]byte
+	Local  [108]byte
 }
 
 // readV2Header assumes the passed buf contains the first 13 bytes which should look like
@@ -201,9 +166,9 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 	if err != nil {
 		return nil, ErrInvalidProxyHeader
 	}
-	header.TransportProtocol = Protocol(b14)
+	header.Protocol = Protocol(b14)
 	// UNSPEC is only supported when LOCAL is set.
-	if header.TransportProtocol == UNSPEC && header.Command != LOCAL {
+	if header.Protocol == UNSPEC && header.Command != LOCAL {
 		return nil, ErrInvalidProxyHeader
 	}
 
@@ -232,39 +197,39 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 	// Read addresses and ports for protocols other than UNSPEC.
 	// Ignore address information for UNSPEC, and skip straight to read TLVs,
 	// since the length is greater than zero.
-	if header.TransportProtocol != UNSPEC {
-		if header.TransportProtocol.IsIPv4() {
+	if header.Protocol != UNSPEC {
+		if header.Protocol.IsIPv4() {
 			var addr _addr4
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
 				return nil, ErrInvalidProxyHeader
 			}
-			header.Source = newIPAddr(header.TransportProtocol, addr.Src[:], addr.SrcPort)
-			header.Destination = newIPAddr(header.TransportProtocol, addr.Dst[:], addr.DstPort)
-		} else if header.TransportProtocol.IsIPv6() {
+			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.SrcPort)
+			header.LocalAddr = newIPAddr(header.Protocol, addr.Dst[:], addr.DstPort)
+		} else if header.Protocol.IsIPv6() {
 			var addr _addr6
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
 				return nil, ErrInvalidProxyHeader
 			}
-			header.Source = newIPAddr(header.TransportProtocol, addr.Src[:], addr.SrcPort)
-			header.Destination = newIPAddr(header.TransportProtocol, addr.Dst[:], addr.DstPort)
-		} else if header.TransportProtocol.IsUnix() {
+			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.SrcPort)
+			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.DstPort)
+		} else if header.Protocol.IsUnix() {
 			var addr _addrUnix
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
 				return nil, ErrInvalidProxyHeader
 			}
 
 			network := "unix"
-			if header.TransportProtocol.IsDatagram() {
+			if header.Protocol.IsDatagram() {
 				network = "unixgram"
 			}
 
-			header.Source = &net.UnixAddr{
+			header.RemoteAddr = &net.UnixAddr{
 				Net:  network,
-				Name: parseUnixName(addr.Src[:]),
+				Name: parseUnixName(addr.Remote[:]),
 			}
-			header.Destination = &net.UnixAddr{
+			header.LocalAddr = &net.UnixAddr{
 				Net:  network,
-				Name: parseUnixName(addr.Dst[:]),
+				Name: parseUnixName(addr.Local[:]),
 			}
 		}
 	}

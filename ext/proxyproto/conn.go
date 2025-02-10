@@ -30,7 +30,7 @@ func (c *conn) Read(b []byte) (n int, err error) {
 // LocalAddr returns the local network address, if known.
 func (c *conn) LocalAddr() net.Addr {
 	if c.h != nil {
-		return c.h.Source
+		return c.h.LocalAddr
 	}
 	return c.Conn.LocalAddr()
 }
@@ -38,7 +38,7 @@ func (c *conn) LocalAddr() net.Addr {
 // RemoteAddr returns the remote network address, if known.
 func (c *conn) RemoteAddr() net.Addr {
 	if c.h != nil {
-		return c.h.Destination
+		return c.h.RemoteAddr
 	}
 	return c.Conn.RemoteAddr()
 }
