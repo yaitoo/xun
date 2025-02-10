@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -65,7 +66,7 @@ func ReadHeader(r *bufio.Reader) (*Header, error) {
 	// Read the first 13 bytes which should contain the identifier
 	buf, err := r.Peek(13)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("proxyproto: read header %w", err)
 	}
 
 	// v1
@@ -84,7 +85,7 @@ func ReadHeader(r *bufio.Reader) (*Header, error) {
 func readV1Header(r *bufio.Reader) (*Header, error) {
 	proxyLine, err := r.ReadString('\n')
 	if err != nil {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: read v1 header %w", err)
 	}
 
 	// PROXY + Protocol + src_ip + dest_ip + src_port + dest_port
@@ -94,7 +95,7 @@ func readV1Header(r *bufio.Reader) (*Header, error) {
 	fields := strings.Fields(proxyLine)
 
 	if len(fields) < 2 {
-		return nil, ErrInvalidProxyHeader
+		return nil, ErrInvalidHeader
 	}
 
 	if fields[1] == v1_TCP4 || fields[1] == v1_TCP6 {
@@ -104,33 +105,33 @@ func readV1Header(r *bufio.Reader) (*Header, error) {
 		var err error
 		h.RemoteAddr, err = net.ResolveTCPAddr("tcp", fields[2]+":"+fields[4])
 		if err != nil {
-			return nil, ErrInvalidProxyHeader
+			return nil, fmt.Errorf("proxyproto: invalid remote address: %w", err)
 		}
 		h.LocalAddr, err = net.ResolveTCPAddr("tcp", fields[3]+":"+fields[5])
 		if err != nil {
-			return nil, ErrInvalidProxyHeader
+			return nil, fmt.Errorf("proxyproto: invalid local address: %w", err)
 		}
 		return h, nil
 	}
 
-	return nil, ErrUnknownProtocol
+	return nil, ErrInvalidProtocol
 }
 
-type _addr4 struct {
+type Addr4 struct {
 	Remote     [4]byte
 	Local      [4]byte
 	RemotePort uint16
 	LocalPort  uint16
 }
 
-type _addr6 struct {
+type Addr6 struct {
 	Remote     [16]byte
 	Local      [16]byte
 	RemotePort uint16
 	LocalPort  uint16
 }
 
-type _addrUnix struct {
+type AddrUnix struct {
 	Remote [108]byte
 	Local  [108]byte
 }
@@ -144,7 +145,7 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 	// Skip first 12 bytes (signature)
 	for i := 0; i < 12; i++ {
 		if _, err = reader.ReadByte(); err != nil {
-			return nil, ErrInvalidProxyHeader
+			return nil, fmt.Errorf("proxyproto: read v2 signature: %w", err)
 		}
 	}
 
@@ -154,31 +155,31 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 	// Read the 13th byte, protocol version and command
 	b13, err := reader.ReadByte()
 	if err != nil {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: read v2 command: %w", err)
 	}
 	header.Command = Command(b13)
 	if _, ok := supportedCommand[header.Command]; !ok {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: invalid command: %w", err)
 	}
 
 	// Read the 14th byte, address family and protocol
 	b14, err := reader.ReadByte()
 	if err != nil {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: read v2 protocol: %w", err)
 	}
 	header.Protocol = Protocol(b14)
 	// UNSPEC is only supported when LOCAL is set.
 	if header.Protocol == UNSPEC && header.Command != LOCAL {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: invalid protocol: %w", err)
 	}
 
 	// Make sure there are bytes available as specified in length
 	var length uint16
 	if err := binary.Read(io.LimitReader(reader, 2), binary.BigEndian, &length); err != nil {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: read v2 length: %w", err)
 	}
 	if !header.validateLength(length) {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: invalid length: %w", err)
 	}
 
 	// Return early if the length is zero, which means that
@@ -188,7 +189,7 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 	}
 
 	if _, err := reader.Peek(int(length)); err != nil {
-		return nil, ErrInvalidProxyHeader
+		return nil, fmt.Errorf("proxyproto: read v2 payload: %w", err)
 	}
 
 	// Length-limited reader for payload section
@@ -199,23 +200,23 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 	// since the length is greater than zero.
 	if header.Protocol != UNSPEC {
 		if header.Protocol.IsIPv4() {
-			var addr _addr4
+			var addr Addr4
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
-				return nil, ErrInvalidProxyHeader
+				return nil, fmt.Errorf("proxyproto: read v2 payload: %w", err)
 			}
 			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
 			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.LocalPort)
 		} else if header.Protocol.IsIPv6() {
-			var addr _addr6
+			var addr Addr6
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
-				return nil, ErrInvalidProxyHeader
+				return nil, fmt.Errorf("proxyproto: read v2 payload: %w", err)
 			}
 			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
 			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.LocalPort)
 		} else if header.Protocol.IsUnix() {
-			var addr _addrUnix
+			var addr AddrUnix
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
-				return nil, ErrInvalidProxyHeader
+				return nil, fmt.Errorf("proxyproto: read v2 payload: %w", err)
 			}
 
 			network := "unix"
@@ -237,7 +238,7 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 	// Copy bytes for optional Type-Length-Value vector
 	header.RawTLVs = make([]byte, payloadReader.N) // Allocate minimum size slice
 	if _, err = io.ReadFull(payloadReader, header.RawTLVs); err != nil && err != io.EOF {
-		return nil, err
+		return nil, fmt.Errorf("proxyproto: read v2 payload: %w", err)
 	}
 
 	return header, nil

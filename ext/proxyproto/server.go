@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+// ListenAndServe listens on the TCP network address srv.Addr and then calls
+// Serve to handle requests on incoming connections.
 func ListenAndServe(srv *http.Server) error {
 	addr := srv.Addr
 	if addr == "" {
@@ -17,6 +19,8 @@ func ListenAndServe(srv *http.Server) error {
 	return srv.Serve(NewListener(ln))
 }
 
+// ListenAndServeTLS listens on the TCP network address srv.Addr and then
+// calls Serve to handle requests on incoming TLS connections.
 func ListenAndServeTLS(srv *http.Server, certFile, keyFile string) error {
 	addr := srv.Addr
 	if addr == "" {

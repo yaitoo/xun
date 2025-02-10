@@ -3,6 +3,7 @@ package proxyproto
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"net"
 )
 
@@ -12,9 +13,13 @@ type conn struct {
 	h *Header
 }
 
+// NewConn wraps a net.Conn and returns a new proxyproto.Conn that reads the
+// PROXY protocol header from the connection. If the connection is not a
+// PROXY protocol connection, it returns the original connection.
 func NewConn(nc net.Conn) (net.Conn, error) {
 	c := &conn{Conn: nc, r: bufio.NewReader(nc)}
 	if err := c.Proxy(); err != nil {
+		slog.Info("", slog.Any("err", err))
 		return nil, err
 	}
 	return c, nil
@@ -47,6 +52,10 @@ func (c *conn) Proxy() error {
 	var err error
 	c.h, err = ReadHeader(c.r)
 	return err
+}
+
+func (c *conn) Close() error {
+	return c.Conn.Close()
 }
 
 func (c *conn) String() string {

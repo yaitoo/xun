@@ -1,19 +1,23 @@
 package proxyproto
 
-import "net"
+import (
+	"log/slog"
+	"net"
+)
 
-type Listener struct {
+type listener struct {
 	net.Listener
 }
 
-func (l *Listener) Accept() (net.Conn, error) {
+func (l *listener) Accept() (net.Conn, error) {
 	c, err := l.Listener.Accept()
 	if err != nil {
+		slog.Info("proxyproto: accept", slog.Any("err", err))
 		return nil, err
 	}
 	return NewConn(c)
 }
 
-func NewListener(l net.Listener) *Listener {
-	return &Listener{Listener: l}
+func NewListener(l net.Listener) net.Listener {
+	return &listener{Listener: l}
 }

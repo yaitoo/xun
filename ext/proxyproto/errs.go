@@ -3,6 +3,6 @@ package proxyproto
 import "errors"
 
 var (
-	ErrInvalidProxyHeader = errors.New("proxyproto: invalid_proxy_header")
-	ErrUnknownProtocol    = errors.New("proxyproto: unknown_protocol")
+	ErrInvalidHeader   = errors.New("proxyproto: invalid_header")
+	ErrInvalidProtocol = errors.New("proxyproto: invalid_protocol")
 )
