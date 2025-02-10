@@ -117,17 +117,17 @@ func readV1Header(r *bufio.Reader) (*Header, error) {
 }
 
 type _addr4 struct {
-	Remote  [4]byte
-	Local   [4]byte
-	SrcPort uint16
-	DstPort uint16
+	Remote     [4]byte
+	Local      [4]byte
+	RemotePort uint16
+	LocalPort  uint16
 }
 
 type _addr6 struct {
-	Remote  [16]byte
-	Local   [16]byte
-	SrcPort uint16
-	DstPort uint16
+	Remote     [16]byte
+	Local      [16]byte
+	RemotePort uint16
+	LocalPort  uint16
 }
 
 type _addrUnix struct {
@@ -203,15 +203,15 @@ func readV2Header(reader *bufio.Reader) (*Header, error) {
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
 				return nil, ErrInvalidProxyHeader
 			}
-			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.SrcPort)
-			header.LocalAddr = newIPAddr(header.Protocol, addr.Dst[:], addr.DstPort)
+			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
+			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.LocalPort)
 		} else if header.Protocol.IsIPv6() {
 			var addr _addr6
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
 				return nil, ErrInvalidProxyHeader
 			}
-			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.SrcPort)
-			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.DstPort)
+			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
+			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.LocalPort)
 		} else if header.Protocol.IsUnix() {
 			var addr _addrUnix
 			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
