@@ -32,8 +32,8 @@ func Logging(opts ...Option) xun.Middleware {
 				requestLine := fmt.Sprintf(`"%s %s %s"`, c.Request.Method, c.Request.URL.Path, c.Request.Proto)
 				host, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
 
-				//远程主机IP、用户标识（通常为“-”）、认证用户名（如果有）、日期时间、请求行、HTTP状态码、返回给客户端的对象大小、引用页（referer）、用户代理（user-agent）。
-				options.Logger.Printf(`%s %s %s %s %s %d %d "%s" "%s"\n`,
+				//COMBINED: remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
+				options.Logger.Printf("%s %s %s %s %s %d %d \"%s\" \"%s\"\n",
 					host,
 					options.GetVisitor(c),
 					options.GetUser(c),
