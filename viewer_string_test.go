@@ -22,7 +22,7 @@ func TestStringViewer(t *testing.T) {
 		err := v.Render(rw, httptest.NewRequest(http.MethodGet, "/", nil), nil)
 		require.NoError(t, err)
 		require.Equal(t, -1, rw.Code) // error StatusCode should not be written by StringViewer
-		require.Empty(t, rw.Header().Get("Content-Type"))
+		require.Equal(t, "text/plain; charset=utf-8", rw.Header().Get("Content-Type"))
 		buf, err := io.ReadAll(rw.Body)
 		require.NoError(t, err)
 		require.Empty(t, buf)
