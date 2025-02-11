@@ -29,6 +29,7 @@ func (*HtmlViewer) MimeType() *MimeType {
 // The rendered result is written to the http.ResponseWriter.
 func (v *HtmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
 	var err error
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if r.Method != http.MethodHead {
 		buf := BufPool.Get()
 		defer BufPool.Put(buf)
@@ -37,8 +38,6 @@ func (v *HtmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) er
 		if err != nil {
 			return err
 		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, err = buf.WriteTo(w)
 	}
 	return err

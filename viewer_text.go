@@ -19,6 +19,7 @@ func (v *TextViewer) MimeType() *MimeType {
 // If there is an error executing the template, it is returned.
 func (v *TextViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
 	var err error
+	w.Header().Set("Content-Type", v.template.mime.String()+v.template.charset)
 	if r.Method != http.MethodHead {
 		buf := BufPool.Get()
 		defer BufPool.Put(buf)
@@ -28,7 +29,6 @@ func (v *TextViewer) Render(w http.ResponseWriter, r *http.Request, data any) er
 			return err
 		}
 
-		w.Header().Set("Content-Type", v.template.mime.String()+v.template.charset)
 		_, err = buf.WriteTo(w)
 	}
 
