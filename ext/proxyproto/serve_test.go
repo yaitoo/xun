@@ -1,6 +1,7 @@
 package proxyproto
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
@@ -17,8 +18,22 @@ func TestListenAndServe(t *testing.T) {
 		w.Write([]byte("OK")) // nolint: errcheck
 	}))
 
+	srv := &http.Server{ // skipcq: GO-S2112
+		Addr:    strings.TrimPrefix(s.URL, "http://"),
+		Handler: s.Config.Handler,
+	}
+
+	defer srv.Close()
+
+	t.Run("fail_to_listen", func(t *testing.T) {
+		err := ListenAndServe(srv)
+		require.NotNil(t, err)
+	})
+
+	s.Close()
+
 	t.Run("listen", func(t *testing.T) {
-		go ListenAndServe(s.Config) // nolint: errcheck
+		go ListenAndServe(srv) // nolint: errcheck
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -29,18 +44,7 @@ func TestListenAndServe(t *testing.T) {
 
 	})
 
-	t.Run("fail_to_listen", func(t *testing.T) {
-		srv := &http.Server{ // skipcq: GO-S2112
-			Addr: strings.TrimPrefix(s.URL, "http://"),
-		}
-
-		defer srv.Close()
-
-		err := ListenAndServe(srv)
-		require.NotNil(t, err)
-	})
-
-	s.Close()
+	srv.Shutdown(context.TODO()) // nolint: errcheck
 
 }
 
@@ -57,8 +61,29 @@ func TestListenAndServeTLS(t *testing.T) {
 		w.Write([]byte("OK")) // nolint: errcheck
 	}))
 
+	time.Sleep(100 * time.Millisecond)
+
+	srv := &http.Server{ // skipcq: GO-S2112
+		Addr: strings.TrimPrefix(s.URL, "https://"),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK")) // nolint: errcheck
+		}),
+		TLSConfig: s.Config.TLSConfig,
+	}
+
+	srv.TLSConfig.Certificates = s.TLS.Certificates
+	defer srv.Close()
+
+	t.Run("fail_to_listen", func(t *testing.T) {
+		err := ListenAndServeTLS(srv, "", "")
+		require.NotNil(t, err)
+	})
+
+	s.Close()
+
 	t.Run("listen", func(t *testing.T) {
-		go ListenAndServeTLS(s.Config, "", "") // nolint: errcheck
+		go ListenAndServeTLS(srv, "", "") // nolint: errcheck
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -66,19 +91,7 @@ func TestListenAndServeTLS(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close() // skipcq: GO-S2307
 		require.Equal(t, http.StatusOK, resp.StatusCode)
-
 	})
 
-	t.Run("fail_to_listen", func(t *testing.T) {
-
-		srv := &http.Server{ // skipcq: GO-S2112
-			Addr: strings.TrimPrefix(s.URL, "http://"),
-		}
-
-		defer srv.Close()
-
-		err := ListenAndServeTLS(srv, "", "")
-		require.NotNil(t, err)
-	})
-
+	srv.Shutdown(context.TODO()) // nolint: errcheck
 }
