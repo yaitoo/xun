@@ -493,30 +493,110 @@ app := xun.New(WithCompressor(&GzipCompressor{}, &DeflateCompressor{}))
 Use `autotls.Configure` to set up servers for automatic obtaining and renewing of TLS certificates from Let's Encrypt.
 
 ```go
+mux := http.NewServeMux()
 
+app := xun.New(xun.WithMux(mux))
+
+//...
+
+httpServer := &http.Server{
+	Addr: ":http",
+	//...
+}
+
+httpsServer := &http.Server{
+	Addr: ":https",
+	//...
+}
+
+autotls.
+	New(autotls.WithCache(autocert.DirCache("./certs")),
+		autotls.WithHosts("abc.com", "123.com")).
+	Configure(httpServer, httpsServer)
+
+go httpServer.ListenAndServe()
+go httpsServer.ListenAndServeTLS("", "")
+```
+
+#### Cookie
+Cookies are a way to store information at the client end. see [more examples](./ext/cookie/cookie_test.go)
+> Write cookie with base64(URL Encoding) to client
+```go
+cookie.Set(ctx,  http.Cookie{Name: "test", Value: "value"}) // Set-Cookie: test=dmFsdWU=
+```
+
+> Read and decoded cookie from client's request
+```go
+v, err := cookie.Get(ctx,"test")
+
+fmt.Println(v) // value
+```
+
+When signed, the cookies can't be forged, because their values are validated using HMAC. 
+```go
+ts, err := cookie.SetSigned(ctx,http.Cookie{Name: "test", Value: "value"},[]byte("secret")) // ts is current timestamp
+
+v, ts, err := cookie.GetSigned(ctx, "test",[]byte("secret")) // v is value, ts is the timestamp that was signed
+```
+
+> Delete a cookie 
+```go
+cookie.Delete(ctx, http.Cookie{Name: "test", Value: "dmFsdWU="}) // Set-Cookie: test=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0
+```
+
+#### HSTS
+HTTP Strict Transport Security (HSTS) is a simple and widely supported standard to protect visitors by ensuring that their browsers always connect to a website over HTTPS.
+
+
+> Redirect redirects plain HTTP requests to HTTPS. **DON'T use it if HTTPs is unsupported on your server.**
+```go
+app.Use(hsts.Redirect())
+```
+
+> Write HSTS header if it is a HTTPs request. **It is only applied in HTTPs request.**
+```go
+app.Use(hsts.WriteHeader())
+```
+
+#### Proxy Protocol
+The PROXY protocol allows our application to receive client connection information that is passed through proxy servers and load balancers. Both PROXY protocol versions 1 and 2 are supported.
+
+[How to use the Proxy Protocol to preserve a client's ip address?](https://www.haproxy.com/blog/use-the-proxy-protocol-to-preserve-a-clients-ip-address)
+
+**Security Note: Do not enable the PROXY protocol on your servers unless they are located behind a proxy server or load balancer. If the PROXY protocol is enabled without such intermediaries, any client could potentially send fake IP addresses or other misleading information, posing a security risk.**
+
+> ListenAndServe
+
+```go
 	mux := http.NewServeMux()
 
-	app := xun.New(xun.WithMux(mux))
-
-	//...
-
-	httpServer := &http.Server{
-		Addr: ":http",
-		//...
+	srv := &http.Server{
+		Addr:    ":80",
+		Handler: mux,
 	}
 
+	app := xun.New(WithMux(mux))
+	app.Start()
+	defer app.Close()
+
+	//   srv.ListenAndServe() 
+	proxyproto.ListenAndServe(srv)
+```
+
+> ListenAndServeTLS
+
+```go
 	httpsServer := &http.Server{
-		Addr: ":https",
-		//...
+		Addr:    ":443",
+		Handler: mux,
 	}
 
-	autotls.
-		New(autotls.WithCache(autocert.DirCache("./certs")),
-			autotls.WithHosts("abc.com", "123.com")).
-		Configure(httpServer, httpsServer)
+	autotls.New(autotls.WithCache(autocert.DirCache("./certs")),
+		autotls.WithHosts("yaitoo.cn", "www.yaitoo.cn")).
+		Configure(srv, httpsServer)
 
-	go httpServer.ListenAndServe()
-	go httpsServer.ListenAndServeTLS("", "")
+  // httpsServer.ListenAndServeTLS( "", "") 
+	proxyproto.ListenAndServeTLS(httpsServer, "", "") 
 ```
 
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
