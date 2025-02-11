@@ -44,12 +44,36 @@ func WithPreload() Option {
 	}
 }
 
+// IgnoreRule is a function that takes a pointer to an http.Request
+// and returns a boolean indicating whether the request should be
+// ignored by the HSTS middleware.
 type IgnoreRule func(*http.Request) bool
 
-func Ignore(paths ...string) IgnoreRule {
+// Match creates an IgnoreRule that matches the given paths to ignore requests.
+//
+// The paths are matched case-insensitively, so "/Doc" and "/doc" would be equivalent.
+func Match(paths ...string) IgnoreRule {
 	return func(r *http.Request) bool {
 		for _, path := range paths {
 			if strings.EqualFold(r.URL.Path, path) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// StartsWith creates an IgnoreRule that checks if the request path starts with any of the specified prefixes.
+//
+// paths MUST be lower case.
+//
+// This function returns an IgnoreRule that converts the request path to lowercase and checks for a prefix match.
+// It is useful for ignoring requests with paths that match specified patterns.
+func StartsWith(paths ...string) IgnoreRule {
+	return func(r *http.Request) bool {
+		l := strings.ToLower(r.URL.Path)
+		for _, path := range paths {
+			if strings.HasPrefix(l, path) {
 				return true
 			}
 		}

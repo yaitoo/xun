@@ -149,7 +149,7 @@ func TestRedirect(t *testing.T) {
 		srv := httptest.NewServer(mux)
 		defer srv.Close()
 		app := xun.New(xun.WithMux(mux))
-		app.Use(Redirect(Ignore("/status")))
+		app.Use(Redirect(Match("/status"), StartsWith("/images")))
 
 		u, err := url.Parse(srv.URL)
 		require.NoError(t, err)
@@ -169,6 +169,14 @@ func TestRedirect(t *testing.T) {
 		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
 
 		req, err = http.NewRequest(http.MethodGet, srv.URL+"/status", nil)
+		require.NoError(t, err)
+		resp, err = c.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, "", resp.Header.Get("Location"))
+		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
+
+		req, err = http.NewRequest(http.MethodGet, srv.URL+"/images/xxx", nil)
 		require.NoError(t, err)
 		resp, err = c.Do(req)
 		require.NoError(t, err)
