@@ -91,7 +91,7 @@ func readV1Header(r *bufio.Reader) *Header {
 	fields := strings.Fields(proxyLine)
 
 	if len(fields) < 6 {
-		Logger.Println("proxyproto: too less v1 fields", err)
+		Logger.Println("proxyproto: insufficient v1 header fields, found", len(fields))
 		return nil
 	}
 

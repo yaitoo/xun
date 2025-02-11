@@ -520,7 +520,7 @@ go httpsServer.ListenAndServeTLS("", "")
 
 #### Cookie
 Cookies are a way to store information at the client end. see [more examples](./ext/cookie/cookie_test.go)
-> Write cookie with base64 URLEncoding to client
+> Write cookie with base64(URL Encoding) to client
 ```go
 cookie.Set(ctx,  http.Cookie{Name: "test", Value: "value"}) // Set-Cookie: test=dmFsdWU=
 ```
@@ -548,12 +548,12 @@ cookie.Delete(ctx, http.Cookie{Name: "test", Value: "dmFsdWU="}) // Set-Cookie: 
 HTTP Strict Transport Security (HSTS) is a simple and widely supported standard to protect visitors by ensuring that their browsers always connect to a website over HTTPS.
 
 
-> Redirect redirects plain HTTP requests to HTTPS. **DON'T use it if https is unsupported on your server.**
+> Redirect redirects plain HTTP requests to HTTPS. **DON'T use it if HTTPs is unsupported on your server.**
 ```go
 app.Use(hsts.Redirect())
 ```
 
-> Write HSTS header if it is a HTTPs request. **It is only applied in https request.**
+> Write HSTS header if it is a HTTPs request. **It is only applied in HTTPs request.**
 ```go
 app.Use(hsts.WriteHeader())
 ```
