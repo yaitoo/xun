@@ -24,13 +24,13 @@ func (m *mockConn) Read(p []byte) (n int, err error) {
 	}
 	return len(p), nil
 }
-func (m *mockConn) Write(p []byte) (n int, err error) { panic("not implemented") }
-func (m *mockConn) Close() error                      { panic("not implemented") }
-func (m *mockConn) LocalAddr() net.Addr               { return m.localAddr }
-func (m *mockConn) RemoteAddr() net.Addr              { return m.remoteAddr }
-func (m *mockConn) SetDeadline(time.Time) error       { panic("not implemented") }
-func (m *mockConn) SetReadDeadline(time.Time) error   { panic("not implemented") }
-func (m *mockConn) SetWriteDeadline(time.Time) error  { panic("not implemented") }
+func (*mockConn) Write(p []byte) (n int, err error) { panic("not implemented") }
+func (*mockConn) Close() error                      { panic("not implemented") }
+func (m *mockConn) LocalAddr() net.Addr             { return m.localAddr }
+func (m *mockConn) RemoteAddr() net.Addr            { return m.remoteAddr }
+func (*mockConn) SetDeadline(time.Time) error       { panic("not implemented") }
+func (*mockConn) SetReadDeadline(time.Time) error   { panic("not implemented") }
+func (*mockConn) SetWriteDeadline(time.Time) error  { panic("not implemented") }
 
 func TestConn(t *testing.T) {
 

@@ -1,9 +1,7 @@
 package proxyproto
 
 import (
-	"context"
 	"crypto/tls"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,11 +12,10 @@ import (
 )
 
 func TestListenAndServe(t *testing.T) {
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK")) // nolint: errcheck
 	}))
-	defer s.Close()
 
 	t.Run("listen", func(t *testing.T) {
 		go ListenAndServe(s.Config) // nolint: errcheck
@@ -27,13 +24,13 @@ func TestListenAndServe(t *testing.T) {
 
 		resp, err := http.Get(s.URL)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() // skipcp: GO-S2307
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	})
 
 	t.Run("fail_to_listen", func(t *testing.T) {
-		srv := &http.Server{
+		srv := &http.Server{ // skipcq: GO-S2112
 			Addr: strings.TrimPrefix(s.URL, "http://"),
 		}
 
@@ -43,23 +40,19 @@ func TestListenAndServe(t *testing.T) {
 		require.NotNil(t, err)
 	})
 
+	s.Close()
+
 }
 
 func TestListenAndServeTLS(t *testing.T) {
 
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012
-		if strings.HasPrefix(addr, "abc.com") {
-			return net.Dial("tcp", strings.TrimPrefix(addr, "abc.com"))
-		}
-		return net.Dial("tcp", addr)
-	}
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // skip: GSC-G402,GO-S1020
 	client := http.Client{
 		Transport: tr,
 	}
 
-	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK")) // nolint: errcheck
 	}))
@@ -71,14 +64,14 @@ func TestListenAndServeTLS(t *testing.T) {
 
 		resp, err := client.Get(s.URL)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer resp.Body.Close() // skipcq: GO-S2307
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	})
 
 	t.Run("fail_to_listen", func(t *testing.T) {
 
-		srv := &http.Server{
+		srv := &http.Server{ // skipcq: GO-S2112
 			Addr: strings.TrimPrefix(s.URL, "http://"),
 		}
 
