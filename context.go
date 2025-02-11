@@ -3,6 +3,12 @@ package xun
 import (
 	"net/http"
 	"strings"
+
+	jsoniter "github.com/json-iterator/go"
+)
+
+var (
+	json = jsoniter.Config{UseNumber: false}.Froze()
 )
 
 // Context is the primary structure for handling HTTP requests.

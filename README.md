@@ -790,7 +790,7 @@ admin := app.Group("/admin")
 
 	app.Post("/login", func(c *xun.Context) error {
 
-		it, err := xun.BindForm[Login](c.Request)
+		it, err := form.BindForm[Login](c.Request)
 
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
