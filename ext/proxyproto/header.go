@@ -95,23 +95,40 @@ func readV1Header(r *bufio.Reader) *Header {
 		return nil
 	}
 
-	if fields[1] == v1_TCP4 || fields[1] == v1_TCP6 {
+	if fields[1] == v1_TCP4 {
 		h := &Header{}
 		h.Version = 1
 
 		var err error
-		h.RemoteAddr, err = net.ResolveTCPAddr("tcp", fields[2]+":"+fields[4])
+		h.RemoteAddr, err = net.ResolveTCPAddr("tcp4", fields[2]+":"+fields[4])
 		if err != nil {
-			Logger.Println("proxyproto: invalid remote address", err)
+			Logger.Println("proxyproto: invalid remote ipv4", err)
 			return nil
 		}
-		h.LocalAddr, err = net.ResolveTCPAddr("tcp", fields[3]+":"+fields[5])
+		h.LocalAddr, err = net.ResolveTCPAddr("tcp4", fields[3]+":"+fields[5])
 		if err != nil {
-			Logger.Println("proxyproto: invalid local address", err)
+			Logger.Println("proxyproto: invalid local ipv4", err)
+			return nil
+		}
+		return h
+	} else if fields[1] == v1_TCP6 {
+		h := &Header{}
+		h.Version = 1
+
+		var err error
+		h.RemoteAddr, err = net.ResolveTCPAddr("tcp6", "["+fields[2]+"]:"+fields[4]) // [::1]:80
+		if err != nil {
+			Logger.Println("proxyproto: invalid remote ipv6", err)
+			return nil
+		}
+		h.LocalAddr, err = net.ResolveTCPAddr("tcp6", "["+fields[3]+"]:"+fields[5])
+		if err != nil {
+			Logger.Println("proxyproto: invalid local ipv6", err)
 			return nil
 		}
 		return h
 	}
+
 	Logger.Println("proxyproto: unknown protocol", fields[1])
 	return nil
 }
@@ -196,7 +213,7 @@ func readV2Header(reader *bufio.Reader) *Header {
 	// Return early if the length is zero, which means that
 	// there's no address information and TLVs present for UNSPEC.
 	if length == 0 {
-		return header
+		return nil
 	}
 
 	if _, err := reader.Peek(int(length)); err != nil {
@@ -250,11 +267,13 @@ func readV2Header(reader *bufio.Reader) *Header {
 		}
 	}
 
-	// Copy bytes for optional Type-Length-Value vector
-	header.RawTLVs = make([]byte, payloadReader.N) // Allocate minimum size slice
-	if _, err = io.ReadFull(payloadReader, header.RawTLVs); err != nil && err != io.EOF {
-		Logger.Println("proxyproto: read v2 TLVs", err)
-		return nil
+	if payloadReader.N > 0 {
+		// Copy bytes for optional Type-Length-Value vector
+		header.RawTLVs = make([]byte, payloadReader.N) // Allocate minimum size slice
+		if _, err = io.ReadFull(payloadReader, header.RawTLVs); err != nil && err != io.EOF {
+			Logger.Println("proxyproto: read v2 TLVs", err)
+			return nil
+		}
 	}
 
 	return header

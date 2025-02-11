@@ -592,7 +592,7 @@ The PROXY protocol allows our application to receive client connection informati
 	}
 
 	autotls.New(autotls.WithCache(autocert.DirCache("./certs")),
-		autotls.WithHosts("getfreeproxy.com", "www.getfreeproxy.com")).
+		autotls.WithHosts("yaitoo.cn", "www.yaitoo.cn")).
 		Configure(srv, httpsServer)
 
   // httpsServer.ListenAndServeTLS( "", "") 

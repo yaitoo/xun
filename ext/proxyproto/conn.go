@@ -3,7 +3,6 @@ package proxyproto
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -81,11 +80,4 @@ func (c *conn) tryUseProxy() {
 	} else if bytes.HasPrefix(buf[0:13], v2) {
 		c.h = readV2Header(c.r)
 	}
-}
-
-func (c *conn) String() string {
-	if c.h != nil {
-		return fmt.Sprintf("PROXYv%v %v", c.h.Protocol, c.Conn)
-	}
-	return fmt.Sprintf("%v", c.Conn)
 }
