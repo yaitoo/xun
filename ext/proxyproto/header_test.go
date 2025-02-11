@@ -3,7 +3,6 @@ package proxyproto
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -321,47 +320,38 @@ func TestV2(t *testing.T) {
 	}
 }
 
-type mockReader struct {
-	i    int
-	read func(i int, p []byte) (n int, err error)
-}
-
-func (r *mockReader) Read(p []byte) (n int, err error) {
-
-	n, err = r.read(r.i, p)
-	r.i = r.i + n
-
-	return n, err
-}
-
 func TestBrokenReader(t *testing.T) {
 
 	tests := []struct {
-		name string
-		size int
-		read func(i int, p []byte) (n int, err error)
+		name  string
+		bytes []byte
+		read  func(i int, p []byte) (n int, err error)
 	}{
 		{
 			name: "break_on_first_12_bytes",
-			read: func(i int, p []byte) (n int, err error) {
-				return 0, errors.New("can't read v2 signature")
-			},
-			size: 12,
 		},
-		// {
-		// 	name: "break_on_13_bytes",
-		// 	read: func(i int, p []byte) (n int, err error) {
-		// 		return 0, errors.New("can't read v2 signature")
-		// 	},
-		// 	size: 13,
-		// },
+		{
+			name: "break_on_13_byte",
+
+			bytes: []byte{0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D, 0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A},
+		},
+		{
+			name:  "break_on_14_byte",
+			bytes: []byte{0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D, 0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A, 0x21},
+		},
+		{
+			name:  "break_on_16_byte",
+			bytes: []byte{0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D, 0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A, 0x21, 0x11},
+		},
+		{
+			name:  "invalid_on_14_byte",
+			bytes: []byte{0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D, 0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A, 0x21, 0x11, 0x00, 0x01},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			h := readV2Header(bufio.NewReaderSize(&mockReader{
-				read: test.read,
-			}, test.size))
+			h := readV2Header(bufio.NewReader(bytes.NewReader(test.bytes)))
 
 			require.Nil(t, h)
 		})
