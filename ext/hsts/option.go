@@ -1,6 +1,10 @@
 package hsts
 
-import "time"
+import (
+	"net/http"
+	"strings"
+	"time"
+)
 
 // Config represents the configuration options for HSTS (HTTP Strict Transport Security).
 // It includes various settings such as MaxAge, IncludeSubDomains, and Preload.
@@ -37,5 +41,18 @@ func WithIncludeSubDomains() Option {
 func WithPreload() Option {
 	return func(c *Config) {
 		c.Preload = true
+	}
+}
+
+type IgnoreRule func(*http.Request) bool
+
+func Ignore(paths ...string) IgnoreRule {
+	return func(r *http.Request) bool {
+		for _, path := range paths {
+			if strings.EqualFold(r.URL.Path, path) {
+				return true
+			}
+		}
+		return false
 	}
 }
