@@ -69,10 +69,11 @@ func TestListenAndServeTLS(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK")) // nolint: errcheck
 		}),
-		TLSConfig: s.Config.TLSConfig,
+		TLSConfig: &tls.Config{
+			Certificates: s.TLS.Certificates,
+		},
 	}
 
-	srv.TLSConfig.Certificates = s.TLS.Certificates
 	defer srv.Close()
 
 	t.Run("fail_to_listen", func(t *testing.T) {
