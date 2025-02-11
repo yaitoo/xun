@@ -2,7 +2,6 @@ package proxyproto
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
 	"io"
 	"net"
@@ -298,18 +297,6 @@ var supportedCommand = map[Command]bool{
 	PROXY: true,
 }
 
-// IsLocal returns true if the command in v2 is LOCAL or the transport in v1 is UNKNOWN,
-// i.e. when no address information is expected, false otherwise.
-func (pvc Command) IsLocal() bool {
-	return LOCAL == pvc
-}
-
-// IsProxy returns true if the command in v2 is PROXY or the transport in v1 is not UNKNOWN,
-// i.e. when valid local/remote address and port information is expected, false otherwise.
-func (pvc Command) IsProxy() bool {
-	return PROXY == pvc
-}
-
 // Protocol represents address family and transport protocol.
 type Protocol byte
 
@@ -351,22 +338,4 @@ func (ap Protocol) IsDatagram() bool {
 // IsUnspec returns true if the transport protocol or address family is unspecified, false otherwise.
 func (ap Protocol) IsUnspec() bool {
 	return (ap&0xF0 == 0x00) || (ap&0x0F == 0x00)
-}
-
-func newIPAddr(transport Protocol, ip net.IP, port uint16) net.Addr {
-	if transport.IsStream() {
-		return &net.TCPAddr{IP: ip, Port: int(port)}
-	} else if transport.IsDatagram() {
-		return &net.UDPAddr{IP: ip, Port: int(port)}
-	} else {
-		return nil
-	}
-}
-
-func parseUnixName(b []byte) string {
-	i := bytes.IndexByte(b, 0)
-	if i < 0 {
-		return string(b)
-	}
-	return string(b[:i])
 }
