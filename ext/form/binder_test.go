@@ -1,7 +1,8 @@
-package xun
+package form
 
 import (
 	"bytes"
+	"crypto/tls"
 
 	"net/http"
 	"net/http/httptest"
@@ -13,14 +14,21 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	trans "github.com/go-playground/validator/v10/translations/zh"
 	"github.com/stretchr/testify/require"
+	"github.com/yaitoo/xun"
 )
 
 func TestBinder(t *testing.T) {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // skipcq: GSC-G402, GO-S1020
+	client := http.Client{
+		Transport: tr,
+	}
+
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithMux(mux))
+	app := xun.New(xun.WithMux(mux))
 
 	type Login struct {
 		Email  string `form:"email" json:"email" validate:"required,email"`
@@ -29,11 +37,11 @@ func TestBinder(t *testing.T) {
 
 	AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslations)
 
-	app.Get("/login", func(c *Context) error {
+	app.Get("/login", func(c *xun.Context) error {
 		it, err := BindQuery[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
+			return xun.ErrCancelled
 		}
 
 		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
@@ -45,11 +53,11 @@ func TestBinder(t *testing.T) {
 		return c.View(it)
 	})
 
-	app.Post("/login", func(c *Context) error {
+	app.Post("/login", func(c *xun.Context) error {
 		it, err := BindForm[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
+			return xun.ErrCancelled
 		}
 
 		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
@@ -61,11 +69,11 @@ func TestBinder(t *testing.T) {
 		return c.View(it)
 	})
 
-	app.Put("/login", func(c *Context) error {
+	app.Put("/login", func(c *xun.Context) error {
 		it, err := BindJson[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
+			return xun.ErrCancelled
 		}
 
 		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
@@ -179,4 +187,18 @@ func TestBinder(t *testing.T) {
 		})
 	}
 
+}
+
+func TestInvalid(t *testing.T) {
+
+	t.Run("invalid_form", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.Body = nil
+		_, err := BindForm[int](req)
+		require.NotNil(t, err)
+	})
+	t.Run("invalid_json", func(t *testing.T) {
+		_, err := BindJson[int](httptest.NewRequest(http.MethodGet, "/", strings.NewReader(`"`)))
+		require.NotNil(t, err)
+	})
 }

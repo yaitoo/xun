@@ -415,7 +415,7 @@ type Login struct {
 #### BindQuery
 ```go
 	app.Get("/login", func(c *Context) error {
-		it, err := xun.BindQuery[Login](c.Request)
+		it, err := form.BindQuery[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -432,7 +432,7 @@ type Login struct {
 #### BindForm
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := xun.BindForm[Login](c.Request)
+		it, err := form.BindForm[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -449,7 +449,7 @@ app.Post("/login", func(c *Context) error {
 #### BindJson
 ```go
 app.Post("/login", func(c *Context) error {
-		it, err := xun.BindJson[Login](c.Request)
+		it, err := form.BindJson[Login](c.Request)
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)
 			return ErrCancelled
@@ -790,7 +790,7 @@ admin := app.Group("/admin")
 
 	app.Post("/login", func(c *xun.Context) error {
 
-		it, err := xun.BindForm[Login](c.Request)
+		it, err := form.BindForm[Login](c.Request)
 
 		if err != nil {
 			c.WriteStatus(http.StatusBadRequest)

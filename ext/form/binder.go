@@ -1,4 +1,4 @@
-package xun
+package form
 
 import (
 	"net/http"
@@ -20,10 +20,8 @@ func BindQuery[T any](req *http.Request) (*TEntity[T], error) {
 
 	data := new(T)
 
-	err := formDecoder.Decode(data, req.URL.Query())
-	if err != nil {
-		return nil, err
-	}
+	// new(T) always is a pointer
+	formDecoder.Decode(data, req.URL.Query()) // nolint: errcheck
 
 	return &TEntity[T]{
 		Data:   *data,
@@ -45,11 +43,8 @@ func BindForm[T any](req *http.Request) (*TEntity[T], error) {
 		return nil, err
 	}
 
-	// r.PostForm is a map of our POST form values
-	err = formDecoder.Decode(data, req.PostForm)
-	if err != nil {
-		return nil, err
-	}
+	// new(T) always is a pointer
+	formDecoder.Decode(data, req.PostForm) // nolint: errcheck
 
 	return &TEntity[T]{
 		Data:   *data,
