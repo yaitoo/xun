@@ -51,7 +51,7 @@ func TestListenAndServe(t *testing.T) {
 func TestListenAndServeTLS(t *testing.T) {
 
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // skip: GSC-G402,GO-S1020
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // skipcq: GSC-G402, GO-S1020
 	client := http.Client{
 		Transport: tr,
 	}
@@ -69,9 +69,7 @@ func TestListenAndServeTLS(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK")) // nolint: errcheck
 		}),
-		TLSConfig: &tls.Config{ // skipcq: GSC-G402,GO-S1020
-			Certificates: s.TLS.Certificates,
-		},
+		TLSConfig: &tls.Config{Certificates: s.TLS.Certificates}, // skipcq: GSC-G402, GO-S1020
 	}
 
 	defer srv.Close()
