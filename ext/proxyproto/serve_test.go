@@ -39,7 +39,7 @@ func TestListenAndServe(t *testing.T) {
 
 		resp, err := http.Get(s.URL)
 		require.NoError(t, err)
-		defer resp.Body.Close() // skipcp: GO-S2307
+		defer resp.Body.Close() // skipcq: GO-S2307
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	})
@@ -69,7 +69,7 @@ func TestListenAndServeTLS(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK")) // nolint: errcheck
 		}),
-		TLSConfig: &tls.Config{
+		TLSConfig: &tls.Config{ // skipcq: GSC-G402,GO-S1020
 			Certificates: s.TLS.Certificates,
 		},
 	}

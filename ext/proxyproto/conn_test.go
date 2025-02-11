@@ -24,7 +24,7 @@ func (m *mockConn) Read(p []byte) (n int, err error) {
 	}
 	return len(p), nil
 }
-func (*mockConn) Write(p []byte) (n int, err error) { panic("not implemented") }
+func (*mockConn) Write(_ []byte) (n int, err error) { panic("not implemented") }
 func (*mockConn) Close() error                      { panic("not implemented") }
 func (m *mockConn) LocalAddr() net.Addr             { return m.localAddr }
 func (m *mockConn) RemoteAddr() net.Addr            { return m.remoteAddr }
