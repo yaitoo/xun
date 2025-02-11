@@ -22,8 +22,8 @@ type conn struct {
 // NewConn wraps a net.Conn and returns a new proxyproto.Conn that reads the
 // PROXY protocol header from the connection. If the connection is not a
 // PROXY protocol connection, it returns the original connection.
-func NewConn(nc net.Conn) (net.Conn, error) {
-	return &conn{Conn: nc, r: bufio.NewReader(nc)}, nil
+func NewConn(nc net.Conn) net.Conn {
+	return &conn{Conn: nc, r: bufio.NewReader(nc)}
 }
 
 // Read reads data from the connection.

@@ -13,7 +13,7 @@ func (l *listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewConn(c)
+	return NewConn(c), nil
 }
 
 // NewListener wraps a net.Listener and returns a new net.Listener that returns
