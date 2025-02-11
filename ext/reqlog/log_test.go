@@ -72,6 +72,8 @@ func TestLogging(t *testing.T) {
 			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 
+		ctx.WriteStatus(http.StatusFound)
+
 		err := m(func(c *xun.Context) error {
 			return nil
 		})(ctx)
@@ -80,7 +82,7 @@ func TestLogging(t *testing.T) {
 
 		l := buf.String()
 
-		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0\n"))
+		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 302 0\n"))
 		require.Contains(t, l, "- - [")
 	})
 }

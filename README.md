@@ -602,9 +602,7 @@ The PROXY protocol allows our application to receive client connection informati
 #### Request Logging 
 logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
 
-** Install [GoAccess] to provider real-time request report
-
-> Use `reqlog` middleware 
+> Enable `reqlog` middleware 
 ```go
 func main(){
  //....
