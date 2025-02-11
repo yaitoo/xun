@@ -18,15 +18,19 @@ func (v *TextViewer) MimeType() *MimeType {
 // It sets the Content-Type header to "text/plain; charset=utf-8" and writes the rendered content to the response.
 // If there is an error executing the template, it is returned.
 func (v *TextViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
-	buf := BufPool.Get()
-	defer BufPool.Put(buf)
+	var err error
+	if r.Method != http.MethodHead {
+		buf := BufPool.Get()
+		defer BufPool.Put(buf)
 
-	err := v.template.Execute(buf, data)
-	if err != nil {
-		return err
+		err = v.template.Execute(buf, data)
+		if err != nil {
+			return err
+		}
+
+		w.Header().Set("Content-Type", v.template.mime.String()+v.template.charset)
+		_, err = buf.WriteTo(w)
 	}
 
-	w.Header().Set("Content-Type", v.template.mime.String()+v.template.charset)
-	_, err = buf.WriteTo(w)
 	return err
 }

@@ -23,15 +23,19 @@ func (*JsonViewer) MimeType() *MimeType {
 //
 // It sets the Content-Type header to "application/json".
 func (*JsonViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
-	buf := BufPool.Get()
-	defer BufPool.Put(buf)
+	var err error
+	if r.Method != http.MethodHead {
+		buf := BufPool.Get()
+		defer BufPool.Put(buf)
 
-	err := json.NewEncoder(buf).Encode(data)
-	if err != nil {
-		return err
+		err = json.NewEncoder(buf).Encode(data)
+		if err != nil {
+			return err
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, err = buf.WriteTo(w)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_, err = buf.WriteTo(w)
 	return err
 }
