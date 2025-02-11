@@ -12,14 +12,10 @@ import (
 // option. The default format is the combined log format (XLF/ELF).
 func New(opts ...Option) xun.Middleware {
 	options := &Options{
-		Logger: log.Default(),
-		GetVisitor: func(c *xun.Context) string {
-			return "-"
-		},
-		GetUser: func(c *xun.Context) string {
-			return "-"
-		},
-		Format: Combined,
+		Logger:     log.Default(),
+		GetVisitor: Miss,
+		GetUser:    Miss,
+		Format:     Combined,
 	}
 
 	for _, opt := range opts {

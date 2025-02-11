@@ -6,6 +6,10 @@ import (
 	"github.com/yaitoo/xun"
 )
 
+// Miss is a default function that returns an empty string.
+// It is used as a default argument for the WithVisitor and WithUser functions.
+var Miss = func(*xun.Context) string { return "-" }
+
 // Options represents the configuration options for the RequestLog middleware.
 // It allows customizing the request log message format, the logger instance,
 // and the functions to retrieve visitor and user information from the request context.

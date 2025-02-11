@@ -600,7 +600,7 @@ The PROXY protocol allows our application to receive client connection informati
 ```
 
 #### Request Logging 
-logs each incoming request to the provided logger. The format of the log messages is customizable using the Format option. The default format is the combined log format (XLF/ELF).
+logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
 
 ** Install [GoAccess] to provider real-time request report
 
@@ -611,7 +611,10 @@ func main(){
 
   logger, _ := setupLogger()
 
-  app.Use(reqlog.New(reqlog.WithLogger(logger),reqlog.WithUser(getUserID),reqlog.WithVisitor(getVisitorID))))
+  app.Use(reqlog.New(reqlog.WithLogger(logger),
+										 reqlog.WithUser(getUserID),
+										 reqlog.WithVisitor(getVisitorID),
+										 reqlog.WithFormat(reqlog.Combined))))
  //...
 
 }
