@@ -3,6 +3,7 @@ package proxyproto
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,6 +25,18 @@ func TestListenAndServe(t *testing.T) {
 	}
 
 	defer srv.Close()
+
+	ln, err := net.Listen("tcp", ":http") // nolint:errcheck
+	if err == nil {
+		defer ln.Close()
+	}
+
+	t.Run("http_80", func(t *testing.T) {
+		srv := &http.Server{ // skipcq: GO-S2112
+		}
+		err := ListenAndServe(srv)
+		require.NotNil(t, err)
+	})
 
 	t.Run("fail_to_listen", func(t *testing.T) {
 		err := ListenAndServe(srv)
@@ -73,6 +86,18 @@ func TestListenAndServeTLS(t *testing.T) {
 	}
 
 	defer srv.Close()
+
+	ln, err := net.Listen("tcp", ":https") // nolint:errcheck
+	if err == nil {
+		defer ln.Close()
+	}
+
+	t.Run("https_443", func(t *testing.T) {
+		srv := &http.Server{ // skipcq: GO-S2112
+		}
+		err := ListenAndServeTLS(srv, "", "")
+		require.NotNil(t, err)
+	})
 
 	t.Run("fail_to_listen", func(t *testing.T) {
 		err := ListenAndServeTLS(srv, "", "")
