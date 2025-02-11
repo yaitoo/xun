@@ -161,7 +161,7 @@ type unixAddr struct {
 // - 2 bytes version (always 2)
 // - 2 bytes command (LOCAL or PROXY)
 // For v2 the header length is at most 52 bytes plus the length of the TLVs.
-func readV2Header(reader *bufio.Reader) *Header {
+func readV2Header(reader *bufio.Reader) *Header { // skipcq: GO-R1005
 	var err error
 	// Skip first 12 bytes (signature)
 	for i := 0; i < 12; i++ {

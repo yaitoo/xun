@@ -32,7 +32,7 @@ func ListenAndServeTLS(srv *http.Server, certFile, keyFile string) error {
 		return err
 	}
 
-	defer ln.Close()
+	defer ln.Close() // skipcq: GO-S2307
 
 	return srv.ServeTLS(NewListener(ln), certFile, keyFile)
 }
