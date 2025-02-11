@@ -338,6 +338,7 @@ func TestBrokenReader(t *testing.T) {
 
 	tests := []struct {
 		name string
+		size int
 		read func(i int, p []byte) (n int, err error)
 	}{
 		{
@@ -345,15 +346,22 @@ func TestBrokenReader(t *testing.T) {
 			read: func(i int, p []byte) (n int, err error) {
 				return 0, errors.New("can't read v2 signature")
 			},
+			size: 12,
 		},
-		//TODO: add more tests
+		// {
+		// 	name: "break_on_13_bytes",
+		// 	read: func(i int, p []byte) (n int, err error) {
+		// 		return 0, errors.New("can't read v2 signature")
+		// 	},
+		// 	size: 13,
+		// },
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			h := readV2Header(bufio.NewReader(&mockReader{
+			h := readV2Header(bufio.NewReaderSize(&mockReader{
 				read: test.read,
-			}))
+			}, test.size))
 
 			require.Nil(t, h)
 		})
