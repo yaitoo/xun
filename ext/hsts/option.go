@@ -65,14 +65,16 @@ func Match(paths ...string) IgnoreRule {
 
 // StartsWith creates an IgnoreRule that checks if the request path starts with any of the specified prefixes.
 //
-// paths MUST be lower case.
-//
-// This function returns an IgnoreRule that converts the request path to lowercase and checks for a prefix match.
-// It is useful for ignoring requests with paths that match specified patterns.
+// The provided paths are automatically converted to lower-case for consistent matching.
 func StartsWith(paths ...string) IgnoreRule {
+	// Convert provided paths to lower-case once for consistent matching.
+	lowerPaths := make([]string, len(paths))
+	for i, p := range paths {
+		lowerPaths[i] = strings.ToLower(p)
+	}
 	return func(r *http.Request) bool {
 		l := strings.ToLower(r.URL.Path)
-		for _, path := range paths {
+		for _, path := range lowerPaths {
 			if strings.HasPrefix(l, path) {
 				return true
 			}
