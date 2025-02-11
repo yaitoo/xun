@@ -2,13 +2,14 @@ package reqlog
 
 import (
 	"log"
-	"net/http"
+
+	"github.com/yaitoo/xun"
 )
 
 type Options struct {
 	Logger     *log.Logger
-	GetVisitor func(r *http.Request) string
-	GetUser    func(r *http.Request) string
+	GetVisitor func(c *xun.Context) string
+	GetUser    func(c *xun.Context) string
 }
 
 type Option func(o *Options)
@@ -21,11 +22,11 @@ func WithLogger(l *log.Logger) Option {
 	}
 }
 
-func WithVisitor(get func(r *http.Request) string) Option {
+func WithVisitor(get func(c *xun.Context) string) Option {
 	return func(o *Options) {
 		if get != nil {
-			o.GetVisitor = func(r *http.Request) string {
-				v := get(r)
+			o.GetVisitor = func(c *xun.Context) string {
+				v := get(c)
 				if v == "" {
 					return "-"
 				}
@@ -37,12 +38,12 @@ func WithVisitor(get func(r *http.Request) string) Option {
 	}
 }
 
-func WithUser(get func(r *http.Request) string) Option {
+func WithUser(get func(c *xun.Context) string) Option {
 	return func(o *Options) {
 		if get != nil {
-			o.GetUser = func(r *http.Request) string {
+			o.GetUser = func(c *xun.Context) string {
 
-				u := get(r)
+				u := get(c)
 				if u == "" {
 					return "-"
 				}
