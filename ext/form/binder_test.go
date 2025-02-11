@@ -188,3 +188,17 @@ func TestBinder(t *testing.T) {
 	}
 
 }
+
+func TestInvalid(t *testing.T) {
+
+	t.Run("invalid_form", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.Body = nil
+		_, err := BindForm[int](req)
+		require.NotNil(t, err)
+	})
+	t.Run("invalid_json", func(t *testing.T) {
+		_, err := BindJson[int](httptest.NewRequest(http.MethodGet, "/", strings.NewReader(`"`)))
+		require.NotNil(t, err)
+	})
+}
