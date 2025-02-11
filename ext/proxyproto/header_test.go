@@ -3,6 +3,7 @@ package proxyproto
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -316,6 +317,45 @@ func TestV2(t *testing.T) {
 				require.Equal(t, 2, h.Version)
 			}
 
+		})
+	}
+}
+
+type mockReader struct {
+	i    int
+	read func(i int, p []byte) (n int, err error)
+}
+
+func (r *mockReader) Read(p []byte) (n int, err error) {
+
+	n, err = r.read(r.i, p)
+	r.i = r.i + n
+
+	return n, err
+}
+
+func TestBrokenReader(t *testing.T) {
+
+	tests := []struct {
+		name string
+		read func(i int, p []byte) (n int, err error)
+	}{
+		{
+			name: "break_on_first_12_bytes",
+			read: func(i int, p []byte) (n int, err error) {
+				return 0, errors.New("can't read v2 signature")
+			},
+		},
+		//TODO: add more tests
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			h := readV2Header(bufio.NewReader(&mockReader{
+				read: test.read,
+			}))
+
+			require.Nil(t, h)
 		})
 	}
 }
