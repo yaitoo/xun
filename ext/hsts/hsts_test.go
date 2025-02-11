@@ -144,6 +144,40 @@ func TestRedirect(t *testing.T) {
 		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
 	})
 
+	t.Run("ignore_should_not_be_redirected", func(t *testing.T) {
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+		app := xun.New(xun.WithMux(mux))
+		app.Use(Redirect(Ignore("/status")))
+
+		u, err := url.Parse(srv.URL)
+		require.NoError(t, err)
+
+		l := "https://" + u.Hostname() + "/"
+
+		app.Get("/", func(c *xun.Context) error {
+			return c.View(nil)
+		})
+
+		req, err := http.NewRequest(http.MethodGet, srv.URL, nil)
+		require.NoError(t, err)
+		resp, err := c.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusFound, resp.StatusCode)
+		require.Equal(t, l, resp.Header.Get("Location"))
+		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
+
+		req, err = http.NewRequest(http.MethodGet, srv.URL+"/status", nil)
+		require.NoError(t, err)
+		resp, err = c.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, "", resp.Header.Get("Location"))
+		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
+
+	})
+
 }
 
 func TestStripPort(t *testing.T) {

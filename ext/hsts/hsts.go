@@ -61,13 +61,17 @@ func WriteHeader(opts ...Option) xun.Middleware {
 }
 
 // Redirect is a middleware that redirects plain HTTP requests to HTTPS.
-func Redirect() xun.Middleware {
+func Redirect(rules ...IgnoreRule) xun.Middleware {
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
-			r := c.Request
+			if c.Request.TLS == nil && (c.Request.Method == "GET" || c.Request.Method == "HEAD") {
+				for _, it := range rules {
+					if it(c.Request) {
+						return next(c)
+					}
+				}
 
-			if r.TLS == nil && (r.Method == "GET" || r.Method == "HEAD") {
-				target := "https://" + stripPort(r.Host) + r.URL.RequestURI()
+				target := "https://" + stripPort(c.Request.Host) + c.Request.URL.RequestURI()
 
 				c.Redirect(target, http.StatusFound)
 				return xun.ErrCancelled
