@@ -4,18 +4,20 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"log/slog"
+	"log"
 	"net"
 	"sync"
 )
+
+var Logger = log.Default()
 
 type conn struct {
 	net.Conn
 	r *bufio.Reader
 	h *Header
 
-	isProxied bool
-	once      sync.Once
+	isLoaded bool
+	once     sync.Once
 }
 
 // NewConn wraps a net.Conn and returns a new proxyproto.Conn that reads the
@@ -29,16 +31,16 @@ func NewConn(nc net.Conn) (net.Conn, error) {
 // Read can be made to time out and return an error after a fixed
 // time limit; see SetDeadline and SetReadDeadline.
 func (c *conn) Read(b []byte) (n int, err error) {
-	if !c.isProxied {
-		c.once.Do(c.Proxy)
+	if !c.isLoaded {
+		c.once.Do(c.tryUseProxy)
 	}
 	return c.r.Read(b)
 }
 
 // LocalAddr returns the local network address, if known.
 func (c *conn) LocalAddr() net.Addr {
-	if !c.isProxied {
-		c.once.Do(c.Proxy)
+	if !c.isLoaded {
+		c.once.Do(c.tryUseProxy)
 	}
 
 	if c.h != nil {
@@ -49,8 +51,8 @@ func (c *conn) LocalAddr() net.Addr {
 
 // RemoteAddr returns the remote network address, if known.
 func (c *conn) RemoteAddr() net.Addr {
-	if !c.isProxied {
-		c.once.Do(c.Proxy)
+	if !c.isLoaded {
+		c.once.Do(c.tryUseProxy)
 	}
 	if c.h != nil {
 		return c.h.RemoteAddr
@@ -58,48 +60,32 @@ func (c *conn) RemoteAddr() net.Addr {
 	return c.Conn.RemoteAddr()
 }
 
-func (c *conn) Proxy() {
+// tryUseProxy tries to read the PROXY protocol header from the connection.
+// If the header is read successfully, it sets the Header field and marks the
+// connection as proxied. If the header is invalid or not present, it does
+// nothing.
+func (c *conn) tryUseProxy() {
 	defer func() {
-		c.isProxied = true
+		c.isLoaded = true
 	}()
-	// For v1 the header length is at most 108 bytes.
-	// For v2 the header length is at most 52 bytes plus the length of the TLVs.
-	// We use 256 bytes to be safe.
-
 	// Read the first 13 bytes which should contain the identifier
 	buf, err := c.r.Peek(13)
 	if err != nil {
-		slog.Info("proxyproto: read header", slog.Any("err", err))
+		Logger.Println("proxyproto: peek", err)
 		return
 	}
 
 	// v1
 	if bytes.HasPrefix(buf[0:13], v1) {
-		c.h, err = readV1Header(c.r)
-
-		if err != nil {
-			slog.Info("", slog.Any("err", err))
-			return
-		}
+		c.h = readV1Header(c.r)
+	} else if bytes.HasPrefix(buf[0:13], v2) {
+		c.h = readV2Header(c.r)
 	}
-
-	// v2
-	if bytes.HasPrefix(buf[0:13], v2) {
-		c.h, err = readV2Header(c.r)
-		if err != nil {
-			slog.Info("", slog.Any("err", err))
-			return
-		}
-	}
-}
-
-func (c *conn) Close() error {
-	return c.Conn.Close()
 }
 
 func (c *conn) String() string {
 	if c.h != nil {
-		return fmt.Sprintf("proxyproto connection %v", c.Conn)
+		return fmt.Sprintf("PROXYv%v %v", c.h.Protocol, c.Conn)
 	}
 	return fmt.Sprintf("%v", c.Conn)
 }
