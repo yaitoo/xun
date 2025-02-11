@@ -146,11 +146,6 @@ type tcp6Addr struct {
 	LocalPort  uint16
 }
 
-type unixAddr struct {
-	Remote [108]byte
-	Local  [108]byte
-}
-
 // readV2Header reads the v2 header.
 //
 // The v2 header is always 16 bytes long and contains the
@@ -192,11 +187,6 @@ func readV2Header(reader *bufio.Reader) *Header { // skipcq: GO-R1005
 		return nil
 	}
 	header.Protocol = Protocol(b14)
-	// UNSPEC is only supported when LOCAL is set.
-	if header.Protocol == UNSPEC && header.Command != LOCAL {
-		Logger.Println("proxyproto: invalid v2 protocol", header.Protocol)
-		return nil
-	}
 
 	// Make sure there are bytes available as specified in length
 	var length uint16
@@ -223,47 +213,25 @@ func readV2Header(reader *bufio.Reader) *Header { // skipcq: GO-R1005
 	// Length-limited reader for payload section
 	payloadReader := io.LimitReader(reader, int64(length)).(*io.LimitedReader)
 
-	// Read addresses and ports for protocols other than UNSPEC.
-	// Ignore address information for UNSPEC, and skip straight to read TLVs,
-	// since the length is greater than zero.
-	if header.Protocol != UNSPEC {
-		if header.Protocol.IsIPv4() {
-			var addr tcp4Addr
-			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
-				Logger.Println("proxyproto: can't read v2 tcp4 addresses", err)
-				return nil
-			}
-			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
-			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.LocalPort)
-		} else if header.Protocol.IsIPv6() {
-			var addr tcp6Addr
-			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
-				Logger.Println("proxyproto: can't read v2 tcp6 addresses", err)
-				return nil
-			}
-			header.RemoteAddr = newIPAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
-			header.LocalAddr = newIPAddr(header.Protocol, addr.Local[:], addr.LocalPort)
-		} else if header.Protocol.IsUnix() {
-			var addr unixAddr
-			if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
-				Logger.Println("proxyproto: can't read v2 unix addresses", err)
-				return nil
-			}
-
-			network := "unix"
-			if header.Protocol.IsDatagram() {
-				network = "unixgram"
-			}
-
-			header.RemoteAddr = &net.UnixAddr{
-				Net:  network,
-				Name: parseUnixName(addr.Remote[:]),
-			}
-			header.LocalAddr = &net.UnixAddr{
-				Net:  network,
-				Name: parseUnixName(addr.Local[:]),
-			}
+	if header.Protocol.IsIPv4() {
+		var addr tcp4Addr
+		if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
+			Logger.Println("proxyproto: can't read v2 tcp4 addresses", err)
+			return nil
 		}
+		header.RemoteAddr = toAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
+		header.LocalAddr = toAddr(header.Protocol, addr.Local[:], addr.LocalPort)
+	} else if header.Protocol.IsIPv6() {
+		var addr tcp6Addr
+		if err := binary.Read(payloadReader, binary.BigEndian, &addr); err != nil {
+			Logger.Println("proxyproto: can't read v2 tcp6 addresses", err)
+			return nil
+		}
+		header.RemoteAddr = toAddr(header.Protocol, addr.Remote[:], addr.RemotePort)
+		header.LocalAddr = toAddr(header.Protocol, addr.Local[:], addr.LocalPort)
+	} else {
+		Logger.Println("proxyproto: unsupported v2 protocol", header.Protocol)
+		return nil
 	}
 
 	if payloadReader.N > 0 {
@@ -301,13 +269,10 @@ var supportedCommand = map[Command]bool{
 type Protocol byte
 
 const (
-	UNSPEC       Protocol = '\x00'
-	TCPv4        Protocol = '\x11'
-	UDPv4        Protocol = '\x12'
-	TCPv6        Protocol = '\x21'
-	UDPv6        Protocol = '\x22'
-	UnixStream   Protocol = '\x31'
-	UnixDatagram Protocol = '\x32'
+	TCPv4 Protocol = '\x11'
+	UDPv4 Protocol = '\x12'
+	TCPv6 Protocol = '\x21'
+	UDPv6 Protocol = '\x22'
 )
 
 // IsIPv4 returns true if the address family is IPv4 (AF_INET4), false otherwise.
