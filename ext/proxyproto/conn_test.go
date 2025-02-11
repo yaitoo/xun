@@ -24,13 +24,13 @@ func (m *mockConn) Read(p []byte) (n int, err error) {
 	}
 	return len(p), nil
 }
-func (m *mockConn) Write(p []byte) (n int, err error)  { panic("not implemented") }
-func (m *mockConn) Close() error                       { panic("not implemented") }
-func (m *mockConn) LocalAddr() net.Addr                { return m.localAddr }
-func (m *mockConn) RemoteAddr() net.Addr               { return m.remoteAddr }
-func (m *mockConn) SetDeadline(t time.Time) error      { panic("not implemented") }
-func (m *mockConn) SetReadDeadline(t time.Time) error  { panic("not implemented") }
-func (m *mockConn) SetWriteDeadline(t time.Time) error { panic("not implemented") }
+func (m *mockConn) Write(p []byte) (n int, err error) { panic("not implemented") }
+func (m *mockConn) Close() error                      { panic("not implemented") }
+func (m *mockConn) LocalAddr() net.Addr               { return m.localAddr }
+func (m *mockConn) RemoteAddr() net.Addr              { return m.remoteAddr }
+func (m *mockConn) SetDeadline(time.Time) error       { panic("not implemented") }
+func (m *mockConn) SetReadDeadline(time.Time) error   { panic("not implemented") }
+func (m *mockConn) SetWriteDeadline(time.Time) error  { panic("not implemented") }
 
 func TestConn(t *testing.T) {
 
@@ -130,9 +130,6 @@ func TestConn(t *testing.T) {
 				localAddr:  &net.TCPAddr{IP: net.ParseIP("192.168.0.2"), Port: 443},
 				remoteAddr: &net.TCPAddr{IP: net.ParseIP("192.168.0.1"), Port: 56324},
 			},
-			fireFunc: func(c net.Conn) {
-
-			},
 			remoteAddr: &net.TCPAddr{IP: net.ParseIP("192.168.0.1"), Port: 56324},
 			localAddr:  &net.TCPAddr{IP: net.ParseIP("192.168.0.2"), Port: 443},
 		},
@@ -141,7 +138,9 @@ func TestConn(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mc := NewConn(tt.mc)
-			tt.fireFunc(mc)
+			if tt.fireFunc != nil {
+				tt.fireFunc(mc)
+			}
 
 			require.Equal(t, tt.remoteAddr.String(), mc.RemoteAddr().String())
 			require.Equal(t, tt.localAddr.String(), mc.LocalAddr().String())
