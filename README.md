@@ -599,6 +599,68 @@ The PROXY protocol allows our application to receive client connection informati
 	proxyproto.ListenAndServeTLS(httpsServer, "", "") 
 ```
 
+#### Logging 
+
+Logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
+
+> Enable `reqlog` middleware 
+
+```go
+func main(){
+ 	//....
+  logger, _ := setupLogger()
+
+  app.Use(reqlog.New(reqlog.WithLogger(logger),
+		reqlog.WithUser(getUserID),
+		reqlog.WithVisitor(getVisitorID),
+		reqlog.WithFormat(reqlog.Combined))))
+ 	//...
+}
+
+func setupLogger() (*log.Logger, error) {
+	logFile, err := os.OpenFile("./access.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return log.New(logFile, "", 0), nil
+}
+
+func getVisitorID(c *xun.Context) string {
+	v, err := c.Request.Cookie("visitor_id") // use fingerprintjs to generate visitor id in client's cookie
+	if err != nil {
+		return ""
+	}
+
+	return v.Value
+}
+
+func getUserID(c *xun.Context) string {
+	v, _, err := cookie.GetSigned(c, "session_id", secretKey)
+	if err != nil {
+		return ""
+	}
+
+	return v
+}
+
+```
+
+> Install GoAccess to generate real-time analysis report
+
+[How to install GoAccess](https://goaccess.io/get-started)
+
+```bash
+goaccess ./access.log --geoip-database=./GeoLite2-ASN.mmdb --geoip-database=./GeoLite2-City.mmdb -o ./realtime.html --log-format=COMBINED --real-time-html
+```
+
+> Serve the online real-time analysis report
+```go
+	app.Get("/reports/realtime.html", func(c *xun.Context) error {
+		http.ServeFile(c.Response, c.Request, "./realtime.html")
+		return nil
+	})
+```
+
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
 #### Install Tailwind CSS
 Install tailwindcss via npm, and create your tailwind.config.js file.

@@ -10,6 +10,7 @@ import (
 type ResponseWriter interface {
 	http.ResponseWriter
 
+	BodyBytesSent() int
 	StatusCode() int
 	Close()
 }

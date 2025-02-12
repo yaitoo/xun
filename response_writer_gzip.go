@@ -14,7 +14,9 @@ type gzipResponseWriter struct {
 // Write writes the data to the underlying gzip writer.
 // It implements the io.Writer interface.
 func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
-	return rw.w.Write(p)
+	n, err := rw.w.Write(p)
+	rw.bodySentBytes += n
+	return n, err
 }
 
 // Close closes the gzipResponseWriter, ensuring that the underlying writer is also closed.
