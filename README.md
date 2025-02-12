@@ -599,8 +599,9 @@ The PROXY protocol allows our application to receive client connection informati
 	proxyproto.ListenAndServeTLS(httpsServer, "", "") 
 ```
 
-#### Request Logging 
-logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
+#### Logging 
+
+Logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
 
 > Enable `reqlog` middleware 
 
