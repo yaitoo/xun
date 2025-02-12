@@ -612,7 +612,6 @@ func main(){
 
   app.Use(reqlog.New(reqlog.WithLogger(logger),
 		reqlog.WithUser(getUserID),
-		reqlog.WithVisitor(getVisitorID),
 		reqlog.WithFormat(reqlog.Combined))))
  	//...
 }

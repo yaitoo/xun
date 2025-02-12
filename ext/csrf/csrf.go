@@ -15,6 +15,7 @@ import (
 
 func New(secretKey []byte, opts ...Option) xun.Middleware {
 	o := &Options{
+		SecretKey:  secretKey,
 		CookieName: "csrf_token",
 		MaxAge:     86400, // 24hours
 	}
@@ -36,8 +37,7 @@ func New(secretKey []byte, opts ...Option) xun.Middleware {
 			}
 
 			if !VerifyToken(ct, o.SecretKey) {
-				c.WriteStatus(http.StatusForbidden)
-				c.Response.Write([]byte("INVALID_CSRF_TOKEN")) // nolint: errcheck
+				c.WriteStatus(http.StatusTeapot)
 				return xun.ErrCancelled
 			}
 
