@@ -25,24 +25,17 @@ func New(secretKey []byte, opts ...Option) xun.Middleware {
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
+			ct, _ := c.Request.Cookie(o.CookieName) // nolint: errcheck
+
 			if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
-				_, err := c.Request.Cookie(o.CookieName)
-				if err != nil { // csrf_token doesn't exists
-					token, maxAge := setTokenCookie(c, o)
-					if o.JsToken {
-						defer func() {
-							// nolint: errcheck
-							c.Response.Write([]byte(
-								fmt.Sprintf(`<script type="text/javascript">document.cookie="js_%s=%s;Max-Age=%v; path=/; SameSite=Lax"</script>`,
-									o.CookieName, token, maxAge)))
-						}()
-					}
+				if ct == nil { // csrf_token doesn't exists
+					setTokenCookie(c, o)
 				}
 
 				return next(c)
 			}
 
-			if !verifyToken(c.Request, o) {
+			if !VerifyToken(ct, o.SecretKey) {
 				c.WriteStatus(http.StatusForbidden)
 				c.Response.Write([]byte("INVALID_CSRF_TOKEN")) // nolint: errcheck
 				return xun.ErrCancelled
@@ -74,12 +67,10 @@ func generateToken(o *Options) string {
 	return token
 }
 
-func verifyToken(r *http.Request, o *Options) bool {
-	cookieToken, err := r.Cookie(o.CookieName)
-	if err != nil {
+func VerifyToken(cookieToken *http.Cookie, secretKey []byte) bool {
+	if cookieToken == nil {
 		return false
 	}
-
 	parts := strings.Split(cookieToken.Value, ".")
 	if len(parts) != 2 {
 		return false
@@ -90,7 +81,7 @@ func verifyToken(r *http.Request, o *Options) bool {
 		return false
 	}
 
-	mac := hmac.New(sha256.New, o.SecretKey)
+	mac := hmac.New(sha256.New, secretKey)
 	mac.Write(randomBytes)
 	expectedSignature := mac.Sum(nil)
 
@@ -100,7 +91,7 @@ func verifyToken(r *http.Request, o *Options) bool {
 	)
 }
 
-func setTokenCookie(c *xun.Context, o *Options) (string, int) {
+func setTokenCookie(c *xun.Context, o *Options) {
 	token := generateToken(o)
 
 	maxAge := o.MaxAge
@@ -116,10 +107,8 @@ func setTokenCookie(c *xun.Context, o *Options) (string, int) {
 		Name:     o.CookieName,
 		Value:    token,
 		MaxAge:   maxAge,
-		HttpOnly: true,
+		HttpOnly: false,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
-
-	return token, maxAge
 }

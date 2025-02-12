@@ -9,7 +9,6 @@ import (
 type Options struct {
 	SecretKey  []byte
 	CookieName string
-	JsToken    bool
 	MaxAge     int
 	ExpireFunc func(*xun.Context) (bool, time.Duration)
 }
@@ -35,11 +34,5 @@ func WithExpire(t time.Duration) Option {
 func WithExpireFunc(f func(*xun.Context) (bool, time.Duration)) Option {
 	return func(o *Options) {
 		o.ExpireFunc = f
-	}
-}
-
-func WithJsToken() Option {
-	return func(o *Options) {
-		o.JsToken = true
 	}
 }
