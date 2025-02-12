@@ -603,18 +603,17 @@ The PROXY protocol allows our application to receive client connection informati
 logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
 
 > Enable `reqlog` middleware 
+
 ```go
 func main(){
- //....
-
+ 	//....
   logger, _ := setupLogger()
 
   app.Use(reqlog.New(reqlog.WithLogger(logger),
-										 reqlog.WithUser(getUserID),
-										 reqlog.WithVisitor(getVisitorID),
-										 reqlog.WithFormat(reqlog.Combined))))
- //...
-
+		reqlog.WithUser(getUserID),
+		reqlog.WithVisitor(getVisitorID),
+		reqlog.WithFormat(reqlog.Combined))))
+ 	//...
 }
 
 func setupLogger() (*log.Logger, error) {
@@ -622,7 +621,7 @@ func setupLogger() (*log.Logger, error) {
 	if err != nil {
 		return nil, err
 	}
-	return log.New(logFile, "", 0), nil // 不添加前缀和时间戳，因为我们将在日志内容中包含它们
+	return log.New(logFile, "", 0), nil
 }
 
 func getVisitorID(c *xun.Context) string {
@@ -646,7 +645,9 @@ func getUserID(c *xun.Context) string {
 ```
 
 > Install GoAccess to generate real-time analysis report
+
 [How to install GoAccess](https://goaccess.io/get-started)
+
 ```bash
 goaccess ./access.log --geoip-database=./GeoLite2-ASN.mmdb --geoip-database=./GeoLite2-City.mmdb -o ./realtime.html --log-format=COMBINED --real-time-html
 ```
