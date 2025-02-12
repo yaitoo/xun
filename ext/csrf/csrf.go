@@ -48,19 +48,21 @@ func New(secretKey []byte, opts ...Option) xun.Middleware {
 	}
 }
 
-func generateToken(o *Options) string {
+func generateToken(o *Options, expires time.Time) string {
 	randomBytes := make([]byte, 32)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return ""
 	}
-
+	ts := []byte(expires.UTC().Format(time.RFC3339))
 	mac := hmac.New(sha256.New, o.SecretKey)
 	mac.Write(randomBytes)
+	mac.Write(ts)
 	signature := mac.Sum(nil)
 
 	token := fmt.Sprintf(
-		"%s.%s",
+		"%s.%v.%s",
 		base64.URLEncoding.EncodeToString(randomBytes),
+		base64.URLEncoding.EncodeToString(ts),
 		base64.URLEncoding.EncodeToString(signature),
 	)
 
@@ -72,7 +74,7 @@ func VerifyToken(cookieToken *http.Cookie, secretKey []byte) bool {
 		return false
 	}
 	parts := strings.Split(cookieToken.Value, ".")
-	if len(parts) != 2 {
+	if len(parts) != 3 {
 		return false
 	}
 
@@ -81,18 +83,34 @@ func VerifyToken(cookieToken *http.Cookie, secretKey []byte) bool {
 		return false
 	}
 
+	ts, err := base64.URLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+
+	expires, err := time.Parse(time.RFC3339, string(ts))
+	if err != nil {
+		return false
+	}
+
+	if time.Now().After(expires) {
+		return false
+	}
+
 	mac := hmac.New(sha256.New, secretKey)
 	mac.Write(randomBytes)
-	expectedSignature := mac.Sum(nil)
+	mac.Write(ts)
+	expected := mac.Sum(nil)
 
-	return hmac.Equal(
-		expectedSignature,
-		[]byte(parts[1]),
-	)
+	actual, err := base64.URLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return false
+	}
+
+	return hmac.Equal(expected, actual)
 }
 
 func setTokenCookie(c *xun.Context, o *Options) {
-	token := generateToken(o)
 
 	maxAge := o.MaxAge
 
@@ -102,6 +120,9 @@ func setTokenCookie(c *xun.Context, o *Options) {
 			maxAge = int(d / time.Second)
 		}
 	}
+
+	expires := time.Now().Add(time.Duration(maxAge * int(time.Second)))
+	token := generateToken(o, expires)
 
 	http.SetCookie(c.Response, &http.Cookie{
 		Name:     o.CookieName,
