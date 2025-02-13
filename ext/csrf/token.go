@@ -51,10 +51,10 @@ func verifyToken(token *http.Cookie, r *http.Request, o *Options) bool {
 	return hmac.Equal(expected, actual)
 }
 
-func generateToken(o *Options) string {
+func generateToken(o *Options) *http.Cookie {
 	randomBytes := make([]byte, 32)
 	if _, err := rand.Read(randomBytes); err != nil {
-		return ""
+		return nil
 	}
 
 	mac := hmac.New(sha256.New, o.SecretKey)
@@ -67,18 +67,19 @@ func generateToken(o *Options) string {
 		base64.URLEncoding.EncodeToString(signature),
 	)
 
-	return token
-}
-
-func setTokenCookie(c *xun.Context, o *Options) {
-
-	token := generateToken(o)
-
-	http.SetCookie(c.Response, &http.Cookie{
+	return &http.Cookie{
 		Name:     o.CookieName,
 		Value:    token,
 		HttpOnly: false,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
-	})
+	}
+}
+
+func setTokenCookie(c *xun.Context, o *Options) {
+	token := generateToken(o)
+
+	if token != nil {
+		http.SetCookie(c.Response, token)
+	}
 }

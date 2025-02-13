@@ -57,8 +57,9 @@ var fsys embed.FS
 
 var zeroTime time.Time
 
-func LoadJsToken(opts ...Option) xun.HandleFunc {
+func LoadJsToken(secretKey []byte, opts ...Option) xun.HandleFunc {
 	o := &Options{
+		SecretKey:  secretKey,
 		CookieName: DefaultCookieName,
 	}
 	for _, opt := range opts {

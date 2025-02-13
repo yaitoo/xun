@@ -1,140 +1,202 @@
 package csrf
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"html/template"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/yaitoo/xun"
 )
 
-func TestCSRFMiddleware(t *testing.T) {
+var nop = func(c *xun.Context) error {
+	c.WriteStatus(http.StatusOK)
+	return nil
+}
+
+func TestNew(t *testing.T) {
 	secretKey := []byte("test-secret-key-123")
 
-	t.Run("options configuration", func(t *testing.T) {
-		mw := New(secretKey, WithCookie("custom_csrf"), WithExpire(100*time.Second))
-		assert.NotNil(t, mw)
+	t.Run("set_cookie_when_missed", func(t *testing.T) {
+		m := New(secretKey)
+
+		ctx := createContext(httptest.NewRequest("GET", "/", nil))
+
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+
+		require.NotNil(t, ctx.Response.Header().Get("Set-Cookie"))
 	})
 
-	t.Run("token generation and validation", func(t *testing.T) {
-		opts := &Options{
-			SecretKey:  secretKey,
-			CookieName: "csrf_token",
-			MaxAge:     3600,
-		}
+	t.Run("skip_set_cookie_when_present", func(t *testing.T) {
+		m := New(secretKey)
 
-		// Generate token
-		expires := time.Now().Add(time.Hour)
-		token := generateToken(opts, expires)
-		assert.NotEmpty(t, token)
+		ctx := createContext(httptest.NewRequest("GET", "/", nil))
 
-		// Verify token parts
-		parts := strings.Split(token, ".")
-		assert.Equal(t, 3, len(parts))
-
-		// Validate token
-		cookie := &http.Cookie{
-			Name:  opts.CookieName,
-			Value: token,
-		}
-		assert.True(t, verifyToken(cookie, secretKey))
-	})
-
-	t.Run("http methods handling", func(t *testing.T) {
-		mw := New(secretKey)
-		handler := func(c *xun.Context) error {
-			return nil
-		}
-
-		methods := []string{"GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE"}
-		for _, method := range methods {
-			t.Run(method, func(t *testing.T) {
-				req := httptest.NewRequest(method, "/test", nil)
-				w := httptest.NewRecorder()
-				c := &xun.Context{
-					Request:  req,
-					Response: xun.NewResponseWriter(w),
-				}
-
-				err := mw(handler)(c)
-
-				if method == "GET" || method == "HEAD" || method == "OPTIONS" {
-					assert.NoError(t, err)
-					assert.Equal(t, http.StatusOK, w.Code)
-					cookies := w.Result().Cookies()
-					assert.Equal(t, 1, len(cookies))
-				} else {
-					assert.Equal(t, xun.ErrCancelled, err)
-					assert.Equal(t, http.StatusTeapot, w.Code)
-				}
-			})
-		}
-	})
-
-	t.Run("custom expire function", func(t *testing.T) {
-		customDuration := 15 * time.Minute
-		mw := New(secretKey, func(o *Options) {
-			o.ExpireFunc = func(c *xun.Context) (bool, time.Duration) {
-				return true, customDuration
-			}
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  DefaultCookieName,
+			Value: "test",
 		})
 
-		handler := func(c *xun.Context) error {
-			return nil
-		}
+		err := m(nop)(ctx)
+		require.NoError(t, err)
 
-		req := httptest.NewRequest("GET", "/test", nil)
+		require.Empty(t, ctx.Response.Header().Get("Set-Cookie"))
+	})
+
+	t.Run("verify_token", func(t *testing.T) {
+		m := New(secretKey)
+
+		// fails
+		ctx := createContext(httptest.NewRequest("POST", "/", nil))
+		err := m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusTeapot, ctx.Response.StatusCode())
+
+		// success
+		ctx = createContext(httptest.NewRequest("POST", "/", nil))
+		cookie := generateToken(&Options{
+			SecretKey:  secretKey,
+			CookieName: DefaultCookieName,
+		})
+
+		ctx.Request.AddCookie(cookie)
+
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		// skip
+		ctx = createContext(httptest.NewRequest("GET", "/", nil))
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+	})
+
+	t.Run("options", func(t *testing.T) {
+		m := New(secretKey, WithCookie("test-cookie-name"))
+
+		ctx := createContext(httptest.NewRequest("GET", "/", nil))
+
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+
+		require.NotNil(t, ctx.Response.Header().Get("Set-Cookie"))
+		require.Contains(t, ctx.Response.Header().Get("Set-Cookie"), "test-cookie-name=")
+	})
+
+	t.Run("verify_js_token", func(t *testing.T) {
+		m := New(secretKey, WithCookie("test_token"), WithJsToken())
+
+		cookie := generateToken(&Options{
+			SecretKey:  secretKey,
+			CookieName: "test_token",
+		})
+
+		// fails on js token
+		ctx := createContext(httptest.NewRequest("POST", "/", nil))
+		ctx.Request.AddCookie(cookie)
+
+		err := m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusTeapot, ctx.Response.StatusCode())
+
+		// fails on js token
+		ctx = createContext(httptest.NewRequest("POST", "/", nil))
+		ctx.Request.AddCookie(cookie)
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  "js_test_token",
+			Value: "",
+		})
+		err = m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusTeapot, ctx.Response.StatusCode())
+
+		// success
+		ctx = createContext(httptest.NewRequest("POST", "/", nil))
+
+		ctx.Request.AddCookie(cookie)
+		ctx.Request.AddCookie(&http.Cookie{
+			Name:  "js_test_token",
+			Value: cookie.Value,
+		})
+
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		// skip
+		ctx = createContext(httptest.NewRequest("GET", "/", nil))
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+	})
+
+}
+
+func TestLoadJsToken(t *testing.T) {
+	fn := LoadJsToken([]byte("secret"), WithCookie("test_token"))
+
+	t.Run("load", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		c := &xun.Context{
-			Request:  req,
+		ctx := &xun.Context{
+			Request:  httptest.NewRequest("GET", "/csrf.js", nil),
 			Response: xun.NewResponseWriter(w),
 		}
 
-		err := mw(handler)(c)
-		assert.NoError(t, err)
+		err := fn(ctx)
+		require.NoError(t, err)
 
-		cookies := w.Result().Cookies()
-		assert.Equal(t, 1, len(cookies))
-		assert.Equal(t, int(customDuration.Seconds()), cookies[0].MaxAge)
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Contains(t, w.Body.String(), `"test_token"`)
 	})
 
-	t.Run("token validation edge cases", func(t *testing.T) {
-		tests := []struct {
-			name  string
-			token *http.Cookie
-			want  bool
-		}{
-			{
-				name:  "nil cookie",
-				token: nil,
-				want:  false,
-			},
-			{
-				name: "malformed token",
-				token: &http.Cookie{
-					Name:  "csrf_token",
-					Value: "invalid",
-				},
-				want: false,
-			},
-			{
-				name: "invalid base64",
-				token: &http.Cookie{
-					Name:  "csrf_token",
-					Value: "invalid.invalid.invalid",
-				},
-				want: false,
-			},
+	t.Run("etag", func(t *testing.T) {
+		f, _ := fsys.Open("csrf.js") // nolint: errcheck
+		defer f.Close()
+
+		buf, _ := io.ReadAll(f) // nolint: errcheck
+
+		p, _ := template.New("token").Parse(string(buf)) // nolint: errcheck
+
+		var processed bytes.Buffer
+		// nolint: errcheck
+		p.Execute(&processed, &Options{
+			SecretKey:  []byte("secret"),
+			CookieName: "test_token",
+		})
+
+		mac := hmac.New(sha256.New, []byte("secret"))
+		mac.Write(processed.Bytes())
+
+		etag := base64.URLEncoding.EncodeToString(mac.Sum(nil))
+
+		w := httptest.NewRecorder()
+		ctx := &xun.Context{
+			Request:  httptest.NewRequest("GET", "/csrf.js", nil),
+			Response: xun.NewResponseWriter(w),
 		}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				got := verifyToken(tt.token, secretKey)
-				assert.Equal(t, tt.want, got)
-			})
-		}
+		ctx.Request.Header.Set("If-None-Match", etag)
+
+		err := fn(ctx)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusNotModified, w.Code)
+
 	})
+
+}
+
+func createContext(r *http.Request) *xun.Context {
+	return &xun.Context{
+		Request:  r,
+		Response: xun.NewResponseWriter(httptest.NewRecorder()),
+	}
 }
