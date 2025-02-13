@@ -1,20 +1,24 @@
 package csrf
 
-import (
-	"time"
-
-	"github.com/yaitoo/xun"
+const (
+	DefaultCookieName = "csrf_token"
 )
 
+// Options represents the configuration for the CSRF middleware.
+// It allows customizing the secret key, cookie name, maximum age,
+// and an expiration function for the CSRF token.
 type Options struct {
 	SecretKey  []byte
 	CookieName string
-	MaxAge     int
-	ExpireFunc func(*xun.Context) (bool, time.Duration)
+	JsToken    bool
 }
 
+// Option is a function type that takes a pointer to Options and modifies it.
+// It is used to customize the behavior of the CSRF middleware.
 type Option func(o *Options)
 
+// WithCookie sets the name of the cookie to use for storing the CSRF token.
+// Defaults to "csrf_token".
 func WithCookie(name string) Option {
 	return func(o *Options) {
 		if name != "" {
@@ -23,16 +27,12 @@ func WithCookie(name string) Option {
 	}
 }
 
-func WithExpire(t time.Duration) Option {
+// WithJsToken enables the JavaScript token feature for CSRF protection.
+//
+// It sets the JsToken field in the Options struct to true, allowing the
+// middleware to generate and handle CSRF tokens via JavaScript.
+func WithJsToken() Option {
 	return func(o *Options) {
-		if t > 0 {
-			o.MaxAge = int(t / time.Second)
-		}
-	}
-}
-
-func WithExpireFunc(f func(*xun.Context) (bool, time.Duration)) Option {
-	return func(o *Options) {
-		o.ExpireFunc = f
+		o.JsToken = true
 	}
 }

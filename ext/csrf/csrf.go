@@ -1,23 +1,24 @@
 package csrf
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"fmt"
+	"bytes"
+	"embed"
+	"html/template"
+	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/yaitoo/xun"
 )
 
+// New returns a middleware that generates a CSRF token and validates it in the request.
+//
+// The opts parameter is a list of Option functions that can be used to customize the
+// behavior of the CSRF middleware. See the Option type for more information.
 func New(secretKey []byte, opts ...Option) xun.Middleware {
 	o := &Options{
 		SecretKey:  secretKey,
-		CookieName: "csrf_token",
-		MaxAge:     86400, // 24hours
+		CookieName: DefaultCookieName,
 	}
 
 	for _, opt := range opts {
@@ -26,110 +27,54 @@ func New(secretKey []byte, opts ...Option) xun.Middleware {
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
-			ct, _ := c.Request.Cookie(o.CookieName) // nolint: errcheck
+
+			token, _ := c.Request.Cookie(o.CookieName) // nolint: errcheck
 
 			if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
-				if ct == nil { // csrf_token doesn't exists
+				if token == nil { // csrf_token doesn't exists
 					setTokenCookie(c, o)
 				}
 
 				return next(c)
 			}
 
-			if !VerifyToken(ct, o.SecretKey) {
+			if !verifyToken(token, c.Request, o) {
 				c.WriteStatus(http.StatusTeapot)
 				return xun.ErrCancelled
 			}
-
-			setTokenCookie(c, o)
 
 			return next(c)
 		}
 	}
 }
 
-func generateToken(o *Options, expires time.Time) string {
-	randomBytes := make([]byte, 32)
-	if _, err := rand.Read(randomBytes); err != nil {
-		return ""
+//go:embed csrf.js
+var fsys embed.FS
+
+var lastModified = time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+func LoadJsToken(opts ...Option) xun.HandleFunc {
+	o := &Options{
+		CookieName: DefaultCookieName,
 	}
-	ts := []byte(expires.UTC().Format(time.RFC3339))
-	mac := hmac.New(sha256.New, o.SecretKey)
-	mac.Write(randomBytes)
-	mac.Write(ts)
-	signature := mac.Sum(nil)
-
-	token := fmt.Sprintf(
-		"%s.%v.%s",
-		base64.URLEncoding.EncodeToString(randomBytes),
-		base64.URLEncoding.EncodeToString(ts),
-		base64.URLEncoding.EncodeToString(signature),
-	)
-
-	return token
-}
-
-func VerifyToken(cookieToken *http.Cookie, secretKey []byte) bool {
-	if cookieToken == nil {
-		return false
-	}
-	parts := strings.Split(cookieToken.Value, ".")
-	if len(parts) != 3 {
-		return false
+	for _, opt := range opts {
+		opt(o)
 	}
 
-	randomBytes, err := base64.URLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return false
+	f, _ := fsys.Open("csrf.js") // nolint: errcheck
+	defer f.Close()
+
+	buf, _ := io.ReadAll(f) // nolint: errcheck
+
+	t, _ := template.New("token").Parse(string(buf)) // nolint: errcheck
+
+	var processed bytes.Buffer
+	t.Execute(&processed, o) // nolint: errcheck
+
+	return func(c *xun.Context) error {
+		content := bytes.NewReader(processed.Bytes())
+		c.Response.Header().Set("Content-Type", "application/javascript")
+		http.ServeContent(c.Response, c.Request, "csrf.js", lastModified, content)
+		return nil
 	}
-
-	ts, err := base64.URLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return false
-	}
-
-	expires, err := time.Parse(time.RFC3339, string(ts))
-	if err != nil {
-		return false
-	}
-
-	if time.Now().After(expires) {
-		return false
-	}
-
-	mac := hmac.New(sha256.New, secretKey)
-	mac.Write(randomBytes)
-	mac.Write(ts)
-	expected := mac.Sum(nil)
-
-	actual, err := base64.URLEncoding.DecodeString(parts[2])
-	if err != nil {
-		return false
-	}
-
-	return hmac.Equal(expected, actual)
-}
-
-func setTokenCookie(c *xun.Context, o *Options) {
-
-	maxAge := o.MaxAge
-
-	if o.ExpireFunc != nil {
-		ok, d := o.ExpireFunc(c)
-		if ok {
-			maxAge = int(d / time.Second)
-		}
-	}
-
-	expires := time.Now().Add(time.Duration(maxAge * int(time.Second)))
-	token := generateToken(o, expires)
-
-	http.SetCookie(c.Response, &http.Cookie{
-		Name:     o.CookieName,
-		Value:    token,
-		MaxAge:   maxAge,
-		HttpOnly: false,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-	})
 }
