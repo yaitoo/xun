@@ -18,6 +18,7 @@ type Options struct {
 	GetVisitor func(c *xun.Context) string
 	GetUser    func(c *xun.Context) string
 	Format     Format
+	SkipFunc   func(c *xun.Context) bool
 }
 
 // Option is a function that takes a pointer to Options and modifies it.
@@ -82,5 +83,14 @@ func WithFormat(f Format) Option {
 		if f != nil {
 			o.Format = f
 		}
+	}
+}
+
+// WithSkip sets a custom function to skip the request log message.
+// The function should take a pointer to the xun.Context and return a boolean.
+// If the function returns true, the request log message will be skipped.
+func WithSkip(f func(c *xun.Context) bool) Option {
+	return func(o *Options) {
+		o.SkipFunc = f
 	}
 }

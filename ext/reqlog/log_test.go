@@ -85,4 +85,48 @@ func TestLogging(t *testing.T) {
 		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 302 0\n"))
 		require.Contains(t, l, "- - [")
 	})
+
+	t.Run("skip", func(t *testing.T) {
+		buf := bytes.Buffer{}
+
+		logger := log.New(&buf, "", 0)
+		m := New(WithLogger(logger),
+			WithSkip(func(c *xun.Context) bool {
+				return c.Request.URL.Path == "/skip"
+			}))
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+		ctx := &xun.Context{
+			Request:  req,
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
+		}
+
+		ctx.WriteStatus(http.StatusFound)
+
+		err := m(func(c *xun.Context) error {
+			return nil
+		})(ctx)
+
+		require.NoError(t, err)
+
+		req = httptest.NewRequest(http.MethodGet, "/skip", nil)
+		ctx = &xun.Context{
+			Request:  req,
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
+		}
+
+		ctx.WriteStatus(http.StatusFound)
+
+		err = m(func(c *xun.Context) error {
+			return nil
+		})(ctx)
+
+		require.NoError(t, err)
+
+		l := buf.String()
+
+		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 302 0 \"\" \"\"\n"))
+		require.Contains(t, l, "- - [")
+	})
 }

@@ -24,6 +24,10 @@ func New(opts ...Option) xun.Middleware {
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
+			if options.SkipFunc != nil && options.SkipFunc(c) {
+				return next(c)
+			}
+
 			now := time.Now()
 			defer func() {
 				options.Format(c, options, now)
