@@ -684,6 +684,8 @@ func main(){
   secretKey := []byte("your-secret-key")
 
   app.Use(csrf.New(secretKey,csrf.WithJsToken()))
+	
+	// ...
 
 	app.Get("/assets/csrf.js",csrf.HandleFunc(secretKey))
  	//...
@@ -692,7 +694,7 @@ func main(){
 
 - load `csrf.js` on html
 ```html
-<script type="text/javascript" src="/csrf.js" defer></script>	
+<script type="text/javascript" src="/assets/csrf.js" defer></script>	
 ```
 
 
