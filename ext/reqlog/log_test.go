@@ -12,6 +12,11 @@ import (
 	"github.com/yaitoo/xun"
 )
 
+var nop = func(c *xun.Context) error {
+	c.WriteStatus(http.StatusOK)
+	return nil
+}
+
 func TestLogging(t *testing.T) {
 
 	getVisitor := func(c *xun.Context) string {
@@ -74,9 +79,7 @@ func TestLogging(t *testing.T) {
 
 		ctx.WriteStatus(http.StatusFound)
 
-		err := m(func(c *xun.Context) error {
-			return nil
-		})(ctx)
+		err := m(nop)(ctx)
 
 		require.NoError(t, err)
 
@@ -104,9 +107,7 @@ func TestLogging(t *testing.T) {
 
 		ctx.WriteStatus(http.StatusFound)
 
-		err := m(func(c *xun.Context) error {
-			return nil
-		})(ctx)
+		err := m(nop)(ctx)
 
 		require.NoError(t, err)
 
@@ -118,9 +119,7 @@ func TestLogging(t *testing.T) {
 
 		ctx.WriteStatus(http.StatusFound)
 
-		err = m(func(c *xun.Context) error {
-			return nil
-		})(ctx)
+		err = m(nop)(ctx)
 
 		require.NoError(t, err)
 
