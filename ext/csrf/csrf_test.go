@@ -140,8 +140,9 @@ func TestNew(t *testing.T) {
 
 }
 
-func TestLoadJsToken(t *testing.T) {
-	fn := LoadJsToken([]byte("secret"), WithCookie("test_token"))
+func TestHandleFunc(t *testing.T) {
+
+	fn := HandleFunc([]byte("secret"), WithCookie("test_token"))
 
 	t.Run("load", func(t *testing.T) {
 		w := httptest.NewRecorder()

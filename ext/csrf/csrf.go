@@ -57,7 +57,11 @@ var fsys embed.FS
 
 var zeroTime time.Time
 
-func LoadJsToken(secretKey []byte, opts ...Option) xun.HandleFunc {
+// HandleFunc serves the JavaScript token required for the CSRF middleware.
+//
+// It takes the secret key and options to customize the behavior. See the Option
+// type for more information.
+func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 	o := &Options{
 		SecretKey:  secretKey,
 		CookieName: DefaultCookieName,
