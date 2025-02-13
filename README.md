@@ -612,6 +612,7 @@ func main(){
 
   app.Use(reqlog.New(reqlog.WithLogger(logger),
 		reqlog.WithUser(getUserID),
+		reqlog.WithVisitor(getVisitorID),
 		reqlog.WithFormat(reqlog.Combined))))
  	//...
 }
@@ -661,7 +662,7 @@ goaccess ./access.log --geoip-database=./GeoLite2-ASN.mmdb --geoip-database=./Ge
 ```
 
 #### CSRF Token
-A CSRF (Cross-Site Request Forgery) token is an unique security measure designed to protect web applications from unauthorized or malicious requests. see more [examples](./ext/csrf/csrf_test.go)
+A CSRF (Cross-Site Request Forgery) token is a unique security measure designed to protect web applications from unauthorized or malicious requests. see more [examples](./ext/csrf/csrf_test.go)
 
 > Enable `csrf` middleware
 ```go
@@ -682,7 +683,7 @@ func main(){
  	//....
   secretKey := []byte("your-secret-key")
 
-  app.Use(csrf.New(secretKey,csrf.WithJsToken())
+  app.Use(csrf.New(secretKey,csrf.WithJsToken()))
 
 	app.Get("/assets/csrf.js",csrf.HandleFunc(secretKey))
  	//...
