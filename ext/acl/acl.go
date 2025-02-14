@@ -26,14 +26,6 @@ func New(opts ...Option) xun.Middleware {
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
 			var host = c.Request.Host
-			var err error
-
-			if strings.Contains(host, ":") {
-				host, _, err = net.SplitHostPort(c.Request.Host)
-				if err != nil {
-					return ErrInvalidRemoteAddr
-				}
-			}
 
 			addr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 			if err != nil {

@@ -3,6 +3,7 @@ package reqlog
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/yaitoo/xun"
@@ -15,11 +16,11 @@ type Format func(c *xun.Context, options *Options, starts time.Time)
 // Combined log request with Combined Log Format (XLF/ELF)
 func Combined(c *xun.Context, options *Options, starts time.Time) {
 	requestLine := fmt.Sprintf(`"%s %s %s"`, c.Request.Method, c.Request.URL.Path, c.Request.Proto)
-	host, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
+	remoteAddr, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
 
 	//COMBINED: remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
 	options.Logger.Printf("%s %s %s %s %s %d %d \"%s\" \"%s\"\n",
-		host,
+		remoteAddr,
 		options.GetVisitor(c),
 		options.GetUser(c),
 		starts.Format("[02/Jan/2006:15:04:05 -0700]"),
@@ -35,10 +36,15 @@ func Combined(c *xun.Context, options *Options, starts time.Time) {
 func VCombined(c *xun.Context, options *Options, starts time.Time) {
 	requestLine := fmt.Sprintf(`"%s %s %s"`, c.Request.Method, c.Request.URL.Path, c.Request.Proto)
 	remoteAddr, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
+	host := c.Request.Host
+
+	if !strings.Contains(host, ":") {
+		host += ":"
+	}
 
 	//VCombined: host、remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
 	options.Logger.Printf("%s %s %s %s %s %s %d %d \"%s\" \"%s\"\n",
-		c.Request.Host,
+		host,
 		remoteAddr,
 		options.GetVisitor(c),
 		options.GetUser(c),
