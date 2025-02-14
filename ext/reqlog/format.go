@@ -31,6 +31,26 @@ func Combined(c *xun.Context, options *Options, starts time.Time) {
 	)
 }
 
+// VCombined log request with Combined Log Format (XLF/ELF) with virtual host
+func VCombined(c *xun.Context, options *Options, starts time.Time) {
+	requestLine := fmt.Sprintf(`"%s %s %s"`, c.Request.Method, c.Request.URL.Path, c.Request.Proto)
+	remoteAddr, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
+
+	//VCombined: host、remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
+	options.Logger.Printf("%s %s %s %s %s %s %d %d \"%s\" \"%s\"\n",
+		c.Request.Host,
+		remoteAddr,
+		options.GetVisitor(c),
+		options.GetUser(c),
+		starts.Format("[02/Jan/2006:15:04:05 -0700]"),
+		requestLine,
+		c.Response.StatusCode(),
+		c.Response.BodyBytesSent(),
+		c.Request.Referer(),
+		c.Request.UserAgent(),
+	)
+}
+
 // Common log request with Common Log Format (CLF)
 func Common(c *xun.Context, options *Options, starts time.Time) {
 	requestLine := fmt.Sprintf(`"%s %s %s"`, c.Request.Method, c.Request.URL.Path, c.Request.Proto)

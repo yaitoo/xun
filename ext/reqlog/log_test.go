@@ -59,6 +59,41 @@ func TestLogging(t *testing.T) {
 		require.Contains(t, l, "combined-vid combined-uid [")
 	})
 
+	t.Run("vcombined", func(t *testing.T) {
+		buf := bytes.Buffer{}
+
+		logger := log.New(&buf, "", 0)
+		m := New(WithLogger(logger),
+			WithUser(getUser),
+			WithVisitor(getVisitor),
+			WithFormat(VCombined))
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = "abc.com:8080"
+		req.Header.Set("Host", "abc.com")
+		req.Header.Set("X-Visitor-Id", "combined-vid")
+		req.Header.Set("X-User-Id", "combined-uid")
+		req.Header.Set("User-Agent", "combined-agent")
+		req.Header.Set("Referer", "combined-referer")
+
+		ctx := &xun.Context{
+			Request:  req,
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
+		}
+
+		err := m(func(c *xun.Context) error {
+			return nil
+		})(ctx)
+
+		require.NoError(t, err)
+
+		l := buf.String()
+
+		require.True(t, strings.HasPrefix(l, "abc.com:8080 192.0.2.1 combined-vid combined-uid ["))
+		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
+		require.Contains(t, l, "combined-vid combined-uid [")
+	})
+
 	t.Run("common", func(t *testing.T) {
 		buf := bytes.Buffer{}
 
