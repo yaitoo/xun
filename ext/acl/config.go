@@ -87,7 +87,7 @@ func loadLine(s *bufio.Scanner) (string, error) {
 			continue
 		}
 
-		if strings.HasPrefix(l, "#") {
+		if strings.HasPrefix(l, "#") || strings.HasPrefix(l, ";") {
 			continue
 		}
 
