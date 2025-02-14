@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"bufio"
 	"os"
 	"sync/atomic"
 	"time"
@@ -9,7 +10,6 @@ import (
 var ConfigCheckInterval = 1 * time.Minute
 
 func watch(file string, v atomic.Value) {
-
 	fi, _ := os.Stat(file)
 
 	lastMod := fi.ModTime()
@@ -17,7 +17,6 @@ func watch(file string, v atomic.Value) {
 	ticker := time.NewTicker(ConfigCheckInterval)
 	defer ticker.Stop()
 
-	o := v.Load().(*Options)
 	for {
 		<-ticker.C
 
@@ -27,14 +26,15 @@ func watch(file string, v atomic.Value) {
 		}
 
 		if fi.ModTime().After(lastMod) {
+			f, err := os.OpenFile(file, os.O_RDONLY, 0644)
+			if err == nil {
+				n := loadOptions(bufio.NewScanner(f))
+				v.Store(n)
 
-			// n := &Options{}
+				f.Close()
 
-			v.Store(&o)
-
-			lastMod = fi.ModTime()
+				lastMod = fi.ModTime()
+			}
 		}
-
 	}
-
 }

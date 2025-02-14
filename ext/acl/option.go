@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"bufio"
 	"net"
 	"strings"
 )
@@ -33,8 +34,8 @@ type Options struct {
 
 type Option func(o *Options)
 
-// AllowHost allow the hosts
-func AllowHost(hosts ...string) Option {
+// AllowHosts allow the hosts
+func AllowHosts(hosts ...string) Option {
 	return func(o *Options) {
 		for _, h := range hosts {
 			o.AllowHosts[strings.ToLower(h)] = struct{}{}
@@ -42,8 +43,8 @@ func AllowHost(hosts ...string) Option {
 	}
 }
 
-// AllowIPNet allow IPNets
-func AllowIPNet(nets ...string) Option {
+// AllowIPNets allow IPNets
+func AllowIPNets(nets ...string) Option {
 	return func(o *Options) {
 		for _, n := range nets {
 			if n == "*" {
@@ -59,8 +60,8 @@ func AllowIPNet(nets ...string) Option {
 	}
 }
 
-// DenyIPNet deny IPNets
-func DenyIPNet(nets ...string) Option {
+// DenyIPNets deny IPNets
+func DenyIPNets(nets ...string) Option {
 	return func(o *Options) {
 		for _, n := range nets {
 			if n == "*" {
@@ -76,8 +77,8 @@ func DenyIPNet(nets ...string) Option {
 	}
 }
 
-// AllowCountry allow countries
-func AllowCountry(countries ...string) Option {
+// AllowCountries allow countries
+func AllowCountries(countries ...string) Option {
 	return func(o *Options) {
 		for _, c := range countries {
 			o.AllowCountries.Items[c] = struct{}{}
@@ -88,8 +89,8 @@ func AllowCountry(countries ...string) Option {
 	}
 }
 
-// DenyCountry deny countries
-func DenyCountry(countries ...string) Option {
+// DenyCountries deny countries
+func DenyCountries(countries ...string) Option {
 	return func(o *Options) {
 		for _, c := range countries {
 			o.DenyCountries.Items[c] = struct{}{}
@@ -115,32 +116,31 @@ func WithViewer(v string) Option {
 }
 
 // WithConfig use the config file to load the options instead of program arguments. It will watch the file and reload the options automatically.
-// The file should be in yaml format.
 // Example:
 //
-//	hosts:
-//		- yaitoo.cn
-//		- www.yaitoo.cn
-//	ipnets:
-//		allow:
-//			- 0.0.0.0/0
-//			- 172.168.1.0/24
-//			- 10.10.10.1
-//		deny:
-//			- ::1/128
-//			-	192.168.0.1/32
-//	countries:
-//		allow:
-//			- CN
-//		deny:
-//			- *
-
+// [allow_hosts]
+// yaitoo.cn
+// www.yaitoo.cn
+// [allow_ipnets]
+// 89.207.132.170/24
+// ::1
+// [deny_ipnets]
+// 0.0.0.0/0
+// [allow_countries]
+// CN
+// [deny_countries]
+// *
+// [host_redirect]
+// url=http://abc.com
+// status_code=301
 func WithConfig(file string) Option {
 	return func(o *Options) {
 		o.Config = file
 	}
 }
 
+// WithHostRedirect sets the redirect URL and status code for host redirection.
+// It configures the Options to redirect requests to the specified URL with the given status code.
 func WithHostRedirect(url string, code int) Option {
 	return func(o *Options) {
 		o.HostRedirectURL = url
@@ -163,6 +163,9 @@ func (cr *CountryRule) Has(name string) bool {
 	return ok
 }
 
+// NewOptions creates and returns a new instance of Options with default values.
+// It initializes the necessary fields, including maps and slices, required for
+// the ACL middleware configuration.
 func NewOptions() *Options {
 	return &Options{
 		AllowHosts:  make(map[string]struct{}),
@@ -174,5 +177,23 @@ func NewOptions() *Options {
 		DenyCountries: &CountryRule{
 			Items: make(map[string]struct{}),
 		},
+	}
+}
+
+
+
+
+func loadAllowHosts(s *bufio.Scanner, o *Options) string {
+	for s.Scan() {
+		l := strings.TrimSpace(s.Text())
+		if l == "" {
+			continue
+		}
+		if strings.HasPrefix(l, "#") {
+			continue
+		}
+
+
+		if 
 	}
 }
