@@ -3,6 +3,7 @@ package acl
 import (
 	"bufio"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -16,14 +17,19 @@ const (
 	SectionDN                // deny_ipnets
 	SectionAC                // allow_countries
 	SectionDC                // deny_countries
-	SectionHR                // host_redirect
 )
 
-func loadOptions(s *bufio.Scanner) *Options {
-	o := NewOptions()
+func loadOptions(file string, o *Options) bool {
+	f, err := os.OpenFile(file, os.O_RDONLY, 0644)
+	if err != nil {
+		return false
+	}
 
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	var section Section
 	for {
-		var section Section
 		l, err := loadLine(s)
 		if err != nil {
 			break
@@ -47,6 +53,7 @@ func loadOptions(s *bufio.Scanner) *Options {
 			continue
 		case "[host_redirect]":
 			loadHostRedirect(s, o)
+			section = SectionNA
 		}
 
 		switch section {
@@ -64,7 +71,7 @@ func loadOptions(s *bufio.Scanner) *Options {
 
 	}
 
-	return o
+	return true
 }
 
 func loadLine(s *bufio.Scanner) (string, error) {

@@ -1,8 +1,8 @@
 package acl
 
 import (
-	"bufio"
 	"net"
+	"net/http"
 	"strings"
 )
 
@@ -115,7 +115,8 @@ func WithViewer(v string) Option {
 	}
 }
 
-// WithConfig use the config file to load the options instead of program arguments. It will watch the file and reload the options automatically.
+// WithConfig use the config file to load the options. It will watch the file and reload the options automatically.
+// After WithConfig, all options will be discard, and overwritten by the config file
 // Example:
 //
 // [allow_hosts]
@@ -136,6 +137,7 @@ func WithViewer(v string) Option {
 func WithConfig(file string) Option {
 	return func(o *Options) {
 		o.Config = file
+		loadOptions(file, o)
 	}
 }
 
@@ -148,6 +150,8 @@ func WithHostRedirect(url string, code int) Option {
 	}
 }
 
+// CountryRule represents a rule for managing country-based access control.
+// It includes a map of country codes and a flag indicating if any country is allowed.
 type CountryRule struct {
 	Items  map[string]struct{}
 	HasAny bool
@@ -177,23 +181,6 @@ func NewOptions() *Options {
 		DenyCountries: &CountryRule{
 			Items: make(map[string]struct{}),
 		},
-	}
-}
-
-
-
-
-func loadAllowHosts(s *bufio.Scanner, o *Options) string {
-	for s.Scan() {
-		l := strings.TrimSpace(s.Text())
-		if l == "" {
-			continue
-		}
-		if strings.HasPrefix(l, "#") {
-			continue
-		}
-
-
-		if 
+		HostRedirectStatusCode: http.StatusFound,
 	}
 }
