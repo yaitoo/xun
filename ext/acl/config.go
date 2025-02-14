@@ -3,6 +3,7 @@ package acl
 import (
 	"bufio"
 	"io"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -20,13 +21,14 @@ const (
 )
 
 func loadOptions(file string, o *Options) bool {
-	f, err := os.OpenFile(file, os.O_RDONLY, 0644)
+	f, err := os.OpenFile(file, os.O_RDONLY, 0600)
 	if err != nil {
 		Logger.Println("acl: can't read file", file, err)
 		return false
 	}
 
-	defer f.Close()
+	// nolint: errcheck
+	defer f.Close() // skipcq: GO-S2307
 
 	s := bufio.NewScanner(f)
 	var section Section
@@ -105,7 +107,10 @@ func loadHostRedirect(s *bufio.Scanner, o *Options) string {
 		}
 
 		if strings.HasPrefix(l, "url=") {
-			o.HostRedirectURL = l[len("url="):]
+			u, err := url.Parse(l[len("url="):])
+			if err == nil {
+				o.HostRedirectURL = u.String()
+			}
 		} else if strings.HasPrefix(l, "status_code=") {
 			o.HostRedirectStatusCode, _ = strconv.Atoi(l[len("status_code="):])
 		} else if strings.HasPrefix(l, "[") { // other section starts

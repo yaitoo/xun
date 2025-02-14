@@ -682,13 +682,10 @@ func main(){
 func main(){
  	//....
   secretKey := []byte("your-secret-key")
-
   app.Use(csrf.New(secretKey,csrf.WithJsToken()))
-	
-	// ...
-
-	app.Get("/assets/csrf.js",csrf.HandleFunc(secretKey))
- 	//...
+  // ...
+  app.Get("/assets/csrf.js",csrf.HandleFunc(secretKey))
+  //...
 }
 ```
 

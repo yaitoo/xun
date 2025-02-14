@@ -3,6 +3,7 @@ package acl
 import (
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -101,14 +102,14 @@ func DenyCountries(countries ...string) Option {
 	}
 }
 
-// DenyCountry deny countries
+// WithLookupFunc setup custom lookup function to get country by ip address
 func WithLookupFunc(fn func(string) string) Option {
 	return func(o *Options) {
 		o.LookupFunc = fn
 	}
 }
 
-// Viewer render the viewer to current visitor when he is denied
+// WithViewer render the viewer to current visitor when he is denied
 func WithViewer(v string) Option {
 	return func(o *Options) {
 		o.ViewerName = v
@@ -143,10 +144,13 @@ func WithConfig(file string) Option {
 
 // WithHostRedirect sets the redirect URL and status code for host redirection.
 // It configures the Options to redirect requests to the specified URL with the given status code.
-func WithHostRedirect(url string, code int) Option {
+func WithHostRedirect(u string, code int) Option {
 	return func(o *Options) {
-		o.HostRedirectURL = url
-		o.HostRedirectStatusCode = code
+		u, err := url.Parse(u)
+		if err == nil {
+			o.HostRedirectURL = u.String()
+			o.HostRedirectStatusCode = code
+		}
 	}
 }
 

@@ -16,7 +16,7 @@ var (
 // It offers various methods to work with request data, manipulate responses, and manage routing.
 type Context struct {
 	Routing  Routing
-	app      *App
+	App      *App
 	Response ResponseWriter
 	Request  *http.Request
 
@@ -91,7 +91,7 @@ func (c *Context) getViewer(name string) (Viewer, bool) {
 	if name == "" {
 		return nil, false
 	}
-	v, ok := c.app.viewers[name]
+	v, ok := c.App.viewers[name]
 	if ok {
 		mime := v.MimeType()
 		for _, accept := range c.Accept() {
@@ -107,8 +107,8 @@ func (c *Context) getViewer(name string) (Viewer, bool) {
 // It uses the given status code. If the status code is not provided,
 // it uses http.StatusFound (302).
 func (c *Context) Redirect(url string, statusCode ...int) {
-	if c.app.interceptor != nil {
-		if c.app.interceptor.Redirect(c, url, statusCode...) {
+	if c.App.interceptor != nil {
+		if c.App.interceptor.Redirect(c, url, statusCode...) {
 			return
 		}
 
@@ -169,8 +169,8 @@ func (c *Context) Accept() (types []MimeType) {
 // RequestReferer returns the referer of the request.
 func (c *Context) RequestReferer() string {
 	var v string
-	if c.app.interceptor != nil {
-		v = c.app.interceptor.RequestReferer(c)
+	if c.App.interceptor != nil {
+		v = c.App.interceptor.RequestReferer(c)
 	}
 
 	if v == "" {

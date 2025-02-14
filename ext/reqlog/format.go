@@ -43,17 +43,17 @@ func VCombined(c *xun.Context, options *Options, starts time.Time) {
 	}
 
 	//VCombined: host、remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
-	options.Logger.Printf("%s %s %s %s %s %s %d %d \"%s\" \"%s\"\n",
-		host,
+	options.Logger.Printf("%s %s %s %s %s %s %d %d %s %s\n",
+		Escape(host),
 		remoteAddr,
-		options.GetVisitor(c),
-		options.GetUser(c),
+		Escape(options.GetVisitor(c)),
+		Escape(options.GetUser(c)),
 		starts.Format("[02/Jan/2006:15:04:05 -0700]"),
 		requestLine,
 		c.Response.StatusCode(),
 		c.Response.BodyBytesSent(),
-		c.Request.Referer(),
-		c.Request.UserAgent(),
+		Escape(c.Request.Referer()),
+		Escape(c.Request.UserAgent()),
 	)
 }
 
@@ -64,12 +64,20 @@ func Common(c *xun.Context, options *Options, starts time.Time) {
 
 	//Common: remote、visitor、user、datetime、request line、status、body_bytes_sent
 	options.Logger.Printf("%s %s %s %s %s %d %d\n",
-		host,
-		options.GetVisitor(c),
-		options.GetUser(c),
+		Escape(host),
+		Escape(options.GetVisitor(c)),
+		Escape(options.GetUser(c)),
 		starts.Format("[02/Jan/2006:15:04:05 -0700]"),
 		requestLine,
 		c.Response.StatusCode(),
 		c.Response.BodyBytesSent(),
 	)
+}
+
+func Escape(s string) string {
+	if s == "-" {
+		return s
+	}
+
+	return "\"" + strings.ReplaceAll(s, `"`, `\"`) + "\""
 }

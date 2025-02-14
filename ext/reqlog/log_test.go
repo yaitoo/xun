@@ -81,17 +81,14 @@ func TestLogging(t *testing.T) {
 			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 
-		err := m(func(c *xun.Context) error {
-			return nil
-		})(ctx)
+		err := m(nop)(ctx)
 
 		require.NoError(t, err)
 
 		l := buf.String()
 
-		require.True(t, strings.HasPrefix(l, "abc.com: 192.0.2.1 combined-vid combined-uid ["))
+		require.True(t, strings.HasPrefix(l, `"abc.com:" 192.0.2.1 "combined-vid" "combined-uid" [`))
 		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
-		require.Contains(t, l, "combined-vid combined-uid [")
 	})
 
 	t.Run("vcombined_with_port", func(t *testing.T) {
@@ -116,17 +113,14 @@ func TestLogging(t *testing.T) {
 			Response: xun.NewResponseWriter(httptest.NewRecorder()),
 		}
 
-		err := m(func(c *xun.Context) error {
-			return nil
-		})(ctx)
+		err := m(nop)(ctx)
 
 		require.NoError(t, err)
 
 		l := buf.String()
 
-		require.True(t, strings.HasPrefix(l, "abc.com:8080 192.0.2.1 combined-vid combined-uid ["))
+		require.True(t, strings.HasPrefix(l, `"abc.com:8080" 192.0.2.1 "combined-vid" "combined-uid" [`))
 		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
-		require.Contains(t, l, "combined-vid combined-uid [")
 	})
 
 	t.Run("common", func(t *testing.T) {
