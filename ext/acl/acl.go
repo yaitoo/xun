@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"log"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -8,19 +9,22 @@ import (
 	"github.com/yaitoo/xun"
 )
 
-func New(opts ...Option) xun.Middleware {
-	var v atomic.Value
+var (
+	Logger = log.Default()
+)
 
+func New(opts ...Option) xun.Middleware {
 	options := NewOptions()
 
 	for _, opt := range opts {
 		opt(options)
 	}
 
+	var v atomic.Value
 	v.Store(options)
 
 	if options.Config != "" {
-		go watch(options.Config, v)
+		go watch(options.Config, &v)
 	}
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
@@ -41,11 +45,11 @@ func New(opts ...Option) xun.Middleware {
 			if len(o.AllowHosts) > 0 {
 				_, allow := o.AllowHosts[m.Host]
 				if !allow {
-					if o.HostRedirectURL == "" {
-						return reject(c, o, m)
+					if o.HostRedirectStatusCode > 0 && o.HostRedirectURL != "" {
+						return redirect(c, o)
 					}
 
-					return redirect(c, o)
+					return reject(c, o, m)
 				}
 			}
 

@@ -22,6 +22,7 @@ const (
 func loadOptions(file string, o *Options) bool {
 	f, err := os.OpenFile(file, os.O_RDONLY, 0644)
 	if err != nil {
+		Logger.Println("acl: can't read file", file, err)
 		return false
 	}
 
@@ -33,6 +34,11 @@ func loadOptions(file string, o *Options) bool {
 		l, err := loadLine(s)
 		if err != nil {
 			break
+		}
+
+		if l == "[host_redirect]" {
+			section = SectionNA
+			l = loadHostRedirect(s, o)
 		}
 
 		switch l {
@@ -51,9 +57,6 @@ func loadOptions(file string, o *Options) bool {
 		case "[deny_countries]":
 			section = SectionDC
 			continue
-		case "[host_redirect]":
-			loadHostRedirect(s, o)
-			section = SectionNA
 		}
 
 		switch section {
@@ -71,12 +74,15 @@ func loadOptions(file string, o *Options) bool {
 
 	}
 
+	Logger.Printf("acl: allow_hosts=%v %v %s\n", len(o.AllowHosts), o.HostRedirectStatusCode, o.HostRedirectURL)
+	Logger.Printf("acl: allow_ipnets=%v deny_ipnets=%v\n", len(o.AllowIPNets), len(o.DenyIPNets))
+	Logger.Printf("acl: allow_countries=%v %v deny_countries=%v %v\n", o.AllowCountries.HasAny, len(o.AllowCountries.Items), o.DenyCountries.HasAny, len(o.DenyCountries.Items))
 	return true
 }
 
 func loadLine(s *bufio.Scanner) (string, error) {
 	for s.Scan() {
-		l := strings.TrimSpace(s.Text())
+		l := strings.ReplaceAll(s.Text(), " ", "")
 		if l == "" {
 			continue
 		}
@@ -91,34 +97,19 @@ func loadLine(s *bufio.Scanner) (string, error) {
 	return "", io.EOF
 }
 
-func loadHostRedirect(s *bufio.Scanner, o *Options) {
-	var url string
-	var statusCode int
-
-	var done int
-
+func loadHostRedirect(s *bufio.Scanner, o *Options) string {
 	for {
 		l, err := loadLine(s)
 		if err != nil {
-			return
+			return ""
 		}
 
 		if strings.HasPrefix(l, "url=") {
-			url = strings.TrimLeft(l, "url=")
-			done++
+			o.HostRedirectURL = l[len("url="):]
 		} else if strings.HasPrefix(l, "status_code=") {
-			statusCode, _ = strconv.Atoi(strings.TrimLeft(l, "status_code="))
-			done++
-		}
-
-		if done == 2 {
-			break
+			o.HostRedirectStatusCode, _ = strconv.Atoi(l[len("status_code="):])
+		} else if strings.HasPrefix(l, "[") { // other section starts
+			return l
 		}
 	}
-
-	o.HostRedirectURL = url
-	if statusCode > 0 {
-		o.HostRedirectStatusCode = statusCode
-	}
-
 }

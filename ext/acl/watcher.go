@@ -12,15 +12,16 @@ var (
 )
 
 var getLastMod = func(file string) time.Time {
-	fi, _ := os.Stat(file)
-	if fi == nil {
+	fi, err := os.Stat(file)
+	if err != nil {
+		Logger.Println("acl: can't read file", file, err)
 		return zeroTime
 	}
 
 	return fi.ModTime()
 }
 
-func watch(file string, v atomic.Value) {
+func watch(file string, v *atomic.Value) {
 	lastMod := getLastMod(file)
 
 	ticker := time.NewTicker(ReloadInterval)
