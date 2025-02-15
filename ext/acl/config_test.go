@@ -12,6 +12,25 @@ import (
 
 func TestConfig(t *testing.T) {
 
+	t.Run("invalid", func(t *testing.T) {
+		New(WithConfig("./notfound.ini"))
+
+		o := v.Load().(*Options)
+
+		require.Len(t, o.AllowHosts, 0)
+		require.Empty(t, o.HostRedirectURL)
+		require.Equal(t, 302, o.HostRedirectStatusCode)
+
+		require.Len(t, o.AllowIPNets, 0)
+		require.Len(t, o.DenyIPNets, 0)
+
+		require.Len(t, o.AllowCountries.Items, 0)
+		require.True(t, !o.AllowCountries.HasAny)
+
+		require.Len(t, o.DenyCountries.Items, 0)
+		require.True(t, !o.DenyCountries.HasAny)
+	})
+
 	var lastModMu sync.Mutex
 
 	lastMod := time.Now()
