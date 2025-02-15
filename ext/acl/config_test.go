@@ -2,6 +2,7 @@ package acl
 
 import (
 	"io/fs"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -10,6 +11,9 @@ import (
 )
 
 func TestConfig(t *testing.T) {
+
+	var lastModMu sync.Mutex
+
 	lastMod := time.Now()
 	fsys := fstest.MapFS{
 		"acl.ini": &fstest.MapFile{
@@ -33,16 +37,11 @@ us
 `),
 			ModTime: lastMod},
 	}
-	glm := getLastMod
-	of := openFile
-	ri := ReloadInterval
-	defer func() {
-		getLastMod = glm
-		openFile = of
-		ReloadInterval = ri
-	}()
 
 	getLastMod = func(string) time.Time {
+		lastModMu.Lock()
+		defer lastModMu.Unlock()
+
 		return lastMod
 	}
 
@@ -79,8 +78,7 @@ us
 		require.True(t, o.DenyCountries.HasAny)
 	})
 
-	t.Run("reload", func(t *testing.T) {
-		fsys["acl.ini"].Data = []byte(`
+	fsys["acl.ini"].Data = []byte(`
 [allow_hosts]
 123.com
 [host_redirect]
@@ -95,7 +93,12 @@ status_code=302
 cn
 [deny_countries]
 `)
-		lastMod = time.Now()
+
+	lastModMu.Lock()
+	lastMod = time.Now()
+	lastModMu.Unlock()
+
+	t.Run("reload", func(t *testing.T) {
 		time.Sleep(2 * time.Second)
 
 		o := v.Load().(*Options)
