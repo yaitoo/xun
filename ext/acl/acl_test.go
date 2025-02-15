@@ -279,3 +279,22 @@ func TestCountries(t *testing.T) {
 		require.Equal(t, "abc.com-192.0.0.2-us", w.Body.String())
 	})
 }
+
+func TestInvalid(t *testing.T) {
+	t.Run("invalid_remote_addr", func(t *testing.T) {
+		m := New()
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "2001:db8:85a3:0:0:8a2e:370:1]:1111"
+		err := m(nop)(ctx)
+		require.ErrorIs(t, err, ErrInvalidRemoteAddr)
+	})
+	t.Run("invalid_remote_ip", func(t *testing.T) {
+		m := New()
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0:1"
+		err := m(nop)(ctx)
+		require.ErrorIs(t, err, ErrInvalidRemoteAddr)
+	})
+}
