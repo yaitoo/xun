@@ -81,17 +81,19 @@ us
 	fsys["acl.ini"].Data = []byte(`
 [allow_hosts]
 123.com
-[host_redirect]
-url=http://123.com
-status_code=302
-[allow_ipnets]
 
+[allow_ipnets]
+; 172.0.0.1
 [deny_ipnets]
 192.0.0.1/24
 172.0.0.1
 [allow_countries]
 cn
 [deny_countries]
+# *
+[host_redirect]
+url=http://123.com
+status_code=302
 `)
 
 	lastModMu.Lock()
