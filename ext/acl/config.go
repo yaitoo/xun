@@ -22,6 +22,7 @@ const (
 )
 
 var openFile = func(file string) (fs.File, error) {
+
 	return os.OpenFile(file, os.O_RDONLY, 0600)
 }
 

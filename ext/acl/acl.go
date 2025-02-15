@@ -11,6 +11,7 @@ import (
 
 var (
 	Logger = log.Default()
+	v      atomic.Value
 )
 
 func New(opts ...Option) xun.Middleware {
@@ -20,7 +21,6 @@ func New(opts ...Option) xun.Middleware {
 		opt(options)
 	}
 
-	var v atomic.Value
 	v.Store(options)
 
 	if options.Config != "" {

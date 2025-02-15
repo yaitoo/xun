@@ -51,9 +51,9 @@ us
 	}
 	ReloadInterval = 1 * time.Second
 
-	t.Run("load_options", func(t *testing.T) {
-		o := NewOptions()
-		loadOptions("acl.ini", o)
+	New(WithConfig("acl.ini"))
+	t.Run("load", func(t *testing.T) {
+		o := v.Load().(*Options)
 
 		_, ok := o.AllowHosts["abc.com"]
 		require.True(t, ok)
@@ -77,6 +77,48 @@ us
 		_, ok = o.DenyCountries.Items["us"]
 		require.True(t, ok)
 		require.True(t, o.DenyCountries.HasAny)
+	})
+
+	t.Run("reload", func(t *testing.T) {
+		fsys["acl.ini"].Data = []byte(`
+[allow_hosts]
+123.com
+[host_redirect]
+url=http://123.com
+status_code=302
+[allow_ipnets]
+
+[deny_ipnets]
+192.0.0.1/24
+172.0.0.1
+[allow_countries]
+cn
+[deny_countries]
+`)
+		lastMod = time.Now()
+		time.Sleep(2 * time.Second)
+
+		o := v.Load().(*Options)
+
+		_, ok := o.AllowHosts["123.com"]
+		require.True(t, ok)
+		require.Len(t, o.AllowHosts, 1)
+		require.Equal(t, "http://123.com", o.HostRedirectURL)
+		require.Equal(t, 302, o.HostRedirectStatusCode)
+
+		require.Len(t, o.AllowIPNets, 0)
+
+		require.Len(t, o.DenyIPNets, 2)
+		require.Equal(t, ParseIPNet("192.0.0.1/24"), o.DenyIPNets[0])
+		require.Equal(t, ParseIPNet("172.0.0.1"), o.DenyIPNets[1])
+
+		require.Len(t, o.AllowCountries.Items, 1)
+		_, ok = o.AllowCountries.Items["cn"]
+		require.True(t, ok)
+		require.True(t, !o.AllowCountries.HasAny)
+
+		require.Len(t, o.DenyCountries.Items, 0)
+		require.True(t, !o.DenyCountries.HasAny)
 	})
 
 }
