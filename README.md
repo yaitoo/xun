@@ -757,7 +757,7 @@ app.Use(acl.New(acl.WithLookupFunc(lookup),acl.DenyCountries("us","cn")))
 ```
 
 ##### Config Example
-The best solution is to load rules from config file automatically instead of hard code. see more [examples](./ext/acl//config_test.go) 
+The optimal solution is to load the rules from a configuration file rather than hard-coding them. The ACL system also monitors the configuration file for changes and automatically reloads the rules. see more [examples](./ext/acl//config_test.go) 
 
 > config file
 ```ini
@@ -766,8 +766,8 @@ abc.com
 www.abc.com
 [allow_ipnets]
 89.207.132.170/24
-::1
-127.0.0.1
+# ::1  
+; 127.0.0.1
 [deny_ipnets]
 *
 [allow_countries]
