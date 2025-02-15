@@ -3,6 +3,7 @@ package acl
 import (
 	"bufio"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"strconv"
@@ -20,8 +21,12 @@ const (
 	SectionDC                // deny_countries
 )
 
+var openFile = func(file string) (fs.File, error) {
+	return os.OpenFile(file, os.O_RDONLY, 0600)
+}
+
 func loadOptions(file string, o *Options) bool {
-	f, err := os.OpenFile(file, os.O_RDONLY, 0600)
+	f, err := openFile(file)
 	if err != nil {
 		Logger.Println("acl: can't read file", file, err)
 		return false
