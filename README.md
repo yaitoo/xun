@@ -695,7 +695,7 @@ func main(){
 ```
 
 
-#### Access Control List(ACL )
+#### Access Control List(ACL)
 It filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
 
 ##### Core Filtering Dimensions
@@ -718,6 +718,7 @@ It filters and monitors HTTP traffic through granular rule sets, designed to pro
     - Use customizable HTTP status HostRedirectStatusCode (e.g., 307 Temporary Redirect)
 
 ##### Code Examples
+see more [examples](./ext/acl/acl_test.go)
 
 > AllowHosts
 ```go
@@ -756,7 +757,7 @@ app.Use(acl.New(acl.WithLookupFunc(lookup),acl.DenyCountries("us","cn")))
 ``
 
 ##### Config Example
-The best solution is to load rules from config file automatically instead of hard code.
+The best solution is to load rules from config file automatically instead of hard code. see more [examples](./ext/acl//config_test.go) 
 
 > config file
 ```ini
