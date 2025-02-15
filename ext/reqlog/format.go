@@ -21,8 +21,8 @@ func Combined(c *xun.Context, options *Options, starts time.Time) {
 	//COMBINED: remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
 	options.Logger.Printf("%s %s %s %s %s %d %d \"%s\" \"%s\"\n",
 		remoteAddr,
-		options.GetVisitor(c),
-		options.GetUser(c),
+		Escape(options.GetVisitor(c)),
+		Escape(options.GetUser(c)),
 		starts.Format("[02/Jan/2006:15:04:05 -0700]"),
 		requestLine,
 		c.Response.StatusCode(),
@@ -44,7 +44,7 @@ func VCombined(c *xun.Context, options *Options, starts time.Time) {
 
 	//VCombined: host、remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
 	options.Logger.Printf("%s %s %s %s %s %s %d %d %s %s\n",
-		Escape(host),
+		host,
 		remoteAddr,
 		Escape(options.GetVisitor(c)),
 		Escape(options.GetUser(c)),
@@ -60,11 +60,11 @@ func VCombined(c *xun.Context, options *Options, starts time.Time) {
 // Common log request with Common Log Format (CLF)
 func Common(c *xun.Context, options *Options, starts time.Time) {
 	requestLine := fmt.Sprintf(`"%s %s %s"`, c.Request.Method, c.Request.URL.Path, c.Request.Proto)
-	host, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
+	remoteAddr, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
 
 	//Common: remote、visitor、user、datetime、request line、status、body_bytes_sent
 	options.Logger.Printf("%s %s %s %s %s %d %d\n",
-		Escape(host),
+		remoteAddr,
 		Escape(options.GetVisitor(c)),
 		Escape(options.GetUser(c)),
 		starts.Format("[02/Jan/2006:15:04:05 -0700]"),
