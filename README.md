@@ -696,7 +696,7 @@ func main(){
 
 
 #### Access Control List(ACL)
-It filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
+The list filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
 
 ##### Core Filtering Dimensions
 - Host-Based Filtering (AllowHosts)
@@ -754,7 +754,7 @@ app.Use(acl.DenyIPNets("172.0.0.0/24"))
 > Blacklist Mode by Countries
 ```go
 app.Use(acl.New(acl.WithLookupFunc(lookup),acl.DenyCountries("us","cn")))
-``
+```
 
 ##### Config Example
 The best solution is to load rules from config file automatically instead of hard code. see more [examples](./ext/acl//config_test.go) 
