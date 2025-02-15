@@ -31,7 +31,7 @@ func TestContextRequestReferer(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := &Context{
-				app:     &App{},
+				App:     &App{},
 				Request: httptest.NewRequest(http.MethodGet, "/", nil),
 			}
 

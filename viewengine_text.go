@@ -53,9 +53,8 @@ func (ve *TextViewEngine) loadText(path string) error {
 		return err
 	}
 
-	ve.app.viewers[path] = &TextViewer{
-		template: t,
-	}
+	ve.app.viewers[path] = NewTextViewer(t)
+
 	return err
 }
 

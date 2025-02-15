@@ -6,6 +6,10 @@ import (
 	"text/template"
 )
 
+func NewTextTemplate(t *template.Template) *TextTemplate {
+	return &TextTemplate{template: t}
+}
+
 // TextTemplate represents a text template that can be loaded from a file system and executed with data.
 type TextTemplate struct {
 	template *template.Template

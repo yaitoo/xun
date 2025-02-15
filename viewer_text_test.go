@@ -19,9 +19,7 @@ func TestInvalidTextTemplate(t *testing.T) {
 	require.NoError(t, err)
 
 	v := &TextViewer{
-		template: &TextTemplate{
-			template: l,
-		},
+		template: NewTextTemplate(l),
 	}
 
 	err = v.Render(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil), Data{})

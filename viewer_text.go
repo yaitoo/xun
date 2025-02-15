@@ -4,6 +4,10 @@ import (
 	"net/http"
 )
 
+func NewTextViewer(t *TextTemplate) *TextViewer {
+	return &TextViewer{template: t}
+}
+
 // TextViewer is a struct that holds an TextTemplate and is used to render text content.
 type TextViewer struct {
 	template *TextTemplate
