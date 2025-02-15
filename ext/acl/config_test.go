@@ -12,28 +12,9 @@ import (
 
 func TestConfig(t *testing.T) {
 
-	t.Run("invalid", func(t *testing.T) {
-		New(WithConfig("./notfound.ini"))
-
-		o := v.Load().(*Options)
-
-		require.Len(t, o.AllowHosts, 0)
-		require.Empty(t, o.HostRedirectURL)
-		require.Equal(t, 302, o.HostRedirectStatusCode)
-
-		require.Len(t, o.AllowIPNets, 0)
-		require.Len(t, o.DenyIPNets, 0)
-
-		require.Len(t, o.AllowCountries.Items, 0)
-		require.True(t, !o.AllowCountries.HasAny)
-
-		require.Len(t, o.DenyCountries.Items, 0)
-		require.True(t, !o.DenyCountries.HasAny)
-	})
-
-	var lastModMu sync.Mutex
-
+	var mu sync.Mutex
 	lastMod := time.Now()
+
 	fsys := fstest.MapFS{
 		"acl.ini": &fstest.MapFile{
 			Data: []byte(`
@@ -57,17 +38,52 @@ us
 			ModTime: lastMod},
 	}
 
-	getLastMod = func(string) time.Time {
-		lastModMu.Lock()
-		defer lastModMu.Unlock()
+	rawGetLastMod := getLastMod
+	rawOpenFile := openFile
+
+	getLastMod = func(file string) time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if file == "not_found" {
+			return rawGetLastMod(file)
+		}
 
 		return lastMod
 	}
 
 	openFile = func(file string) (fs.File, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if file == "not_found" {
+			return rawOpenFile(file)
+		}
+
 		return fsys.Open(file)
 	}
 	ReloadInterval = 1 * time.Second
+
+	t.Run("invalid", func(t *testing.T) {
+		New(WithConfig("not_found"))
+
+		o := v.Load().(*Options)
+
+		require.Len(t, o.AllowHosts, 0)
+		require.Empty(t, o.HostRedirectURL)
+		require.Equal(t, 302, o.HostRedirectStatusCode)
+
+		require.Len(t, o.AllowIPNets, 0)
+		require.Len(t, o.DenyIPNets, 0)
+
+		require.Len(t, o.AllowCountries.Items, 0)
+		require.True(t, !o.AllowCountries.HasAny)
+
+		require.Len(t, o.DenyCountries.Items, 0)
+		require.True(t, !o.DenyCountries.HasAny)
+	})
+
+	stop <- struct{}{}
 
 	New(WithConfig("acl.ini"))
 	t.Run("load", func(t *testing.T) {
@@ -115,9 +131,9 @@ url=http://123.com
 status_code=302
 `)
 
-	lastModMu.Lock()
+	mu.Lock()
 	lastMod = time.Now()
-	lastModMu.Unlock()
+	mu.Unlock()
 
 	t.Run("reload", func(t *testing.T) {
 		time.Sleep(2 * time.Second)
@@ -145,4 +161,5 @@ status_code=302
 		require.True(t, !o.DenyCountries.HasAny)
 	})
 
+	stop <- struct{}{}
 }

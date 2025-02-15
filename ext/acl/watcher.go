@@ -9,6 +9,7 @@ import (
 var (
 	ReloadInterval = 1 * time.Minute
 	zeroTime       time.Time
+	stop           = make(chan struct{})
 )
 
 var getLastMod = func(file string) time.Time {
@@ -28,7 +29,11 @@ func watch(file string, v *atomic.Value) {
 	defer ticker.Stop()
 
 	for {
-		<-ticker.C
+		select {
+		case <-ticker.C:
+		case <-stop:
+			return
+		}
 
 		modTime := getLastMod(file)
 
