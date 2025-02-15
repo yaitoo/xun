@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/stretchr/testify/require"
 	"github.com/yaitoo/xun"
@@ -248,5 +249,33 @@ func TestCountries(t *testing.T) {
 		err = m(nop)(ctx)
 		require.ErrorIs(t, err, xun.ErrCancelled)
 		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
+	})
+
+	t.Run("with_viewer", func(t *testing.T) {
+		m := New(WithViewer("403"), WithLookupFunc(lookup),
+			AllowCountries("cn"), DenyCountries("*"))
+
+		ctx := createContext(nil)
+
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		w := httptest.NewRecorder()
+		ctx = createContext(w)
+
+		text, err := template.New("403").Parse("{{ .Host }}-{{ .IP }}-{{.Country}}")
+		require.NoError(t, err)
+		v := xun.NewTextViewer(xun.NewTextTemplate(text))
+
+		ctx.App = xun.New(xun.WithMux(http.NewServeMux()))
+		ctx.App.HandlePage("/403", "403", v)
+		ctx.Request.Host = "abc.com"
+		ctx.Request.RemoteAddr = "192.0.0.2:2222"
+		err = m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
+		require.Equal(t, "abc.com-192.0.0.2-us", w.Body.String())
 	})
 }

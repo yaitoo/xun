@@ -20,7 +20,7 @@ func TestInvalidTextTemplate(t *testing.T) {
 
 	v := &TextViewer{
 		template: &TextTemplate{
-			template: l,
+			Template: l,
 		},
 	}
 

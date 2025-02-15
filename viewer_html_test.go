@@ -20,7 +20,7 @@ func TestInvalidHtmlTemplate(t *testing.T) {
 
 	v := &HtmlViewer{
 		template: &HtmlTemplate{
-			template: l,
+			Template: l,
 		},
 	}
 
