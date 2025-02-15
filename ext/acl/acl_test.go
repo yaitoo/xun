@@ -70,7 +70,7 @@ func TestHosts(t *testing.T) {
 
 func TestIPNets(t *testing.T) {
 
-	t.Run("allow", func(t *testing.T) {
+	t.Run("allow_deny", func(t *testing.T) {
 		m := New(AllowIPNets("172.0.0.1"), DenyIPNets("172.0.0.1", "172.0.0.2"))
 
 		ctx := createContext(nil)
@@ -86,7 +86,23 @@ func TestIPNets(t *testing.T) {
 		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
 	})
 
-	t.Run("deny", func(t *testing.T) {
+	t.Run("only_allow", func(t *testing.T) {
+		m := New(AllowIPNets("[2001:db8:85a3:0:0:8a2e:370]:1"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "[2001:db8:85a3:0:0:8a2e:370:1]:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "[2001:db8:85a3:0:0:8a2e:370:2]:2222"
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+	})
+
+	t.Run("only_deny", func(t *testing.T) {
 		m := New(DenyIPNets("172.0.0.1", "172.0.0.2"))
 
 		ctx := createContext(nil)
@@ -101,5 +117,21 @@ func TestIPNets(t *testing.T) {
 		require.ErrorIs(t, err, xun.ErrCancelled)
 		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
 
+	})
+
+	t.Run("allow_any", func(t *testing.T) {
+		m := New(AllowIPNets("*"), DenyIPNets("172.0.0.1", "172.0.0.2"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.2:2222"
+		err = m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
 	})
 }

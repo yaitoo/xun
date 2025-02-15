@@ -66,7 +66,7 @@ func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Eve
 
 func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 
-	name := strings.ToLower(path)
+	name := path
 
 	if strings.HasSuffix(name, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
 		name = name[:len(name)-10]
