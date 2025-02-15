@@ -3,6 +3,7 @@ package acl
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -120,7 +121,23 @@ func TestIPNets(t *testing.T) {
 	})
 
 	t.Run("allow_any", func(t *testing.T) {
-		m := New(AllowIPNets("*"), DenyIPNets("172.0.0.1", "172.0.0.2"))
+		m := New(AllowIPNets("*"), DenyIPNets("172.0.0.1", "192.0.0.2"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "192.0.0.2:2222"
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+	})
+
+	t.Run("deny_any", func(t *testing.T) {
+		m := New(AllowIPNets("172.0.0.1"), DenyIPNets("*"))
 
 		ctx := createContext(nil)
 		ctx.Request.RemoteAddr = "172.0.0.1:1111"
@@ -130,6 +147,104 @@ func TestIPNets(t *testing.T) {
 
 		ctx = createContext(nil)
 		ctx.Request.RemoteAddr = "172.0.0.2:2222"
+		err = m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
+	})
+}
+
+func TestCountries(t *testing.T) {
+
+	lookup := func(ip string) string {
+		if strings.HasPrefix(ip, "172.") {
+			return "cn"
+		}
+
+		return "us"
+	}
+
+	t.Run("allow_deny", func(t *testing.T) {
+		m := New(WithLookupFunc(lookup),
+			AllowCountries("cn"),
+			DenyCountries("us"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "192.0.0.1:2222"
+		err = m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
+	})
+
+	t.Run("only_allow", func(t *testing.T) {
+		m := New(WithLookupFunc(lookup),
+			AllowCountries("cn"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "192.0.0.1:2222"
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+	})
+
+	t.Run("only_deny", func(t *testing.T) {
+		m := New(WithLookupFunc(lookup),
+			DenyCountries("cn", "us"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.2:2222"
+		err = m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
+
+	})
+
+	t.Run("allow_any", func(t *testing.T) {
+		m := New(WithLookupFunc(lookup),
+			AllowCountries("*"), DenyCountries("cn", "us"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "192.0.0.2:2222"
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+	})
+
+	t.Run("deny_any", func(t *testing.T) {
+		m := New(WithLookupFunc(lookup),
+			AllowCountries("cn"), DenyCountries("*"))
+
+		ctx := createContext(nil)
+		ctx.Request.RemoteAddr = "172.0.0.1:1111"
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, ctx.Response.StatusCode())
+
+		ctx = createContext(nil)
+		ctx.Request.RemoteAddr = "192.0.0.2:2222"
 		err = m(nop)(ctx)
 		require.ErrorIs(t, err, xun.ErrCancelled)
 		require.Equal(t, http.StatusForbidden, ctx.Response.StatusCode())
