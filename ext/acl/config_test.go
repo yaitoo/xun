@@ -124,8 +124,7 @@ us
 172.0.0.1
 [allow_countries]
 cn
-[deny_countries]
-# *
+# us
 [host_redirect]
 url=http://123.com
 status_code=302

@@ -695,7 +695,95 @@ func main(){
 ```
 
 
+#### Access Control List(ACL )
+It filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
 
+##### Core Filtering Dimensions
+- Host-Based Filtering (AllowHosts)
+
+    Restrict access to explicitly permitted domains/subdomains
+- IP Range Control (AllowIPNets/DenyIPNets)
+
+    Allow/block traffic from specific IP addresses or CIDR-notated subnets
+- Geolocation Filtering (AllowCountries/DenyCountries)
+
+    Permit/restrict access based on client geolocation
+
+##### Enforcement Actions
+- Block unauthorized requests with 403 Forbidden status
+
+- Host Redirection (Conditional):
+    When AllowHosts validation fails:
+    - Redirect to HostRedirectURL
+    - Use customizable HTTP status HostRedirectStatusCode (e.g., 307 Temporary Redirect)
+
+##### Code Examples
+
+> AllowHosts
+```go
+app.Use(acl.New(acl.AllowHosts("abc.com","123.com"), acl.WithHostRedirect("https://abc.com", 302)))
+
+```
+
+> Whitelist Mode by IPNets
+```go
+app.Use(acl.New(acl.AllowIPNets("172.0.0.1","2000::1/8")),acl.DenyIPNets("*")) 
+```
+
+> Whitelist Mode by Countries
+```go
+func lookup(ip string)string {
+	db, _ := geoip2.Open("./GeoLite2-City.mmdb")
+	nip := net.ParseIP(ip)
+
+	c, _ := db.cityDB.City(nip)
+
+	return c.CountryCode
+}
+
+app.Use(acl.New(acl.WithLookupFunc(lookup),
+	acl.AllowCountries("CN"),acl.DenyCountries("*)))
+```
+
+> Blacklist Mode by IPNets
+```go
+app.Use(acl.DenyIPNets("172.0.0.0/24")) 
+```
+
+> Blacklist Mode by Countries
+```go
+app.Use(acl.New(acl.WithLookupFunc(lookup),acl.DenyCountries("us","cn")))
+``
+
+##### Config Example
+The best solution is to load rules from config file automatically instead of hard code.
+
+> config file
+```ini
+[allow_hosts]
+abc.com
+www.abc.com
+[allow_ipnets]
+89.207.132.170/24
+::1
+127.0.0.1
+[deny_ipnets]
+*
+[allow_countries]
+
+[deny_countries]
+us
+
+[host_redirect]
+url=http://yaitoo.cn
+status_code=302
+
+```
+
+> use middleware with config
+```go
+app.Use(acl.New(acl.WithConfig("./acl.ini")))
+```
 
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
 #### Install Tailwind CSS
