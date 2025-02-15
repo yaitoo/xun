@@ -695,8 +695,8 @@ func main(){
 ```
 
 
-#### Access Control List(ACL)
-The list filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
+#### Access Control List
+The ACL filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
 
 ##### Core Filtering Dimensions
 - Host-Based Filtering (AllowHosts)
@@ -704,7 +704,7 @@ The list filters and monitors HTTP traffic through granular rule sets, designed 
     Restrict access to explicitly permitted domains/subdomains
 - IP Range Control (AllowIPNets/DenyIPNets)
 
-    Allow/block traffic from specific IP addresses or CIDR-notated subnets
+    Allow/block traffic from specific IP addresses or CIDR-notated subnets. IPv4/IPv6 are both supported.
 - Geolocation Filtering (AllowCountries/DenyCountries)
 
     Permit/restrict access based on client geolocation
