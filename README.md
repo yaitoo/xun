@@ -711,8 +711,8 @@ The ACL filters and monitors HTTP traffic through granular rule sets, designed t
 
 ##### Enforcement Actions
 - Block unauthorized requests with 403 Forbidden status
-
 - Host Redirection (Conditional):
+  
     When AllowHosts validation fails:
     - Redirect to HostRedirectURL
     - Use customizable HTTP status HostRedirectStatusCode (e.g., 307 Temporary Redirect)
