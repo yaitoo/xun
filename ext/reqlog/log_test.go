@@ -87,11 +87,11 @@ func TestLogging(t *testing.T) {
 
 		l := buf.String()
 
-		require.True(t, strings.HasPrefix(l, `abc.com: 192.0.2.1 "combined-vid" "combined-uid" [`))
+		require.True(t, strings.HasPrefix(l, `abc.com:80 192.0.2.1 "combined-vid" "combined-uid" [`))
 		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
 	})
 
-	t.Run("vcombined_with_port", func(t *testing.T) {
+	t.Run("vcombined_custom_port", func(t *testing.T) {
 		buf := bytes.Buffer{}
 
 		logger := log.New(&buf, "", 0)
@@ -120,6 +120,71 @@ func TestLogging(t *testing.T) {
 		l := buf.String()
 
 		require.True(t, strings.HasPrefix(l, `abc.com:8080 192.0.2.1 "combined-vid" "combined-uid" [`))
+		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
+	})
+
+	t.Run("vcombined_https_port", func(t *testing.T) {
+		buf := bytes.Buffer{}
+
+		logger := log.New(&buf, "", 0)
+		m := New(WithLogger(logger),
+			WithUser(getUser),
+			WithVisitor(getVisitor),
+			WithFormat(VCombined))
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = "abc.com"
+		req.Header.Set("Host", "abc.com")
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Visitor-Id", "combined-vid")
+		req.Header.Set("X-User-Id", "combined-uid")
+		req.Header.Set("User-Agent", "combined-agent")
+		req.Header.Set("Referer", "combined-referer")
+
+		ctx := &xun.Context{
+			Request:  req,
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
+		}
+
+		err := m(nop)(ctx)
+
+		require.NoError(t, err)
+
+		l := buf.String()
+
+		require.True(t, strings.HasPrefix(l, `abc.com:443 192.0.2.1 "combined-vid" "combined-uid" [`))
+		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
+	})
+
+	t.Run("vcombined_empty_host", func(t *testing.T) {
+		buf := bytes.Buffer{}
+
+		logger := log.New(&buf, "", 0)
+		m := New(WithLogger(logger),
+			WithUser(getUser),
+			WithVisitor(getVisitor),
+			WithFormat(VCombined))
+
+		req := httptest.NewRequest(http.MethodGet, "http://123.com/", nil)
+		req.Host = ""
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Visitor-Id", "combined-vid")
+		req.Header.Set("X-User-Id", "combined-uid")
+		req.Header.Set("User-Agent", "combined-agent")
+		req.Header.Set("Referer", "combined-referer")
+
+		ctx := &xun.Context{
+			Request:  req,
+			Response: xun.NewResponseWriter(httptest.NewRecorder()),
+		}
+
+		err := m(nop)(ctx)
+
+		require.NoError(t, err)
+
+		l := buf.String()
+
+		require.True(t, strings.HasPrefix(l, `123.com:443 192.0.2.1 "combined-vid" "combined-uid" [`))
 		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
 	})
 
