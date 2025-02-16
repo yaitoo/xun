@@ -743,7 +743,7 @@ func lookup(ip string)string {
 }
 
 app.Use(acl.New(acl.WithLookupFunc(lookup),
-	acl.AllowCountries("CN"),acl.DenyCountries("*)))
+	acl.AllowCountries("CN"),acl.DenyCountries("*")))
 ```
 
 > Blacklist Mode by IPNets
@@ -785,6 +785,51 @@ status_code=302
 ```go
 app.Use(acl.New(acl.WithConfig("./acl.ini")))
 ```
+
+### Deploy your application
+Leveraging Go's built-in `//go:embed` directive and the standard library's `fs.FS` interface, we can compile all static assets and configuration files into a single self-contained binary. This dependency-free approach enables seamless deployment to any server environment while maintaining full portability and simplified operational management.
+
+```go
+
+//go:embed app
+var fsys embed.FS
+
+func main() {
+	var dev bool
+	flag.BoolVar(&dev, "dev", false, "it is development environment")
+
+	flag.Parse()
+
+	var opts []xun.Option
+	if dev {
+		// use local filesystem in development, and watch files to reload automatically
+		opts = []xun.Option{xun.WithFsys(os.DirFS("./app")), xun.WithWatch()}
+	} else {
+		// use embed resources in production environment
+		views, _ := fs.Sub(fsys, "app")
+		opts = []xun.Option{xun.WithFsys(views)}
+	}
+
+	app := xun.New(opts...)
+	//...
+
+	app.Start()
+	defer app.Close()
+
+	if dev {
+		slog.Default().Info("xun-admin is running in development")
+	} else {
+		slog.Default().Info("xun-admin is running in production")
+	}
+
+	err := http.ListenAndServe(":80", http.DefaultServeMux)
+	if err != nil {
+		panic(err)
+	}
+}
+```
+
+
 
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
 #### Install Tailwind CSS
@@ -954,7 +999,7 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 
 
 ```go
-admin := app.Group("/admin")
+	admin := app.Group("/admin")
 
 	admin.Use(func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
@@ -1007,7 +1052,7 @@ admin := app.Group("/admin")
 			SameSite: http.SameSiteLaxMode,
 		}
 
-		http.SetCookie(c.Writer(), &cookie)
+		http.SetCookie(c.Response, &cookie)
 
 		c.Redirect(c.RequestReferer().Query().Get("return"))
 		return nil

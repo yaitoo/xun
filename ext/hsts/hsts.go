@@ -43,8 +43,7 @@ func WriteHeader(opts ...Option) xun.Middleware {
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
 			r := c.Request
-
-			if r.TLS != nil && (r.Method == "GET" || r.Method == "HEAD") {
+			if (r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https") && (r.Method == "GET" || r.Method == "HEAD") {
 				v := "max-age=" + strconv.FormatInt(cfg.MaxAge, 10)
 				if cfg.IncludeSubDomains {
 					v += "; includeSubDomains"

@@ -3,6 +3,7 @@ package reqlog
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -38,8 +39,16 @@ func VCombined(c *xun.Context, options *Options, starts time.Time) {
 	remoteAddr, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
 	host := c.Request.Host
 
+	if host == "" {
+		host = c.Request.URL.Host
+	}
+
 	if !strings.Contains(host, ":") {
-		host += ":"
+		if IsHTTPs(c.Request) {
+			host += ":" + "443"
+		} else {
+			host += ":" + "80"
+		}
 	}
 
 	//VCombined: host、remote、visitor、user、datetime、request line、status、body_bytes_sent、referer、user-agent
@@ -72,6 +81,10 @@ func Common(c *xun.Context, options *Options, starts time.Time) {
 		c.Response.StatusCode(),
 		c.Response.BodyBytesSent(),
 	)
+}
+
+func IsHTTPs(r *http.Request) bool {
+	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 func Escape(s string) string {
