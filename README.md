@@ -787,7 +787,7 @@ app.Use(acl.New(acl.WithConfig("./acl.ini")))
 ```
 
 ### Deploy your application
-Leveraging Go's built-in `//go:embed` directive and the standard library's `fs.FS` interface, we can compile all static assets and configuration files into a single self-contained binary. This dependency-free approach enables seamless deployment to any server environment while maintaining full portability and simplified operational management.
+Leveraging Go's built-in `//go:embed` directive and the standard library's `fs.FS` interface, we can compile all static assets and configuration files into a single self-contained binary. This dependency-free approach enables seamless deployment to any server environment.
 
 ```go
 

@@ -87,7 +87,7 @@ func TestLogging(t *testing.T) {
 
 		l := buf.String()
 
-		require.True(t, strings.HasPrefix(l, `abc.com: 192.0.2.1 "combined-vid" "combined-uid" [`))
+		require.True(t, strings.HasPrefix(l, `abc.com:80 192.0.2.1 "combined-vid" "combined-uid" [`))
 		require.True(t, strings.HasSuffix(l, "] \"GET / HTTP/1.1\" 200 0 \"combined-referer\" \"combined-agent\"\n"))
 	})
 
