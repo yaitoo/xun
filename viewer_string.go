@@ -23,15 +23,15 @@ func (*StringViewer) MimeType() *MimeType {
 // Render renders the given data as string to the http.ResponseWriter.
 //
 // It sets the Content-Type header to "text/plain; charset=utf-8".
-func (*StringViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
+func (*StringViewer) Render(ctx *Context, data any) error { // skipcq: RVV-B0012
 	var err error
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	ctx.Response.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if data == nil {
 		return nil
 	}
 
-	if r.Method != http.MethodHead {
-		_, err = fmt.Fprint(w, data)
+	if ctx.Request.Method != http.MethodHead {
+		_, err = fmt.Fprint(ctx.Response, data)
 	}
 
 	return err

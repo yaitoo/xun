@@ -25,8 +25,13 @@ func TestFileViewer(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 
+		ctx := &Context{
+			Request:  r,
+			Response: NewResponseWriter(w),
+		}
+
 		require.Equal(t, "*/*", v.MimeType().String())
-		err := v.Render(w, r, nil)
+		err := v.Render(ctx, nil)
 
 		require.NoError(t, err)
 		etag := w.Header().Get("ETag")
@@ -39,7 +44,12 @@ func TestFileViewer(t *testing.T) {
 
 		w = httptest.NewRecorder()
 
-		err = v.Render(w, r, nil)
+		ctx = &Context{
+			Request:  r,
+			Response: NewResponseWriter(w),
+		}
+
+		err = v.Render(ctx, nil)
 		require.NoError(t, err)
 
 		require.NotEmpty(t, etag)
@@ -50,8 +60,12 @@ func TestFileViewer(t *testing.T) {
 		v := NewFileViewer(fsys, "public/index.html", false)
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
+		ctx := &Context{
+			Request:  r,
+			Response: NewResponseWriter(w),
+		}
 
-		err := v.Render(w, r, nil)
+		err := v.Render(ctx, nil)
 
 		require.NoError(t, err)
 		lastModified := w.Header().Get("Last-Modified")
@@ -66,7 +80,12 @@ func TestFileViewer(t *testing.T) {
 
 		w = httptest.NewRecorder()
 
-		err = v.Render(w, r, nil)
+		ctx = &Context{
+			Request:  r,
+			Response: NewResponseWriter(w),
+		}
+
+		err = v.Render(ctx, nil)
 		require.NoError(t, err)
 
 		lastModified = w.Header().Get("Last-Modified")
@@ -80,7 +99,12 @@ func TestFileViewer(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 
-		err := v.Render(w, r, nil)
+		ctx := &Context{
+			Request:  r,
+			Response: NewResponseWriter(w),
+		}
+
+		err := v.Render(ctx, nil)
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusNotFound, w.Code)
@@ -89,7 +113,12 @@ func TestFileViewer(t *testing.T) {
 		r = httptest.NewRequest(http.MethodGet, "/", nil)
 		w = httptest.NewRecorder()
 
-		err = v.Render(w, r, nil)
+		ctx = &Context{
+			Request:  r,
+			Response: NewResponseWriter(w),
+		}
+
+		err = v.Render(ctx, nil)
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusNotFound, w.Code)
@@ -117,7 +146,12 @@ func TestFileViewer(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 
-		err := v.Render(w, r, nil)
+		ctx := &Context{
+			Request:  r,
+			Response: NewResponseWriter(w),
+		}
+
+		err := v.Render(ctx, nil)
 
 		require.ErrorIs(t, err, errCannotStat)
 	})

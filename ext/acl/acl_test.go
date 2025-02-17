@@ -265,7 +265,7 @@ func TestCountries(t *testing.T) {
 		w := httptest.NewRecorder()
 		ctx = createContext(w)
 
-		text, err := template.New("403").Parse("{{ .Host }}-{{ .IP }}-{{.Country}}")
+		text, err := template.New("403").Parse("{{ .Data.Host }}-{{ .Data.IP }}-{{.Data.Country}}")
 		require.NoError(t, err)
 		v := xun.NewTextViewer(xun.NewTextTemplate(text))
 

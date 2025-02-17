@@ -70,21 +70,21 @@ func (*FileViewer) MimeType() *MimeType {
 
 // Render serves a file from the file system using the FileViewer.
 // It writes the file to the http.ResponseWriter.
-func (v *FileViewer) Render(w http.ResponseWriter, r *http.Request, data any) error {
+func (v *FileViewer) Render(ctx *Context, data any) error {
 	if !v.isEmbed {
-		return v.serveContent(w, r)
+		return v.serveContent(ctx.Response, ctx.Request)
 	}
-	if match := r.Header.Get("If-None-Match"); match != "" {
+	if match := ctx.Request.Header.Get("If-None-Match"); match != "" {
 		for _, it := range strings.Split(match, ",") {
 			if strings.TrimSpace(it) == v.etag {
-				w.WriteHeader(http.StatusNotModified)
+				ctx.Response.WriteHeader(http.StatusNotModified)
 				return nil
 			}
 		}
 	}
 
-	w.Header().Set("ETag", v.etag)
-	return v.serveContent(w, r)
+	ctx.Response.Header().Set("ETag", v.etag)
+	return v.serveContent(ctx.Response, ctx.Request)
 }
 
 func (v *FileViewer) serveContent(w http.ResponseWriter, r *http.Request) error {

@@ -14,7 +14,7 @@ import (
 func TestGroup(t *testing.T) {
 
 	fsys := &fstest.MapFS{
-		"pages/admin/index.html": &fstest.MapFile{Data: []byte(`{{.}}`)},
+		"pages/admin/index.html": &fstest.MapFile{Data: []byte(`{{.Data}}`)},
 	}
 
 	mux := http.NewServeMux()

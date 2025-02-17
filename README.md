@@ -3,12 +3,13 @@ Xun is an HTTP web framework built on Go's built-in html/template and net/http p
 
 Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signifies being lightweight and fast.
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Tests](https://github.com/yaitoo/xun/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/xun/actions/workflows/tests.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
 [![Codecov](https://codecov.io/gh/yaitoo/xun/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/xun)
-[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun)](https://github.com/yaitoo/xun/blob/main/CHANGELOG.md)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yaitoo/xun)](https://goreportcard.com/report/github.com/yaitoo/xun)
+[![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
+[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun)](https://github.com/yaitoo/xun/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-blue.svg)](https://github.com/yaitoo/xun/compare)
 
 ## Features
 - Works with Go's built-in `net/http.ServeMux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
@@ -218,7 +219,7 @@ Page Router only serve static content from html files. We have to define router 
 ```html
 <!--layout:home-->
 {{ define "content" }}
-    <div id="app">hello {{.Name}}</div>
+    <div id="app">hello {{.Data.Name}}</div>
 {{ end }}
 ```
 
@@ -264,7 +265,7 @@ For examples, below patterns will be generated automatically, and registered in 
 ```html
 <!--layout:home-->
 {{ define "content" }}
-    <div id="app">hello {{.Name}}</div>
+    <div id="app">hello {{.Data.Name}}</div>
 {{ end }}
 ```
 
@@ -922,9 +923,12 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 <!--layout:home-->
 {{ define "content" }}
     <div id="app" class="text-3xl font-bold underline" hx-boost="true">
-        <span>hello {{.Name}}</span>
 
-        <a href="/admin/">admin</a>
+			{{ if .TempData.Session }}
+				Hello {{ .TempData.Session }}, go <a href="/admin">Admin</>
+			{{ else }}
+        Hello guest, please <a href="/login">Login</a>	
+			{{ end }}    
     </div>
 
 {{ end }}
@@ -972,7 +976,9 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 ```html
 <!--layout:home-->
 {{ define "content" }}
-    <div id="app" class="text-3xl font-bold underline">Hello admin: {{.Name}}</div>
+    <div id="app" class="text-3xl font-bold underline">
+				Hello admin: {{ .Data.Name }}
+			</div>
 {{ end }}
 ```
 
@@ -1009,7 +1015,9 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 				return xun.ErrCancelled
 			}
 
-			c.Set("session", s.Value)
+			// set session in Context.TempData, 
+			// and get it by `.TempData.Session on text/html template files
+			c.Set("Session", s.Value)
 			return next(c)
 		}
 	})
