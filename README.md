@@ -923,9 +923,12 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 <!--layout:home-->
 {{ define "content" }}
     <div id="app" class="text-3xl font-bold underline" hx-boost="true">
-        <span>hello {{.Data.Name}}</span>
 
-        <a href="/admin/">admin</a>
+			{{ if .Context.Values.session }}
+				Hello {{ .Context.Values.session }}, go <a href="/admin">Admin</>
+			{{ else }}
+        Hello guest, please <a href="/login">Login</a>	
+			{{ end }}    
     </div>
 
 {{ end }}
@@ -974,11 +977,7 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 <!--layout:home-->
 {{ define "content" }}
     <div id="app" class="text-3xl font-bold underline">
-			{{ if .Context.Values.session }}
 				Hello admin: {{ .Data.Name }}
-			{{ else }}
-        Hello guest
-			{{ end }}
 			</div>
 {{ end }}
 ```
