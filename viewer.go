@@ -18,8 +18,8 @@ type Viewer interface {
 	Render(ctx *Context, data any) error
 }
 
-// ContextData holds the context and associated data for rendering.
-type ContextData struct {
-	Context *Context
-	Data    any
+// ViewModel holds the context and associated data for rendering.
+type ViewModel struct {
+	TempData map[string]any
+	Data     any
 }

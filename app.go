@@ -225,6 +225,7 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 			Response: rw,
 			Routing:  *r,
 			App:      app,
+			TempData: make(map[string]any),
 		}
 
 		err := r.Next(ctx)
@@ -283,6 +284,7 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 			Response: rw,
 			Routing:  *r,
 			App:      app,
+			TempData: make(map[string]any),
 		}
 
 		err := r.Next(ctx)
@@ -381,6 +383,7 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 			Response: rw,
 			Routing:  *r,
 			App:      app,
+			TempData: make(map[string]any),
 		}
 
 		err := r.Next(ctx)

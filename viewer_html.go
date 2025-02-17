@@ -34,7 +34,7 @@ func (v *HtmlViewer) Render(ctx *Context, data any) error { // skipcq: RVV-B0012
 		buf := BufPool.Get()
 		defer BufPool.Put(buf)
 
-		err = v.template.Execute(buf, ContextData{Context: ctx, Data: data})
+		err = v.template.Execute(buf, ViewModel{TempData: ctx.TempData, Data: data})
 		if err != nil {
 			return err
 		}

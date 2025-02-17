@@ -924,8 +924,8 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 {{ define "content" }}
     <div id="app" class="text-3xl font-bold underline" hx-boost="true">
 
-			{{ if .Context.Values.session }}
-				Hello {{ .Context.Values.session }}, go <a href="/admin">Admin</>
+			{{ if .TempData.Session }}
+				Hello {{ .TempData.Session }}, go <a href="/admin">Admin</>
 			{{ else }}
         Hello guest, please <a href="/login">Login</a>	
 			{{ end }}    
@@ -1015,9 +1015,9 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 				return xun.ErrCancelled
 			}
 
-			// set session in Context.Values, 
-			// and get it by `.Context.Values.session on text/html template files
-			c.Set("session", s.Value)
+			// set session in Context.TempData, 
+			// and get it by `.TempData.Session on text/html template files
+			c.Set("Session", s.Value)
 			return next(c)
 		}
 	})

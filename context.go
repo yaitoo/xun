@@ -20,7 +20,7 @@ type Context struct {
 	Response ResponseWriter
 	Request  *http.Request
 
-	Values map[string]any
+	TempData map[string]any
 }
 
 // WriteStatus sets the HTTP status code for the response.
@@ -183,18 +183,18 @@ func (c *Context) RequestReferer() string {
 // Get retrieves a value from the context's values map by key.
 // If the values map is nil or the key does not exist, it returns nil.
 func (c *Context) Get(key string) any {
-	if c.Values == nil {
+	if c.TempData == nil {
 		return nil
 	}
 
-	return c.Values[key]
+	return c.TempData[key]
 }
 
 // Set assigns a value to the specified key in the context's values map.
 // If the values map is nil, it initializes a new map.
 func (c *Context) Set(key string, value any) {
-	if c.Values == nil {
-		c.Values = make(map[string]any)
+	if c.TempData == nil {
+		c.TempData = make(map[string]any)
 	}
-	c.Values[key] = value
+	c.TempData[key] = value
 }
