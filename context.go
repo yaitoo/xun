@@ -11,6 +11,8 @@ var (
 	json = jsoniter.Config{UseNumber: false}.Froze()
 )
 
+type TempData map[string]any
+
 // Context is the primary structure for handling HTTP requests.
 // It encapsulates the request, response, routing information, and application context.
 // It offers various methods to work with request data, manipulate responses, and manage routing.
@@ -20,7 +22,7 @@ type Context struct {
 	Response ResponseWriter
 	Request  *http.Request
 
-	TempData map[string]any
+	TempData TempData
 }
 
 // WriteStatus sets the HTTP status code for the response.
@@ -180,21 +182,12 @@ func (c *Context) RequestReferer() string {
 	return v
 }
 
-// Get retrieves a value from the context's values map by key.
-// If the values map is nil or the key does not exist, it returns nil.
+// Get retrieves a value from the context's TempData by key.
 func (c *Context) Get(key string) any {
-	if c.TempData == nil {
-		return nil
-	}
-
 	return c.TempData[key]
 }
 
-// Set assigns a value to the specified key in the context's values map.
-// If the values map is nil, it initializes a new map.
+// Set assigns a value to the specified key in the context's TempData.
 func (c *Context) Set(key string, value any) {
-	if c.TempData == nil {
-		c.TempData = make(map[string]any)
-	}
 	c.TempData[key] = value
 }

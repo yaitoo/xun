@@ -42,7 +42,7 @@ func TestContextRequestReferer(t *testing.T) {
 	}
 }
 
-func TestContextVars(t *testing.T) {
+func TestTempData(t *testing.T) {
 
 	srv := httptest.NewServer(http.DefaultServeMux)
 	defer srv.Close()
