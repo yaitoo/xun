@@ -4,11 +4,14 @@ Xun is an HTTP web framework built on Go's built-in html/template and net/http p
 Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signifies being lightweight and fast.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+|
 [![Tests](https://github.com/yaitoo/xun/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/xun/actions/workflows/tests.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
 [![Codecov](https://codecov.io/gh/yaitoo/xun/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/xun)
-[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun?logo=go)](https://github.com/yaitoo/xun/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yaitoo/xun)](https://goreportcard.com/report/github.com/yaitoo/xun)
+|
+[![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
+[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun?logo=go)](https://github.com/yaitoo/xun/releases)
+|
 [![Issues welcome](https://img.shields.io/badge/Issues-welcome-blue.svg)](https://github.com/yaitoo/xun/issues/new)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-blue.svg)](https://github.com/yaitoo/xun/compare)
 
