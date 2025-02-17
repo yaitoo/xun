@@ -617,12 +617,12 @@ func TestDataBindOnHtml(t *testing.T) {
 <tbody>
 <tr><th>Name</th><th>ID</th></tr>
 </tbody>
-{{range .}}<tr><td>{{.Name}}</td><td>{{.ID}}</td></tr>{{end}}
+{{range .Data}}<tr><td>{{.Name}}</td><td>{{.ID}}</td></tr>{{end}}
 </tbody>
 </table>
 </body></html>`)},
 		"pages/user/{id}.html": {Data: []byte(`<html><body>
-<div>{{ ToUpper .Name}}: {{.ID}}</div>
+<div>{{ ToUpper .Data.Name}}: {{.Data.ID}}</div>
 </body></html>`)},
 	}
 

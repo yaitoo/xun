@@ -17,3 +17,9 @@ type Viewer interface {
 	MimeType() *MimeType
 	Render(ctx *Context, data any) error
 }
+
+// ContextData holds the context and associated data for rendering.
+type ContextData struct {
+	Context *Context
+	Data    any
+}

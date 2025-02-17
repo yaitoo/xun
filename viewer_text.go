@@ -28,7 +28,7 @@ func (v *TextViewer) Render(ctx *Context, data any) error { // skipcq: RVV-B0012
 		buf := BufPool.Get()
 		defer BufPool.Put(buf)
 
-		err = v.template.Execute(buf, data)
+		err = v.template.Execute(buf, ContextData{Context: ctx, Data: data})
 		if err != nil {
 			return err
 		}

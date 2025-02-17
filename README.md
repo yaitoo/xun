@@ -220,7 +220,7 @@ Page Router only serve static content from html files. We have to define router 
 ```html
 <!--layout:home-->
 {{ define "content" }}
-    <div id="app">hello {{.Name}}</div>
+    <div id="app">hello {{.Data.Name}}</div>
 {{ end }}
 ```
 
@@ -266,7 +266,7 @@ For examples, below patterns will be generated automatically, and registered in 
 ```html
 <!--layout:home-->
 {{ define "content" }}
-    <div id="app">hello {{.Name}}</div>
+    <div id="app">hello {{.Data.Name}}</div>
 {{ end }}
 ```
 
@@ -924,7 +924,7 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 <!--layout:home-->
 {{ define "content" }}
     <div id="app" class="text-3xl font-bold underline" hx-boost="true">
-        <span>hello {{.Name}}</span>
+        <span>hello {{.Data.Name}}</span>
 
         <a href="/admin/">admin</a>
     </div>
@@ -974,7 +974,13 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 ```html
 <!--layout:home-->
 {{ define "content" }}
-    <div id="app" class="text-3xl font-bold underline">Hello admin: {{.Name}}</div>
+    <div id="app" class="text-3xl font-bold underline">
+			{{ if .Context.Values.session }}
+				Hello admin: {{ .Data.Name }}
+			{{ else }}
+        Hello guest
+			{{ end }}
+			</div>
 {{ end }}
 ```
 
@@ -1011,6 +1017,8 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 				return xun.ErrCancelled
 			}
 
+			// set session in Context.Values, 
+			// and get it by `.Context.Values.session on text/html template files
 			c.Set("session", s.Value)
 			return next(c)
 		}
