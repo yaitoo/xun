@@ -202,7 +202,7 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 	app.viewers[name] = v
 
 	hf := func(c *Context) error {
-		return v.Render(c.Response, c.Request, nil)
+		return v.Render(c, nil)
 	}
 
 	r = &Routing{
@@ -260,7 +260,7 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	app.viewers[viewName] = v
 
 	hf := func(c *Context) error {
-		return v.Render(c.Response, c.Request, nil)
+		return v.Render(c, nil)
 	}
 
 	r = &Routing{

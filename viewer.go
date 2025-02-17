@@ -1,9 +1,5 @@
 package xun
 
-import (
-	"net/http"
-)
-
 // BufPool is a pool of *bytes.Buffer for reuse to reduce memory alloc.
 //
 // It is used by the Viewer to render the content.
@@ -19,5 +15,5 @@ func init() {
 // an effective viewer.
 type Viewer interface {
 	MimeType() *MimeType
-	Render(w http.ResponseWriter, r *http.Request, data any) error
+	Render(ctx *Context, data any) error
 }

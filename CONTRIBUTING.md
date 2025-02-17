@@ -17,7 +17,7 @@ We use github to host code, to track issues and feature requests, as well as acc
 5. Make sure your code lints: `make lint`.
 6. Issue that pull request!
 
-### Any contributions you make will be under the MIT Software License
+### Any contributions you make will be under the Apache-2.0 license 
 In short, when you submit code changes, your submissions are understood to be under the same [Apache-2.0 license](LICENSE) that covers the project. Feel free to contact the maintainers if that's a concern.
 
 ### Report bugs using Github's [Issues](https://github.com/yaitoo/xun/issues)

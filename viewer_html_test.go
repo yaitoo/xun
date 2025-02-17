@@ -24,6 +24,14 @@ func TestInvalidHtmlTemplate(t *testing.T) {
 		},
 	}
 
-	err = v.Render(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil), Data{})
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	ctx := &Context{
+		Request:  r,
+		Response: NewResponseWriter(w),
+	}
+
+	err = v.Render(ctx, Data{})
 	require.NotNil(t, err)
 }

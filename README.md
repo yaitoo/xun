@@ -9,6 +9,8 @@ Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signif
 [![Codecov](https://codecov.io/gh/yaitoo/xun/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/xun)
 [![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun)](https://github.com/yaitoo/xun/blob/main/CHANGELOG.md)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yaitoo/xun)](https://goreportcard.com/report/github.com/yaitoo/xun)
+[![Issues welcome](https://img.shields.io/badge/Issues-welcome-brightgreen.svg)](https://github.com/yaitoo/xun/issues/new)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/yaitoo/xun/compare)
 
 ## Features
 - Works with Go's built-in `net/http.ServeMux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).

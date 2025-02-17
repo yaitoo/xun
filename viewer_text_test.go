@@ -22,6 +22,11 @@ func TestInvalidTextTemplate(t *testing.T) {
 		template: NewTextTemplate(l),
 	}
 
-	err = v.Render(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil), Data{})
+	ctx := &Context{
+		Request:  httptest.NewRequest(http.MethodGet, "/", nil),
+		Response: NewResponseWriter(httptest.NewRecorder()),
+	}
+
+	err = v.Render(ctx, Data{})
 	require.NotNil(t, err)
 }

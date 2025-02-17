@@ -23,10 +23,10 @@ func (*XmlViewer) MimeType() *MimeType {
 // Render renders the given data as xml to the http.ResponseWriter.
 //
 // It sets the Content-Type header to "text/xml; charset=utf-8".
-func (*XmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) error { // skipcq: RVV-B0012
+func (*XmlViewer) Render(ctx *Context, data any) error { // skipcq: RVV-B0012
 	var err error
-	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
-	if r.Method != http.MethodHead {
+	ctx.Response.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	if ctx.Request.Method != http.MethodHead {
 		buf := BufPool.Get()
 		defer BufPool.Put(buf)
 
@@ -34,7 +34,7 @@ func (*XmlViewer) Render(w http.ResponseWriter, r *http.Request, data any) error
 		if err != nil {
 			return err
 		}
-		_, err = buf.WriteTo(w)
+		_, err = buf.WriteTo(ctx.Response)
 	}
 
 	return err

@@ -20,7 +20,7 @@ type Context struct {
 	Response ResponseWriter
 	Request  *http.Request
 
-	values map[string]any
+	Values map[string]any
 }
 
 // WriteStatus sets the HTTP status code for the response.
@@ -83,7 +83,7 @@ func (c *Context) View(data any, options ...string) error {
 		}
 	}
 
-	return v.Render(c.Response, c.Request, data)
+	return v.Render(c, data)
 }
 
 // getViewer get viewer by name
@@ -183,18 +183,18 @@ func (c *Context) RequestReferer() string {
 // Get retrieves a value from the context's values map by key.
 // If the values map is nil or the key does not exist, it returns nil.
 func (c *Context) Get(key string) any {
-	if c.values == nil {
+	if c.Values == nil {
 		return nil
 	}
 
-	return c.values[key]
+	return c.Values[key]
 }
 
 // Set assigns a value to the specified key in the context's values map.
 // If the values map is nil, it initializes a new map.
 func (c *Context) Set(key string, value any) {
-	if c.values == nil {
-		c.values = make(map[string]any)
+	if c.Values == nil {
+		c.Values = make(map[string]any)
 	}
-	c.values[key] = value
+	c.Values[key] = value
 }
