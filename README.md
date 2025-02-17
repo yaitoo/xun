@@ -7,7 +7,7 @@ Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signif
 [![Tests](https://github.com/yaitoo/xun/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/xun/actions/workflows/tests.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
 [![Codecov](https://codecov.io/gh/yaitoo/xun/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/xun)
-[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun)](https://github.com/yaitoo/xun/blob/main/CHANGELOG.md)
+[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun?logo=go&color=green)](https://github.com/yaitoo/xun/releases)
 [![Go Report Card](https://goreportcard.com/badge/github.com/yaitoo/xun)](https://goreportcard.com/report/github.com/yaitoo/xun)
 [![Issues welcome](https://img.shields.io/badge/Issues-welcome-brightgreen.svg)](https://github.com/yaitoo/xun/issues/new)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/yaitoo/xun/compare)
