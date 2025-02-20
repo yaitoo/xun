@@ -79,7 +79,10 @@ func TestETag(t *testing.T) {
 		req.Header.Set("If-None-Match", `""`)
 		require.False(t, WriteIfNoneMatch(w, req))
 
-		req.Header.Set("If-None-Match", `"etag",`)
+		req.Header.Set("If-None-Match", `"etag "`)
+		require.False(t, WriteIfNoneMatch(w, req))
+
+		req.Header.Set("If-None-Match", `"etag`)
 		require.False(t, WriteIfNoneMatch(w, req))
 	})
 }

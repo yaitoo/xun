@@ -1,7 +1,7 @@
 package xun
 
 import (
-	"crypto/md5" // skipcq: GSC-G401, GO-S1023
+	"crypto/md5" // skipcq: GSC-G401, GSC-G501, GO-S1023
 	"encoding/hex"
 	"hash"
 	"io"
@@ -10,18 +10,16 @@ import (
 	"strings"
 )
 
-// ComputeEtag returns the ETag header value for the given reader content.
+// ComputeETag returns the ETag header value for the given reader content.
 //
-// The value is computed by taking the SHA256 of the content and encoding it
+// The value is computed by taking the md5 of the content and encoding it
 // as a hexadecimal string.
 func ComputeETag(r io.Reader) string {
-	return ComputeETagWith(r, md5.New()) // skipcq: GSC-G401, GO-S1023
+	return ComputeETagWith(r, md5.New()) // skipcq: GSC-G401, GSC-G501, GO-S1023
 }
 
-// ComputeEtag returns the ETag header value for the given reader content.
-//
-// The value is computed by taking the SHA256 of the content and encoding it
-// as a hexadecimal string.
+// ComputeETagWith returns the ETag header value for the given reader content
+// using the provided hash function.
 func ComputeETagWith(r io.Reader, h hash.Hash) string {
 	if _, err := io.Copy(h, r); err != nil {
 		return ""
