@@ -6,16 +6,26 @@ window.xun = window.xun || {
    * the DOM is fully loaded or when an `htmx:load` event occurs.
    * 
    * @function ready
-   * @param {Function} fn - The callback function to be executed.
+   * @param {Function} callback - The callback function to be executed.
+   * @param {String} selector - The selector to be used to check if the callback should be executed.
    */
-    ready:function(fn){
+    ready:function(callback,selector){
+      const f = function(evt){
+       if(selector){
+        if(document.querySelector(selector)){
+          callback(evt);
+        }
+       }else{
+        callback(evt);
+       }
+      }
       let boosted = false;
-      document.addEventListener('DOMContentLoaded',function(){
-        fn();
+      document.addEventListener('DOMContentLoaded',function(evt){
+        f(evt);
       });
       document.addEventListener('htmx:load', function(evt) {
         if(boosted){
-          fn(evt);
+          f(evt);
           boosted = false;  
         }
       });  
