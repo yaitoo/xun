@@ -7,7 +7,7 @@ window.xun = window.xun || {
    * 
    * @function ready
    * @param {Function} callback - The callback function to be executed.
-   * @param {String} selector - The selector to be used to check if the callback should be triggered.
+   * @param {String} selector - The selector to be used to check if the callback should be executed.
    */
     ready:function(callback,selector){
       const f = function(evt){
