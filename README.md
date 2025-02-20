@@ -907,8 +907,8 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 │   ├── tailwind.css
 ```
 
-#### 2. Serve htmx-ext.js to seamlessly integrate htmx.js into your Go web application.
-check more [apis](./ext/htmx/htmx.js)
+#### 2. Serve [htmx-ext.js](./ext/htmx/htmx.js) to seamlessly integrate htmx.js into your Go web application.
+
 ```go
 	app.Get("/htmx-ext.js", htmx.HandleFunc())
 ```
@@ -1069,7 +1069,9 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 
 		http.SetCookie(c.Response, &cookie)
 
-		c.Redirect(c.RequestReferer().Query().Get("return"))
+    u, _ := url.Parse(c.RequestReferer())
+
+		c.Redirect(u.Query().Get("return"))
 		return nil
 	})
 ```
