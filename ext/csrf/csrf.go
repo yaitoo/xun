@@ -5,11 +5,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"embed"
-	"encoding/base64"
 	"html/template"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/yaitoo/xun"
@@ -70,6 +68,26 @@ func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 		opt(o)
 	}
 
+	buf := loadJavaScript(o)
+
+	mac := hmac.New(sha256.New, o.SecretKey)
+	etag := xun.ComputeETagWith(bytes.NewReader(buf), mac)
+
+	return func(c *xun.Context) error {
+		c.Response.Header().Set("ETag", etag)
+		if xun.WriteIfNoneMatch(c.Response, c.Request) {
+			return nil
+		}
+
+		content := bytes.NewReader(buf)
+		c.Response.Header().Set("Content-Type", "application/javascript")
+		http.ServeContent(c.Response, c.Request, "csrf.js", zeroTime, content)
+
+		return nil
+	}
+}
+
+func loadJavaScript(o *Options) []byte {
 	f, _ := fsys.Open("csrf.js") // nolint: errcheck
 	defer f.Close()
 
@@ -77,29 +95,8 @@ func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 
 	t, _ := template.New("token").Parse(string(buf)) // nolint: errcheck
 
-	var processed bytes.Buffer
-	t.Execute(&processed, o) // nolint: errcheck
+	var body bytes.Buffer
+	t.Execute(&body, o) // nolint: errcheck
 
-	mac := hmac.New(sha256.New, o.SecretKey)
-	mac.Write(processed.Bytes())
-
-	etag := base64.URLEncoding.EncodeToString(mac.Sum(nil))
-
-	return func(c *xun.Context) error {
-		if match := c.Request.Header.Get("If-None-Match"); match != "" {
-			for _, it := range strings.Split(match, ",") {
-				if strings.TrimSpace(it) == etag {
-					c.Response.WriteHeader(http.StatusNotModified)
-					return nil
-				}
-			}
-		}
-
-		c.Response.Header().Set("ETag", etag)
-
-		content := bytes.NewReader(processed.Bytes())
-		c.Response.Header().Set("Content-Type", "application/javascript")
-		http.ServeContent(c.Response, c.Request, "csrf.js", zeroTime, content)
-		return nil
-	}
+	return body.Bytes()
 }

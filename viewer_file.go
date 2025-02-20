@@ -1,12 +1,9 @@
 package xun
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"io"
 	"io/fs"
 	"net/http"
-	"strings"
 )
 
 // NewFileViewer creates a new FileViewer instance.
@@ -23,12 +20,8 @@ func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
 		}
 		defer f.Close()
 
-		hash := sha256.New() // skipcq: GSC-G401, GO-S1023
-		if _, err := io.Copy(hash, f); err != nil {
-			return v
-		}
 		v.isEmbed = true
-		v.etag = `"` + hex.EncodeToString(hash.Sum(nil)) + `"`
+		v.etag = ComputeETag(f)
 	}
 
 	return v
@@ -74,16 +67,12 @@ func (v *FileViewer) Render(ctx *Context, data any) error {
 	if !v.isEmbed {
 		return v.serveContent(ctx.Response, ctx.Request)
 	}
-	if match := ctx.Request.Header.Get("If-None-Match"); match != "" {
-		for _, it := range strings.Split(match, ",") {
-			if strings.TrimSpace(it) == v.etag {
-				ctx.Response.WriteHeader(http.StatusNotModified)
-				return nil
-			}
-		}
-	}
 
 	ctx.Response.Header().Set("ETag", v.etag)
+	if WriteIfNoneMatch(ctx.Response, ctx.Request) {
+		return nil
+	}
+
 	return v.serveContent(ctx.Response, ctx.Request)
 }
 

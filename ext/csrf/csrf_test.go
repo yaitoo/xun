@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/base64"
 	"html/template"
 	"io"
 	"net/http"
@@ -166,17 +165,14 @@ func TestHandleFunc(t *testing.T) {
 
 		p, _ := template.New("token").Parse(string(buf)) // nolint: errcheck
 
-		var processed bytes.Buffer
+		var body bytes.Buffer
 		// nolint: errcheck
-		p.Execute(&processed, &Options{
+		p.Execute(&body, &Options{
 			SecretKey:  []byte("secret"),
 			CookieName: "test_token",
 		})
 
-		mac := hmac.New(sha256.New, []byte("secret"))
-		mac.Write(processed.Bytes())
-
-		etag := base64.URLEncoding.EncodeToString(mac.Sum(nil))
+		etag := xun.ComputeETagWith(&body, hmac.New(sha256.New, []byte("secret")))
 
 		w := httptest.NewRecorder()
 		ctx := &xun.Context{

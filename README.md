@@ -833,13 +833,13 @@ func main() {
 
 
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
-#### Install Tailwind CSS
+#### 1. Install Tailwind CSS
 Install tailwindcss via npm, and create your tailwind.config.js file.
 ```bash
 npm install -D tailwindcss
 npx tailwindcss init
 ```
-#### Configure your template paths
+#### 2. Configure your template paths
 Add the paths to all of your template files in your tailwind.config.js file.
 
 > tailwind.config.js
@@ -854,7 +854,7 @@ module.exports = {
 }
 ```
 
-#### Add the Tailwind directives to your CSS
+#### 3. Add the Tailwind directives to your CSS
 Add the @tailwind directives for each of Tailwind’s layers to your main CSS file.
 > app/tailwind.css
 ```css
@@ -863,14 +863,14 @@ Add the @tailwind directives for each of Tailwind’s layers to your main CSS fi
 @tailwind utilities;
 ```
 
-#### Start the Tailwind CLI build process
+#### 4. Start the Tailwind CLI build process
 Run the CLI tool to scan your template files for classes and build your CSS.
 
 ```bash
 npx tailwindcss -i ./app/tailwind.css -o ./app/public/theme.css --watch
 ```
 
-#### Start using Tailwind in your HTML
+#### 5. Start using Tailwind in your HTML
 Add your compiled CSS file to the `assets.html` and start using Tailwind’s utility classes to style your content.
 
 > components/assets.html
@@ -881,7 +881,7 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 ```
 
 ### Works with [htmx.js](https://htmx.org/docs/)
-#### Add new pages
+#### 1. Add new pages
 > `pages/admin/index.html` and `pages/login.html`
 ```
 ├── app
@@ -907,17 +907,25 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 │   ├── tailwind.css
 ```
 
-#### Install htmx.js
+#### 2. Serve [htmx-ext.js](./ext/htmx/htmx.js) library
+The library to enable seamless integration between native JavaScript methods and htmx features, enhancing interactive capabilities without compromising core functionality.
+
+```go
+	app.Get("/htmx-ext.js", htmx.HandleFunc())
+```
+
+#### 3. Install htmx.js and htmx-ext.js
 
 > components/assets.html
 ```html
 <link rel="stylesheet" href="/skin.css">
 <link rel="stylesheet" href="/theme.css">
 <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-<script type="text/javascript" src="/app.js"></script>
+<script type="text/javascript" src="/htmx-ext.js"></script>
+<script type="text/javascript" src="/app.js" defer></script>
 ```
 
-#### Enabled `htmx` feature on pages
+#### 4. Enabled `htmx` feature on pages
 > pages/index.html
 ```html
 <!--layout:home-->
@@ -982,25 +990,25 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 {{ end }}
 ```
 
-#### Setup Hx-Trigger listener
+#### 5. Setup Hx-Trigger listener
 > app.js
 ```js
-window.addEventListener("DOMContentLoaded", (event) => {
-  document.body.addEventListener("showMessage", function(evt){
+xun.ready(function(evt) {
+	document.body.addEventListener("showMessage", function(evt){
     alert(evt.detail.value);
   })
 });
 
 ```
 
-#### Apply `htmx` interceptor 
+#### 6. Apply `htmx` interceptor 
 ```go
 
 	app := xun.New(xun.WithInterceptor(htmx.New()))
 
 ```
 
-#### Create router handler to process request
+#### 7. Create router handler to process request
 create an `admin` group router, and apply a middleware to check if it's logged. if not, redirect to /login.
 
 
@@ -1062,7 +1070,9 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 
 		http.SetCookie(c.Response, &cookie)
 
-		c.Redirect(c.RequestReferer().Query().Get("return"))
+    u, _ := url.Parse(c.RequestReferer())
+
+		c.Redirect(u.Query().Get("return"))
 		return nil
 	})
 ```
