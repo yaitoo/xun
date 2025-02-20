@@ -68,14 +68,14 @@ func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 		opt(o)
 	}
 
-	buf := loadJavascript(o)
+	buf := loadJavaScript(o)
 
 	mac := hmac.New(sha256.New, o.SecretKey)
-	etag := xun.ComputeEtagWith(bytes.NewReader(buf), mac)
+	etag := xun.ComputeETagWith(bytes.NewReader(buf), mac)
 
 	return func(c *xun.Context) error {
 		c.Response.Header().Set("ETag", etag)
-		if xun.WriteNotModifiedForTag(c.Response, c.Request) {
+		if xun.WriteIfNoneMatch(c.Response, c.Request) {
 			return nil
 		}
 
@@ -87,7 +87,7 @@ func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 	}
 }
 
-func loadJavascript(o *Options) []byte {
+func loadJavaScript(o *Options) []byte {
 	f, _ := fsys.Open("csrf.js") // nolint: errcheck
 	defer f.Close()
 

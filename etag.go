@@ -1,7 +1,7 @@
 package xun
 
 import (
-	"crypto/md5"
+	"crypto/md5" // skipcq: GSC-G401, GO-S1023
 	"encoding/hex"
 	"hash"
 	"io"
@@ -10,19 +10,19 @@ import (
 	"strings"
 )
 
-// ComputesEtag returns the ETag header value for the given reader content.
+// ComputeEtag returns the ETag header value for the given reader content.
 //
 // The value is computed by taking the SHA256 of the content and encoding it
 // as a hexadecimal string.
-func ComputeEtag(r io.Reader) string {
-	return ComputeEtagWith(r, md5.New())
+func ComputeETag(r io.Reader) string {
+	return ComputeETagWith(r, md5.New()) // skipcq: GSC-G401, GO-S1023
 }
 
-// ComputesEtag returns the ETag header value for the given reader content.
+// ComputeEtag returns the ETag header value for the given reader content.
 //
 // The value is computed by taking the SHA256 of the content and encoding it
 // as a hexadecimal string.
-func ComputeEtagWith(r io.Reader, h hash.Hash) string {
+func ComputeETagWith(r io.Reader, h hash.Hash) string {
 	if _, err := io.Copy(h, r); err != nil {
 		return ""
 	}
@@ -30,10 +30,10 @@ func ComputeEtagWith(r io.Reader, h hash.Hash) string {
 	return `"` + hex.EncodeToString(h.Sum(nil)) + `"`
 }
 
-func WriteNotModifiedForTag(w http.ResponseWriter, r *http.Request) bool {
+func WriteIfNoneMatch(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == "GET" || r.Method == "HEAD" {
-		if CheckIfNoneMatch(w, r) {
-			WriteNotModified(w)
+		if checkIfNoneMatch(w, r) {
+			writeNotModified(w)
 			return true
 		}
 	}
@@ -41,7 +41,7 @@ func WriteNotModifiedForTag(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-func CheckIfNoneMatch(w http.ResponseWriter, r *http.Request) bool {
+func checkIfNoneMatch(w http.ResponseWriter, r *http.Request) bool {
 	inm := r.Header.Get("If-None-Match")
 	if inm == "" {
 		return false
@@ -59,11 +59,11 @@ func CheckIfNoneMatch(w http.ResponseWriter, r *http.Request) bool {
 		if buf[0] == '*' {
 			return true
 		}
-		etag, remain := ScanETag(buf)
+		etag, remain := scanETag(buf)
 		if etag == "" {
 			break
 		}
-		if EtagWeakMatch(etag, w.Header().Get("Etag")) {
+		if etagWeakMatch(etag, w.Header().Get("Etag")) {
 			return true
 		}
 		buf = remain
@@ -74,7 +74,7 @@ func CheckIfNoneMatch(w http.ResponseWriter, r *http.Request) bool {
 // scanETag determines if a syntactically valid ETag is present at s. If so,
 // the ETag and remaining text after consuming ETag is returned. Otherwise,
 // it returns "", "".
-func ScanETag(s string) (etag string, remain string) {
+func scanETag(s string) (etag string, remain string) {
 	s = textproto.TrimString(s)
 	start := 0
 	if strings.HasPrefix(s, "W/") {
@@ -101,11 +101,11 @@ func ScanETag(s string) (etag string, remain string) {
 
 // etagWeakMatch reports whether a and b match using weak ETag comparison.
 // Assumes a and b are valid ETags.
-func EtagWeakMatch(a, b string) bool {
+func etagWeakMatch(a, b string) bool {
 	return strings.TrimPrefix(a, "W/") == strings.TrimPrefix(b, "W/")
 }
 
-func WriteNotModified(w http.ResponseWriter) {
+func writeNotModified(w http.ResponseWriter) {
 	// RFC 7232 section 4.1:
 	// a sender SHOULD NOT generate representation metadata other than the
 	// above listed fields unless said metadata exists for the purpose of

@@ -93,12 +93,12 @@ var zeroTime time.Time
 
 // HandleFunc serves the htmx.js library for the htmx extension.
 func HandleFunc() xun.HandleFunc {
-	buf := loadJavascript()
-	etag := xun.ComputeEtag(bytes.NewReader(buf))
+	buf := loadJavaScript()
+	etag := xun.ComputeETag(bytes.NewReader(buf))
 
 	return func(c *xun.Context) error {
 		c.Response.Header().Set("ETag", etag)
-		if xun.WriteNotModifiedForTag(c.Response, c.Request) {
+		if xun.WriteIfNoneMatch(c.Response, c.Request) {
 			return nil
 		}
 
@@ -109,7 +109,7 @@ func HandleFunc() xun.HandleFunc {
 	}
 }
 
-func loadJavascript() []byte {
+func loadJavaScript() []byte {
 	f, _ := fsys.Open("htmx.js") // nolint: errcheck
 	defer f.Close()
 

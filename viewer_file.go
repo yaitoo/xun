@@ -21,7 +21,7 @@ func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
 		defer f.Close()
 
 		v.isEmbed = true
-		v.etag = ComputeEtag(f)
+		v.etag = ComputeETag(f)
 	}
 
 	return v
@@ -69,7 +69,7 @@ func (v *FileViewer) Render(ctx *Context, data any) error {
 	}
 
 	ctx.Response.Header().Set("ETag", v.etag)
-	if WriteNotModifiedForTag(ctx.Response, ctx.Request) {
+	if WriteIfNoneMatch(ctx.Response, ctx.Request) {
 		return nil
 	}
 

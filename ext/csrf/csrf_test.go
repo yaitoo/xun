@@ -172,7 +172,7 @@ func TestHandleFunc(t *testing.T) {
 			CookieName: "test_token",
 		})
 
-		etag := xun.ComputeEtagWith(&body, hmac.New(sha256.New, []byte("secret")))
+		etag := xun.ComputeETagWith(&body, hmac.New(sha256.New, []byte("secret")))
 
 		w := httptest.NewRecorder()
 		ctx := &xun.Context{

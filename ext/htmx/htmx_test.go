@@ -102,7 +102,7 @@ func TestHandleFunc(t *testing.T) {
 		// nolint: errcheck
 		p.Execute(&body, nil)
 
-		etag := xun.ComputeEtag(&body)
+		etag := xun.ComputeETag(&body)
 
 		w := httptest.NewRecorder()
 		ctx := &xun.Context{
