@@ -907,7 +907,8 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 │   ├── tailwind.css
 ```
 
-#### 2. Serve [htmx-ext.js](./ext/htmx/htmx.js) to seamlessly integrate htmx.js into your Go web application.
+#### 2. Serve [htmx-ext.js](./ext/htmx/htmx.js) library
+The library to enable seamless integration between native JavaScript methods and htmx features, enhancing interactive capabilities without compromising core functionality.
 
 ```go
 	app.Get("/htmx-ext.js", htmx.HandleFunc())
