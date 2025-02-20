@@ -1,6 +1,9 @@
 package htmx
 
 import (
+	"bytes"
+	"html/template"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -66,5 +69,54 @@ func TestHtmxWriteHeader(t *testing.T) {
 	err = json.Unmarshal([]byte(value), &header)
 	require.NoError(t, err)
 	require.Equal(t, "message", header["name"])
+
+}
+
+func TestHandleFunc(t *testing.T) {
+
+	fn := HandleFunc()
+
+	t.Run("load", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		ctx := &xun.Context{
+			Request:  httptest.NewRequest("GET", "/htmx.js", nil),
+			Response: xun.NewResponseWriter(w),
+		}
+
+		err := fn(ctx)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Contains(t, w.Body.String(), `DOMContentLoaded`)
+	})
+
+	t.Run("etag", func(t *testing.T) {
+		f, _ := fsys.Open("htmx.js") // nolint: errcheck
+		defer f.Close()
+
+		buf, _ := io.ReadAll(f) // nolint: errcheck
+
+		p, _ := template.New("token").Parse(string(buf)) // nolint: errcheck
+
+		var body bytes.Buffer
+		// nolint: errcheck
+		p.Execute(&body, nil)
+
+		etag := xun.ComputeEtag(&body)
+
+		w := httptest.NewRecorder()
+		ctx := &xun.Context{
+			Request:  httptest.NewRequest("GET", "/htmx.js", nil),
+			Response: xun.NewResponseWriter(w),
+		}
+
+		ctx.Request.Header.Set("If-None-Match", etag)
+
+		err := fn(ctx)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusNotModified, w.Code)
+
+	})
 
 }
