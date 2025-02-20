@@ -907,14 +907,21 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 │   ├── tailwind.css
 ```
 
-#### Install htmx.js
+#### serve htmx-ext.js to seamlessly integrate htmx.js into your Go web application.
+check more [apis](./ext/htmx/htmx-ext.js)
+```go
+	app.Get("/htmx-ext.js", htmx.HandleFunc())
+```
+
+#### Install  htmx.js and htmx-ext.js
 
 > components/assets.html
 ```html
 <link rel="stylesheet" href="/skin.css">
 <link rel="stylesheet" href="/theme.css">
 <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-<script type="text/javascript" src="/app.js"></script>
+<script type="text/javascript" src="/htmx-ext.js"></script>
+<script type="text/javascript" src="/app.js" defer></script>
 ```
 
 #### Enabled `htmx` feature on pages
@@ -985,8 +992,8 @@ Add your compiled CSS file to the `assets.html` and start using Tailwind’s uti
 #### Setup Hx-Trigger listener
 > app.js
 ```js
-window.addEventListener("DOMContentLoaded", (event) => {
-  document.body.addEventListener("showMessage", function(evt){
+$x.ready(function(evt) {
+	document.body.addEventListener("showMessage", function(evt){
     alert(evt.detail.value);
   })
 });

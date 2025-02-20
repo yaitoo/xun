@@ -20,6 +20,7 @@ window.$x = window.$x || {
         }
       });  
       document.addEventListener('htmx:beforeOnLoad', function(evt) {
+        // trigger ready function again when a boosted request is done
         boosted = evt.detail.boosted;
       });
     }
