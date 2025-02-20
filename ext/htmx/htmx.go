@@ -1,6 +1,12 @@
 package htmx
 
 import (
+	"bytes"
+	"embed"
+	"io"
+	"net/http"
+	"time"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/yaitoo/xun"
 )
@@ -78,4 +84,36 @@ func WriteHeader(c *xun.Context, key string, value any) {
 
 	buf, _ := json.Marshal(value)
 	c.WriteHeader(key, string(buf))
+}
+
+//go:embed htmx.js
+var fsys embed.FS
+
+var zeroTime time.Time
+
+// HandleFunc serves the htmx.js library for the htmx extension.
+func HandleFunc() xun.HandleFunc {
+	buf := loadJavascript()
+	etag := xun.ComputeEtag(bytes.NewReader(buf))
+
+	return func(c *xun.Context) error {
+		c.Response.Header().Set("ETag", etag)
+		if xun.WriteNotModifiedForTag(c.Response, c.Request) {
+			return nil
+		}
+
+		content := bytes.NewReader(buf)
+		c.Response.Header().Set("Content-Type", "application/javascript")
+		http.ServeContent(c.Response, c.Request, "htmx.js", zeroTime, content)
+		return nil
+	}
+}
+
+func loadJavascript() []byte {
+	f, _ := fsys.Open("htmx.js") // nolint: errcheck
+	defer f.Close()
+
+	buf, _ := io.ReadAll(f) // nolint: errcheck
+
+	return buf
 }
