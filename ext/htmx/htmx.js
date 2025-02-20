@@ -1,4 +1,4 @@
-window.$x = window.$x || {
+window.xun = window.xun || {
   /**
    * A global object to manage custom events and callbacks.
    *

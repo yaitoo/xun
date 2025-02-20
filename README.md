@@ -993,7 +993,7 @@ The library to enable seamless integration between native JavaScript methods and
 #### 5. Setup Hx-Trigger listener
 > app.js
 ```js
-$x.ready(function(evt) {
+xun.ready(function(evt) {
 	document.body.addEventListener("showMessage", function(evt){
     alert(evt.detail.value);
   })
