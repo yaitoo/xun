@@ -33,26 +33,26 @@ type Encoder interface {
 type stdJsonEncoding struct {
 }
 
-func (e *stdJsonEncoding) Marshal(v interface{}) ([]byte, error) {
+func (*stdJsonEncoding) Marshal(v interface{}) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (e *stdJsonEncoding) MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
+func (*stdJsonEncoding) MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
 	return json.MarshalIndent(v, prefix, indent)
 }
 
-func (e *stdJsonEncoding) UnmarshalFromString(str string, v interface{}) error {
+func (*stdJsonEncoding) UnmarshalFromString(str string, v interface{}) error {
 	return json.Unmarshal([]byte(str), v)
 }
 
-func (e *stdJsonEncoding) Unmarshal(data []byte, v interface{}) error {
+func (*stdJsonEncoding) Unmarshal(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
-func (e *stdJsonEncoding) NewEncoder(writer io.Writer) Encoder {
+func (*stdJsonEncoding) NewEncoder(writer io.Writer) Encoder {
 	return json.NewEncoder(writer)
 }
 
-func (e *stdJsonEncoding) NewDecoder(reader io.Reader) Decoder {
+func (*stdJsonEncoding) NewDecoder(reader io.Reader) Decoder {
 	return json.NewDecoder(reader)
 }
