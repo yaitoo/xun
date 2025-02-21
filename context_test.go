@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -182,7 +183,7 @@ func TestMixedViewers(t *testing.T) {
 			Num  int    `json:"num"`
 		}{}
 
-		err = Json.Unmarshal(buf, data)
+		err = json.Unmarshal(buf, data)
 
 		require.NoError(t, err)
 

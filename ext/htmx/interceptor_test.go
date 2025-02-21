@@ -62,7 +62,7 @@ func TestHtmxInterceptor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	err = json.NewDecoder(resp.Body).Decode(&referer)
+	err = Json.NewDecoder(resp.Body).Decode(&referer)
 	require.NoError(t, err)
 
 	require.Equal(t, "/home", referer)
@@ -76,7 +76,7 @@ func TestHtmxInterceptor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	err = json.NewDecoder(resp.Body).Decode(&referer)
+	err = Json.NewDecoder(resp.Body).Decode(&referer)
 	require.NoError(t, err)
 
 	require.Equal(t, "/home", referer)
@@ -89,7 +89,7 @@ func TestHtmxInterceptor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	err = json.NewDecoder(resp.Body).Decode(&referer)
+	err = Json.NewDecoder(resp.Body).Decode(&referer)
 	require.NoError(t, err)
 
 	require.Empty(t, referer) // empty referer
@@ -103,7 +103,7 @@ func TestHtmxInterceptor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	err = json.NewDecoder(resp.Body).Decode(&referer)
+	err = Json.NewDecoder(resp.Body).Decode(&referer)
 	require.NoError(t, err)
 
 	require.Empty(t, referer)

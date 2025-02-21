@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"io"
 	"net/http"
@@ -93,7 +94,7 @@ func TestRoutingOption(t *testing.T) {
 	resp.Body.Close()
 
 	d1 := make(map[string]any)
-	err = Json.Unmarshal(buf, &d1)
+	err = json.Unmarshal(buf, &d1)
 	require.NoError(t, err)
 
 	require.Equal(t, "v1", d1["s1"])
@@ -112,7 +113,7 @@ func TestRoutingOption(t *testing.T) {
 	resp.Body.Close()
 
 	d2 := make(map[string]any)
-	err = Json.Unmarshal(buf, &d2)
+	err = json.Unmarshal(buf, &d2)
 	require.NoError(t, err)
 
 	require.Equal(t, "", d2["s1"])
@@ -131,7 +132,7 @@ func TestRoutingOption(t *testing.T) {
 	resp.Body.Close()
 
 	d3 := make(map[string]any)
-	err = Json.Unmarshal(buf, &d3)
+	err = json.Unmarshal(buf, &d3)
 	require.NoError(t, err)
 
 	require.Equal(t, "", d3["s1"])

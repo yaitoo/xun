@@ -2,6 +2,7 @@ package htmx
 
 import (
 	"bytes"
+	"encoding/json"
 	"html/template"
 	"io"
 	"net/http"

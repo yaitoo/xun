@@ -64,7 +64,7 @@ const (
 )
 
 var (
-	json = xun.Json
+	Json = xun.Json
 )
 
 // HxHeader represents a map of string keys to values of any type.
@@ -81,7 +81,7 @@ func WriteHeader(c *xun.Context, key string, value any) {
 		return
 	}
 
-	buf, _ := json.Marshal(value)
+	buf, _ := Json.Marshal(value)
 	c.WriteHeader(key, string(buf))
 }
 

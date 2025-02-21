@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -704,7 +705,7 @@ func TestDataBindOnHtml(t *testing.T) {
 	resp.Body.Close()
 
 	var list []User
-	err = Json.Unmarshal(buf, &list)
+	err = json.Unmarshal(buf, &list)
 	require.NoError(t, err)
 
 	require.Equal(t, len(list), 3)
