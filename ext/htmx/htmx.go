@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/yaitoo/xun"
 )
 
@@ -65,7 +64,7 @@ const (
 )
 
 var (
-	json = jsoniter.Config{UseNumber: false}.Froze()
+	Json = xun.Json
 )
 
 // HxHeader represents a map of string keys to values of any type.
@@ -82,8 +81,11 @@ func WriteHeader(c *xun.Context, key string, value any) {
 		return
 	}
 
-	buf, _ := json.Marshal(value)
-	c.WriteHeader(key, string(buf))
+	buf := bytes.NewBuffer(nil)
+
+	Json.NewEncoder(buf).Encode(value) // nolint: errcheck
+
+	c.WriteHeader(key, buf.String())
 }
 
 //go:embed htmx.js

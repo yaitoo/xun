@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -80,7 +81,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(data)
+	err = Json.NewDecoder(resp.Body).Decode(data)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -92,7 +93,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "POST", data.Method)
@@ -103,7 +104,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "PUT", data.Method)
@@ -114,7 +115,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "DELETE", data.Method)
@@ -125,7 +126,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "HandleFunc", data.Method)

@@ -3,6 +3,7 @@ package form
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 
 	"net/http"
 	"net/http/httptest"
@@ -135,7 +136,7 @@ func TestBinder(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
-			err = json.NewDecoder(resp.Body).Decode(&result)
+			err = Json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 			resp.Body.Close()
 			require.Equal(t, "xun@yaitoo.cn", result.Data.Email)
@@ -148,7 +149,7 @@ func TestBinder(t *testing.T) {
 
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-			err = json.NewDecoder(resp.Body).Decode(&result)
+			err = Json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 			resp.Body.Close()
 			require.Equal(t, "xun@yaitoo.cn", result.Data.Email)
@@ -163,7 +164,7 @@ func TestBinder(t *testing.T) {
 
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-			err = json.NewDecoder(resp.Body).Decode(&result)
+			err = Json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 			resp.Body.Close()
 			require.Len(t, result.Errors, 2)
@@ -178,7 +179,7 @@ func TestBinder(t *testing.T) {
 
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
-			err = json.NewDecoder(resp.Body).Decode(&result)
+			err = Json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
 			resp.Body.Close()
 			require.Len(t, result.Errors, 2)

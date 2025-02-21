@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"io"
 	"net/http"

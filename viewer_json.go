@@ -29,7 +29,7 @@ func (*JsonViewer) Render(ctx *Context, data any) error { // skipcq: RVV-B0012
 		buf := BufPool.Get()
 		defer BufPool.Put(buf)
 
-		err = json.NewEncoder(buf).Encode(data)
+		err = Json.NewEncoder(buf).Encode(data)
 		if err != nil {
 			return err
 		}

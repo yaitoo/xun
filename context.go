@@ -3,12 +3,6 @@ package xun
 import (
 	"net/http"
 	"strings"
-
-	jsoniter "github.com/json-iterator/go"
-)
-
-var (
-	json = jsoniter.Config{UseNumber: false}.Froze()
 )
 
 type TempData map[string]any

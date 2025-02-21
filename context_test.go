@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -71,7 +72,7 @@ func TestTempData(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var v string
-	err = json.NewDecoder(resp.Body).Decode(&v)
+	err = Json.NewDecoder(resp.Body).Decode(&v)
 	require.NoError(t, err)
 	require.Equal(t, "middleware", v)
 }

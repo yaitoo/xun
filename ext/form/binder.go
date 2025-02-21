@@ -5,11 +5,11 @@ import (
 
 	"github.com/go-playground/form/v4"
 	"github.com/go-playground/validator/v10"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/yaitoo/xun"
 )
 
 var (
-	json = jsoniter.Config{UseNumber: false}.Froze()
+	Json = xun.Json
 
 	// use a single instance of Decoder, it caches struct info
 	formDecoder = form.NewDecoder()
@@ -61,7 +61,7 @@ func BindForm[T any](req *http.Request) (*TEntity[T], error) {
 func BindJson[T any](req *http.Request) (*TEntity[T], error) {
 	data := new(T)
 
-	err := json.NewDecoder(req.Body).Decode(data)
+	err := Json.NewDecoder(req.Body).Decode(data)
 	if err != nil {
 		return nil, err
 	}
