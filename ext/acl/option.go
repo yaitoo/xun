@@ -20,6 +20,7 @@ type Options struct {
 
 	HostRedirectURL        string
 	HostRedirectStatusCode int
+	HostRedirectWhitelist  []string
 
 	AllowIPNets []*net.IPNet
 	DenyIPNets  []*net.IPNet
@@ -144,12 +145,13 @@ func WithConfig(file string) Option {
 
 // WithHostRedirect sets the redirect URL and status code for host redirection.
 // It configures the Options to redirect requests to the specified URL with the given status code.
-func WithHostRedirect(u string, code int) Option {
+func WithHostRedirect(u string, code int, whitelist ...string) Option {
 	return func(o *Options) {
 		u, err := url.Parse(u)
 		if err == nil {
 			o.HostRedirectURL = u.String()
 			o.HostRedirectStatusCode = code
+			o.HostRedirectWhitelist = whitelist
 		}
 	}
 }

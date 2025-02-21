@@ -45,6 +45,15 @@ func New(opts ...Option) xun.Middleware {
 			if len(o.AllowHosts) > 0 {
 				_, allow := o.AllowHosts[m.Host]
 				if !allow {
+					for _, it := range o.HostRedirectWhitelist {
+						if strings.EqualFold(c.Request.URL.Path, it) {
+							allow = true
+							break
+						}
+					}
+				}
+
+				if !allow {
 					if o.HostRedirectStatusCode > 0 && o.HostRedirectURL != "" {
 						return redirect(c, o)
 					}
