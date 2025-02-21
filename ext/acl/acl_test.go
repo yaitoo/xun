@@ -49,6 +49,29 @@ func TestHosts(t *testing.T) {
 		require.Equal(t, "http://127.0.0.2", w.Header().Get("Location"))
 	})
 
+	t.Run("host_whitelist", func(t *testing.T) {
+		m := New(AllowHosts("abc.com"), WithHostWhitelist("/status", "/Ping"))
+
+		ctx := createContext(nil)
+
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/status", nil)
+		err := m(nop)(ctx)
+		require.NoError(t, err)
+
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/ping", nil)
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/home", nil)
+		err = m(nop)(ctx)
+		require.ErrorIs(t, err, xun.ErrCancelled)
+
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://abc.com/home", nil)
+		err = m(nop)(ctx)
+		require.NoError(t, err)
+
+	})
+
 	t.Run("redirect_with_invalid_url", func(t *testing.T) {
 		m := New(AllowHosts("abc.com"), WithHostRedirect("", http.StatusFound))
 

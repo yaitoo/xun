@@ -20,9 +20,15 @@ func TestConfig(t *testing.T) {
 			Data: []byte(`
 [allow_hosts]
 abc.com
+
+[host_whitelist]
+/allow
+/admin
+
 [host_redirect]
 url=http://abc.com
 status_code=301
+
 [allow_ipnets]
 172.0.0.0/24
 192.0.0.1
@@ -72,6 +78,7 @@ us
 		require.Len(t, o.AllowHosts, 0)
 		require.Empty(t, o.HostRedirectURL)
 		require.Equal(t, 302, o.HostRedirectStatusCode)
+		require.Len(t, o.HostWhitelist, 0)
 
 		require.Len(t, o.AllowIPNets, 0)
 		require.Len(t, o.DenyIPNets, 0)
@@ -94,6 +101,9 @@ us
 		require.Len(t, o.AllowHosts, 1)
 		require.Equal(t, "http://abc.com", o.HostRedirectURL)
 		require.Equal(t, 301, o.HostRedirectStatusCode)
+		require.Len(t, o.HostWhitelist, 2)
+		require.Equal(t, "/allow", o.HostWhitelist[0])
+		require.Equal(t, "/admin", o.HostWhitelist[1])
 
 		require.Len(t, o.AllowIPNets, 2)
 		require.Equal(t, ParseIPNet("172.0.0.0/24"), o.AllowIPNets[0])
@@ -128,6 +138,9 @@ cn
 [host_redirect]
 url=http://123.com
 status_code=302
+
+[host_whitelist]
+/status
 `)
 
 	mu.Lock()
@@ -144,6 +157,8 @@ status_code=302
 		require.Len(t, o.AllowHosts, 1)
 		require.Equal(t, "http://123.com", o.HostRedirectURL)
 		require.Equal(t, 302, o.HostRedirectStatusCode)
+		require.Len(t, o.HostWhitelist, 1)
+		require.Equal(t, "/status", o.HostWhitelist[0])
 
 		require.Len(t, o.AllowIPNets, 0)
 

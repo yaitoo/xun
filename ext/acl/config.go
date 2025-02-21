@@ -19,6 +19,7 @@ const (
 	SectionDN                // deny_ipnets
 	SectionAC                // allow_countries
 	SectionDC                // deny_countries
+	SectionWL                // host_whitelist
 )
 
 var openFile = func(file string) (fs.File, error) {
@@ -65,6 +66,9 @@ func loadOptions(file string, o *Options) bool {
 		case "[deny_countries]":
 			section = SectionDC
 			continue
+		case "[host_whitelist]":
+			section = SectionWL
+			continue
 		}
 
 		switch section {
@@ -78,6 +82,8 @@ func loadOptions(file string, o *Options) bool {
 			AllowCountries(l)(o)
 		case SectionDC:
 			DenyCountries(l)(o)
+		case SectionWL:
+			WithHostWhitelist(l)(o)
 		}
 
 	}
