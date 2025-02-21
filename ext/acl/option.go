@@ -155,10 +155,10 @@ func WithHostRedirect(u string, code int) Option {
 	}
 }
 
-// WithHostWhitelist sets the whitelist for host redirection.
-func WithHostWhitelist(whitelist ...string) Option {
+// WithHostWhitelist sets the whitelist for AllowHosts,allowing specific paths to bypass host checking.
+func WithHostWhitelist(paths ...string) Option {
 	return func(o *Options) {
-		o.HostWhitelist = append(o.HostWhitelist, whitelist...)
+		o.HostWhitelist = append(o.HostWhitelist, paths...)
 	}
 }
 
