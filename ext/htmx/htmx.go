@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/yaitoo/xun"
 )
 
@@ -65,7 +64,7 @@ const (
 )
 
 var (
-	json = jsoniter.Config{UseNumber: false}.Froze()
+	json = xun.Json
 )
 
 // HxHeader represents a map of string keys to values of any type.

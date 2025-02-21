@@ -994,10 +994,10 @@ The library to enable seamless integration between native JavaScript methods and
 > app.js
 ```js
 xun.ready(function(evt) {
-	document.body.addEventListener("showMessage", function(evt){
+	document.addEventListener("showMessage", function(evt){
     alert(evt.detail.value);
   })
-});
+},'body');
 
 ```
 

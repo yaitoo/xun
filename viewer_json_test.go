@@ -25,7 +25,7 @@ func TestJsonViewerRenderError(t *testing.T) {
 	// should get raw error when json.marshal fails, and StatusCode should be written
 	err := v.Render(ctx, data)
 	require.Error(t, err)
-	require.Equal(t, "chan int is unsupported type", err.Error())
+	require.Equal(t, "json: unsupported type: chan int", err.Error())
 
 	require.Equal(t, -1, rw.Code)
 

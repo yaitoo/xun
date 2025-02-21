@@ -112,7 +112,7 @@ func TestWatchOnText(t *testing.T) {
 	require.NoError(t, err)
 
 	var content string
-	err = json.NewDecoder(resp.Body).Decode(&content)
+	err = Json.NewDecoder(resp.Body).Decode(&content)
 	require.NoError(t, err)
 	require.Empty(t, content)
 	resp.Body.Close()

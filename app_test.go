@@ -80,7 +80,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(data)
+	err = Json.NewDecoder(resp.Body).Decode(data)
 	require.NoError(t, err)
 	resp.Body.Close()
 
@@ -92,7 +92,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "POST", data.Method)
@@ -103,7 +103,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "PUT", data.Method)
@@ -114,7 +114,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "DELETE", data.Method)
@@ -125,7 +125,7 @@ func TestJsonViewer(t *testing.T) {
 	resp, err = client.Do(req)
 	require.NoError(t, err)
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = Json.NewDecoder(resp.Body).Decode(&data)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, "HandleFunc", data.Method)
@@ -704,7 +704,7 @@ func TestDataBindOnHtml(t *testing.T) {
 	resp.Body.Close()
 
 	var list []User
-	err = json.Unmarshal(buf, &list)
+	err = Json.Unmarshal(buf, &list)
 	require.NoError(t, err)
 
 	require.Equal(t, len(list), 3)

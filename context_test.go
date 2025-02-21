@@ -71,7 +71,7 @@ func TestTempData(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var v string
-	err = json.NewDecoder(resp.Body).Decode(&v)
+	err = Json.NewDecoder(resp.Body).Decode(&v)
 	require.NoError(t, err)
 	require.Equal(t, "middleware", v)
 }
@@ -182,7 +182,7 @@ func TestMixedViewers(t *testing.T) {
 			Num  int    `json:"num"`
 		}{}
 
-		err = json.Unmarshal(buf, data)
+		err = Json.Unmarshal(buf, data)
 
 		require.NoError(t, err)
 

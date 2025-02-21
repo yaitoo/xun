@@ -112,7 +112,7 @@ func TestGzipCompressor(t *testing.T) {
 			require.Equal(t, test.contentEncoding, resp.Header.Get("Content-Encoding"))
 
 			data := make(map[string]string)
-			err = json.NewDecoder(test.createReader(resp.Body)).Decode(&data)
+			err = Json.NewDecoder(test.createReader(resp.Body)).Decode(&data)
 			require.NoError(t, err)
 			require.Equal(t, "hello", data["message"])
 		})
