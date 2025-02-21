@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	json = xun.Json
+	Json = xun.Json
 
 	// use a single instance of Decoder, it caches struct info
 	formDecoder = form.NewDecoder()
@@ -61,7 +61,7 @@ func BindForm[T any](req *http.Request) (*TEntity[T], error) {
 func BindJson[T any](req *http.Request) (*TEntity[T], error) {
 	data := new(T)
 
-	err := json.NewDecoder(req.Body).Decode(data)
+	err := Json.NewDecoder(req.Body).Decode(data)
 	if err != nil {
 		return nil, err
 	}

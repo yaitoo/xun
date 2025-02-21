@@ -81,8 +81,11 @@ func WriteHeader(c *xun.Context, key string, value any) {
 		return
 	}
 
-	buf, _ := Json.Marshal(value)
-	c.WriteHeader(key, string(buf))
+	buf := bytes.NewBuffer(nil)
+
+	Json.NewEncoder(buf).Encode(value) // nolint: errcheck
+
+	c.WriteHeader(key, buf.String())
 }
 
 //go:embed htmx.js
