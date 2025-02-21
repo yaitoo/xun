@@ -19,6 +19,7 @@ const (
 	SectionDN                // deny_ipnets
 	SectionAC                // allow_countries
 	SectionDC                // deny_countries
+	SectionWL                // host_whitelist
 )
 
 var openFile = func(file string) (fs.File, error) {
@@ -26,7 +27,7 @@ var openFile = func(file string) (fs.File, error) {
 	return os.OpenFile(file, os.O_RDONLY, 0600)
 }
 
-func loadOptions(file string, o *Options) bool {
+func loadOptions(file string, o *Options) bool { // skipcq: GO-R1005
 	f, err := openFile(file)
 	if err != nil {
 		Logger.Println("acl: can't read file", file, err)
@@ -65,6 +66,9 @@ func loadOptions(file string, o *Options) bool {
 		case "[deny_countries]":
 			section = SectionDC
 			continue
+		case "[host_whitelist]":
+			section = SectionWL
+			continue
 		}
 
 		switch section {
@@ -78,6 +82,8 @@ func loadOptions(file string, o *Options) bool {
 			AllowCountries(l)(o)
 		case SectionDC:
 			DenyCountries(l)(o)
+		case SectionWL:
+			WithHostWhitelist(l)(o)
 		}
 
 	}

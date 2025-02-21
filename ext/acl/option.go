@@ -20,6 +20,7 @@ type Options struct {
 
 	HostRedirectURL        string
 	HostRedirectStatusCode int
+	HostWhitelist          []string
 
 	AllowIPNets []*net.IPNet
 	DenyIPNets  []*net.IPNet
@@ -151,6 +152,13 @@ func WithHostRedirect(u string, code int) Option {
 			o.HostRedirectURL = u.String()
 			o.HostRedirectStatusCode = code
 		}
+	}
+}
+
+// WithHostWhitelist sets the whitelist for AllowHosts,allowing specific paths to bypass host checking.
+func WithHostWhitelist(paths ...string) Option {
+	return func(o *Options) {
+		o.HostWhitelist = append(o.HostWhitelist, paths...)
 	}
 }
 

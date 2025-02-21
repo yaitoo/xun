@@ -1,3 +1,10 @@
+// This package provides Access Control List (ACL) middleware for the Xun framework.
+// It allows for configuring allowed and denied hosts, IP networks, and countries
+// based on configuration files. The middleware supports dynamic reloading of rules
+// when the configuration file changes, enabling real-time updates to access rules.
+// It also offers functionality for host redirection and integrates with the Xun
+// framework's context to apply these rules to incoming requests.
+
 package acl
 
 import (
@@ -14,7 +21,9 @@ var (
 	v      atomic.Value
 )
 
-func New(opts ...Option) xun.Middleware {
+// New returns a new ACL middleware that applies access rules based on the provided options.
+// It dynamically reloads rules if a configuration file is specified, enabling real-time updates.
+func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 	options := NewOptions()
 
 	for _, opt := range opts {
@@ -44,6 +53,15 @@ func New(opts ...Option) xun.Middleware {
 			o := v.Load().(*Options)
 			if len(o.AllowHosts) > 0 {
 				_, allow := o.AllowHosts[m.Host]
+				if !allow {
+					for _, it := range o.HostWhitelist {
+						if strings.EqualFold(c.Request.URL.Path, it) {
+							allow = true
+							break
+						}
+					}
+				}
+
 				if !allow {
 					if o.HostRedirectStatusCode > 0 && o.HostRedirectURL != "" {
 						return redirect(c, o)
