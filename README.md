@@ -1,5 +1,5 @@
 # Xun
-Xun is an HTTP web framework built on Go's built-in html/template and net/http package’s router.
+Xun is a web framework built on Go's built-in html/template and net/http package’s router. It is designed to be lightweight, fast, and easy to use. Xun provides a simple and intuitive API for building web applications, while also offering advanced features such as middleware, routing, and template rendering.
 
 Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signifies being lightweight and fast.
 
