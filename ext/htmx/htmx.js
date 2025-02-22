@@ -55,10 +55,14 @@
       if (!response.ok) {
         const hx = response.headers.get("Hx-Trigger");
         if (hx) {
-          const d = JSON.parse(hx);
-          const keys = Object.keys(d);
-          for (const key of keys) {
-            window.dispatchEvent(new CustomEvent(key, { detail: d[key] }));
+          try{
+            const d = JSON.parse(hx);
+            const keys = Object.keys(d);
+            for (const key of keys) {
+              window.dispatchEvent(new CustomEvent(key, { detail: d[key] }));
+            }
+          }catch(e){ 
+            // prevent invalid JSON from breaking the application
           }
         }
       }
