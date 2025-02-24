@@ -1,6 +1,7 @@
 module github.com/yaitoo/xun
 
 go 1.22
+toolchain go1.23.6
 
 require (
 	github.com/go-playground/form/v4 v4.2.1
@@ -8,7 +9,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.25.0
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.34.0
 )
 
 require (
