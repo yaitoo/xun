@@ -3,7 +3,10 @@
 package sse
 
 import (
+	"context"
 	"sync"
+
+	"github.com/yaitoo/async"
 )
 
 // Server represents a structure that manages connected clients
@@ -25,7 +28,7 @@ func New() *Server {
 // Join adds a new client to the server or retrieves an existing one based on the provided ID.
 // It establishes a connection with the specified Streamer and sets the appropriate headers
 // for Server-Sent Events (SSE). If a client with the given ID already exists, it reuses that client.
-func (s *Server) Join(id string, sm Streamer) *Client {
+func (s *Server) Join(ctx context.Context, id string, sm Streamer) *Client {
 	s.Lock()
 	defer s.Unlock()
 	c, ok := s.clients[id]
@@ -35,7 +38,7 @@ func (s *Server) Join(id string, sm Streamer) *Client {
 		s.clients[id] = c
 	}
 
-	c.Connect(sm)
+	c.Connect(ctx, sm)
 
 	sm.Header().Set("Content-Type", "text/event-stream")
 	sm.Header().Set("Cache-Control", "no-cache")
@@ -67,17 +70,17 @@ func (s *Server) Get(id string) *Client {
 // Broadcast sends the specified event to all connected clients.
 // It acquires a read lock to ensure thread-safe access to the clients slice,
 // and spawns a goroutine for each client to handle the sending of the event.
-func (s *Server) Broadcast(event Event) {
+func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 	s.RLock()
 	defer s.RUnlock()
-	var wg sync.WaitGroup
-	wg.Add(len(s.clients))
+
+	task := async.NewA()
+
 	for _, c := range s.clients {
-		go func() {
-			defer wg.Done()
-			c.Send(event)
-		}()
+		task.Add(func(ctx context.Context) error {
+			return c.Send(event)
+		})
 	}
 
-	wg.Wait()
+	return task.Wait(ctx)
 }

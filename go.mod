@@ -10,6 +10,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.25.0
 	github.com/stretchr/testify v1.10.0
+	github.com/yaitoo/async v1.0.4
 	golang.org/x/crypto v0.35.0
 )
 

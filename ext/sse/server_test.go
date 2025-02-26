@@ -2,9 +2,10 @@ package sse
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -14,9 +15,9 @@ func TestServer(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c1 := srv.Join("join", rw)
+		c1 := srv.Join(context.TODO(), "join", rw)
 
-		c2 := srv.Join("join", rw)
+		c2 := srv.Join(context.TODO(), "join", rw)
 
 		require.Equal(t, c1, c2)
 
@@ -24,14 +25,6 @@ func TestServer(t *testing.T) {
 
 		require.Equal(t, c1, c3)
 
-		ctx, cancel := context.WithCancel(context.TODO())
-
-		go func() {
-			time.Sleep(1 * time.Second)
-			cancel()
-		}()
-
-		c1.Wait(ctx)
 		srv.Leave("join")
 
 		c4 := srv.Get("join")
@@ -43,17 +36,16 @@ func TestServer(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c := srv.Join("send", rw)
+		c := srv.Join(context.TODO(), "send", rw)
 
-		c.Send(Event{Name: "event1", Data: "data1"})
+		err := c.Send(Event{Name: "event1", Data: "data1"})
+		require.NoError(t, err)
 		buf := rw.Body.Bytes()
-
 		require.Equal(t, "event: event1\ndata: \"data1\"\n\n", string(buf))
 
-		c.Send(Event{Name: "event2", Data: "data2"})
-
+		err = c.Send(Event{Name: "event2", Data: "data2"})
+		require.NoError(t, err)
 		buf = rw.Body.Bytes()
-
 		require.Equal(t, "event: event1\ndata: \"data1\"\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
 	})
 
@@ -63,13 +55,15 @@ func TestServer(t *testing.T) {
 		rw1 := httptest.NewRecorder()
 		rw2 := httptest.NewRecorder()
 
-		c1 := srv.Join("c1", rw1)
+		c1 := srv.Join(context.TODO(), "c1", rw1)
 		require.NotNil(t, c1)
 
-		c2 := srv.Join("c2", rw2)
+		c2 := srv.Join(context.TODO(), "c2", rw2)
 		require.NotNil(t, c2)
 
-		srv.Broadcast(Event{Name: "event1", Data: "data1"})
+		errs, err := srv.Broadcast(context.TODO(), Event{Name: "event1", Data: "data1"})
+		require.NoError(t, err)
+		require.Nil(t, errs)
 
 		buf1 := rw1.Body.Bytes()
 		buf2 := rw2.Body.Bytes()
@@ -77,4 +71,38 @@ func TestServer(t *testing.T) {
 		require.Equal(t, buf1, buf2)
 		require.Equal(t, "event: event1\ndata: \"data1\"\n\n", string(buf1))
 	})
+
+	t.Run("invalid", func(t *testing.T) {
+		srv := New()
+
+		rw := &streamerMock{
+			ResponseWriter: httptest.NewRecorder(),
+		}
+
+		ctx, cancel := context.WithCancel(context.TODO())
+
+		c := srv.Join(ctx, "invalid", rw)
+
+		err := c.Send(Event{Name: "event1", Data: make(chan int)})
+		require.Error(t, err)
+
+		err = c.Send(Event{Name: "event1"})
+		require.Error(t, err)
+
+		cancel()
+
+		err = c.Send(Event{Name: "event1"})
+		require.ErrorIs(t, err, ErrClientClosed)
+
+	})
 }
+
+type streamerMock struct {
+	http.ResponseWriter
+}
+
+func (*streamerMock) Write([]byte) (int, error) {
+	return 0, errors.New("mock: invalid")
+}
+
+func (*streamerMock) Flush() {}
