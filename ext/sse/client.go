@@ -2,9 +2,7 @@ package sse
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 )
 
 var (
@@ -37,11 +35,7 @@ func (c *Client) Send(event Event) error {
 	case <-c.ctx.Done():
 		return NewError(c.ID, ErrClientClosed)
 	default:
-		buf, err := json.Marshal(event.Data)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintf(c.s, "event: %s\ndata: %s\n\n", event.Name, string(buf))
+		err := event.Write(c.s)
 		if err != nil {
 			return NewError(c.ID, err)
 		}
