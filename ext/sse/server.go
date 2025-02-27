@@ -82,10 +82,11 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 	s.RLock()
 	defer s.RUnlock()
 
-	task := async.NewA()
+	tasks := async.NewA()
 
 	for _, c := range s.clients {
-		task.Add(func(ctx context.Context) error {
+
+		tasks.Add(func(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
 				return NewError(c.ID, err)
 			}
@@ -93,11 +94,10 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 				return NewError(c.ID, err)
 			}
 			return nil
-
 		})
 	}
 
-	return task.Wait(ctx)
+	return tasks.Wait(ctx)
 }
 
 // Shutdown gracefully closes all active client connections and cleans up the client list.
@@ -105,8 +105,9 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 func (s *Server) Shutdown() {
 	s.Lock()
 	defer s.Unlock()
-	for id, c := range s.clients {
+	for _, c := range s.clients {
 		c.Close()
-		delete(s.clients, id)
 	}
+
+	s.clients = make(map[string]*Client)
 }
