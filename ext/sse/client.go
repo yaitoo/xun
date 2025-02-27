@@ -13,8 +13,8 @@ var ErrClientClosed = errors.New("sse: client closed")
 // flushing data to the client. It contains a response writer, a flusher for
 // sending data immediately, and a channel for managing the client's lifecycle.
 type Client struct {
-	s Streamer
-
+	ID  string
+	s   Streamer
 	ctx context.Context
 }
 

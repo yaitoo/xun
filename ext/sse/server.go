@@ -4,6 +4,7 @@ package sse
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/yaitoo/async"
@@ -34,7 +35,9 @@ func (s *Server) Join(ctx context.Context, id string, sm Streamer) *Client {
 	c, ok := s.clients[id]
 
 	if !ok {
-		c = &Client{}
+		c = &Client{
+			ID: id,
+		}
 		s.clients[id] = c
 	}
 
@@ -78,7 +81,18 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 
 	for _, c := range s.clients {
 		task.Add(func(ctx context.Context) error {
-			return c.Send(event)
+			select {
+			case <-ctx.Done():
+				return ErrClientClosed
+			default:
+				err := c.Send(event)
+				if err != nil {
+					return fmt.Errorf("%s: %w", c.ID, err)
+				}
+
+				return nil
+			}
+
 		})
 	}
 

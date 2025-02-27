@@ -20,6 +20,7 @@ func TestServer(t *testing.T) {
 		c2 := srv.Join(context.TODO(), "join", rw)
 
 		require.Equal(t, c1, c2)
+		require.Equal(t, "join", c1.ID)
 
 		c3 := srv.Get("join")
 
