@@ -134,17 +134,26 @@ func TestServer(t *testing.T) {
 
 	})
 
-	t.Run("wait", func(t *testing.T) {
+	t.Run("shutdown", func(t *testing.T) {
 		srv := New()
 
-		rw := httptest.NewRecorder()
-
-		c, err := srv.Join(context.TODO(), "wait", rw)
+		c1, err := srv.Join(context.TODO(), "c1", httptest.NewRecorder())
 		require.NoError(t, err)
+		require.NotNil(t, c1)
 
-		err = c.Send(Event{Name: "event1", Data: "data1"})
+		c2, err := srv.Join(context.TODO(), "c1", httptest.NewRecorder())
 		require.NoError(t, err)
+		require.NotNil(t, c2)
 
+		go func() {
+			time.Sleep(1 * time.Second)
+			srv.Shutdown()
+		}()
+
+		c1.Wait()
+		c2.Wait()
+
+		require.Len(t, srv.clients, 0)
 	})
 }
 

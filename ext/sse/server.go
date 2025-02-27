@@ -99,3 +99,14 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 
 	return task.Wait(ctx)
 }
+
+// Shutdown gracefully closes all active client connections and cleans up the client list.
+// It locks the server to ensure thread safety during the shutdown process.
+func (s *Server) Shutdown() {
+	s.Lock()
+	defer s.Unlock()
+	for id, c := range s.clients {
+		c.Close()
+		delete(s.clients, id)
+	}
+}
