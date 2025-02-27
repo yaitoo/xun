@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/yaitoo/async"
@@ -27,7 +28,9 @@ func TestServer(t *testing.T) {
 		c1, err = srv.Join(context.TODO(), "join", rw)
 		require.NoError(t, err)
 
-		c2, err := srv.Join(context.TODO(), "join", rw)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		c2, err := srv.Join(ctx, "join", rw)
 		require.NoError(t, err)
 
 		require.Equal(t, c1, c2)
@@ -36,6 +39,14 @@ func TestServer(t *testing.T) {
 		c3 := srv.Get("join")
 
 		require.Equal(t, c1, c3)
+
+		go func() {
+			time.Sleep(1 * time.Second)
+			c3.Close()
+		}()
+
+		c2.Wait()
+		c3.Wait()
 
 		srv.Leave("join")
 
@@ -120,6 +131,19 @@ func TestServer(t *testing.T) {
 		errs, err := srv.Broadcast(context.TODO(), Event{Name: "event1", Data: "data1"})
 		require.ErrorIs(t, err, async.ErrTooLessDone)
 		require.Len(t, errs, 1)
+
+	})
+
+	t.Run("wait", func(t *testing.T) {
+		srv := New()
+
+		rw := httptest.NewRecorder()
+
+		c, err := srv.Join(context.TODO(), "wait", rw)
+		require.NoError(t, err)
+
+		err = c.Send(Event{Name: "event1", Data: "data1"})
+		require.NoError(t, err)
 
 	})
 }

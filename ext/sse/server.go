@@ -86,20 +86,13 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 
 	for _, c := range s.clients {
 		task.Add(func(ctx context.Context) error {
-			select {
-			case <-ctx.Done():
-				return ErrClientClosed
-			default:
-				err := c.Send(event)
-				if err != nil {
-					return &Error{
-						ClientID: c.ID,
-						error:    err,
-					}
-				}
-
-				return nil
+			if err := ctx.Err(); err != nil {
+				return NewError(c.ID, err)
 			}
+			if err := c.Send(event); err != nil {
+				return NewError(c.ID, err)
+			}
+			return nil
 
 		})
 	}
