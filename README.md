@@ -794,15 +794,15 @@ Server-Sent Events (SSE) is a server push technology enabling a client to receiv
 ```go
 ss := sse.New()
 
-app.Get("/chatroom/{id}", func(ctx *xun.Context)error {
-	id := c.Request.PathValue("id")
-	room, err := ss.Join(c.Request.Context(), id, c.Response)
+app.Get("/topic/{id}", func(ctx *xun.Context)error {
+	id := c.Get("SessionID").(string)
+	s, err := ss.Join(c.Request.Context(), id, c.Response)
 	if err != nil {
 		c.WriteStatus(http.StatusBadRequest)
 		return xun.ErrCancelled
 	}
 
-	room.Wait()
+	s.Wait()
 
 	ss.Leave(id)
 
@@ -811,18 +811,18 @@ app.Get("/chatroom/{id}", func(ctx *xun.Context)error {
 
 ```
 
-> push an event to the chatroom
+> push an event to the user
 ```go
-r := ss.Get("room_id")
-if r != nil {
-	r.Send(sse.TextEvent{
+u := ss.Get("user_id")
+if u != nil {
+	u.Send(sse.TextEvent{
 		Name:"showMessage",
 		Data:"Hello",
 	})
 }
 ```
 
-> broadcast an event to all chatroom
+> broadcast an event to all users
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
@@ -832,7 +832,7 @@ ss.Broadcast(ctx, sse.TextEvent{
 }
 ```
 
-> shutdown server and close all chatrooms
+> shutdown server and close all user connections
 ```go
 ss.Shutdown()
 ```
@@ -843,7 +843,7 @@ ss.Shutdown()
 <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/ext/sse.min.js" integrity="sha512-uROW42fbC8XT6OsVXUC00tuak//shtU8zZE9BwxkT2kOxnZux0Ws8kypRr2UV4OhTEVmUSPIoUOrBN5DXeRNAQ==" 
 crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-<div class="w-full" hx-ext="sse" sse-connect="/chatroom/{id}" >
+<div class="w-full" hx-ext="sse" sse-connect="/topic/{id}" >
 ...
 </div>
 ```
