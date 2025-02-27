@@ -787,6 +787,61 @@ status_code=302
 app.Use(acl.New(acl.WithConfig("./acl.ini")))
 ```
 
+#### Server-Sent Events ([SSE](./ext/sse/))
+Server-Sent Events (SSE) is a server push technology enabling a client to receive automatic updates from a server via an HTTP connection.
+
+> use `sse` extension to handle SSE request
+```go
+ss := sse.New()
+
+app.Get("/sse/{id}", func(ctx *xun.Context)error {
+	client, err := ss.Join(c.Request.Context(), c.Request.PathValue("id"), c.Response)
+	if err != nil {
+		c.WriteStatus(http.StatusBadRequest)
+		return xun.ErrCancelled
+	}
+
+	client.Wait()
+
+	ss.Leave(id.Value)
+
+	return nil
+})
+
+```
+
+> push an Event to client	
+```go
+client := ss.Get("id")
+if client != nil {
+	client.Send(sse.Event{
+		Name:"showMessage",
+		Data:"Hello World",
+	})
+}
+```
+
+> broadcast an Event to all clients
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+ss.Broadcast(ctx, sse.Event{
+	Name:"shutdown",
+	Data:"Server is shutting down",
+}
+```
+
+> use [htmx-ext-sse](https://htmx.org/extensions/sse/) extension to send SSE request
+```html
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/ext/sse.min.js" integrity="sha512-uROW42fbC8XT6OsVXUC00tuak//shtU8zZE9BwxkT2kOxnZux0Ws8kypRr2UV4OhTEVmUSPIoUOrBN5DXeRNAQ==" 
+crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<div class="w-full" hx-ext="sse" sse-connect="/chat/{id}" >
+...
+</div>
+```
+
 ### Deploy your application
 Leveraging Go's built-in `//go:embed` directive and the standard library's `fs.FS` interface, we can compile all static assets and configuration files into a single self-contained binary. This dependency-free approach enables seamless deployment to any server environment.
 
