@@ -144,12 +144,7 @@ func TestServer(t *testing.T) {
 		c2, err := srv.Join(context.TODO(), "c1", httptest.NewRecorder())
 		require.NoError(t, err)
 		require.NotNil(t, c2)
-
-		go func() {
-			time.Sleep(1 * time.Second)
-			srv.Shutdown()
-		}()
-
+		srv.Shutdown()
 		c1.Wait()
 		c2.Wait()
 
