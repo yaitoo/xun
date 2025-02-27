@@ -4,7 +4,7 @@ package sse
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/yaitoo/async"
@@ -29,7 +29,12 @@ func New() *Server {
 // Join adds a new client to the server or retrieves an existing one based on the provided ID.
 // It establishes a connection with the specified Streamer and sets the appropriate headers
 // for Server-Sent Events (SSE). If a client with the given ID already exists, it reuses that client.
-func (s *Server) Join(ctx context.Context, id string, sm Streamer) *Client {
+func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*Client, error) {
+	sm, err := NewStreamer(rw)
+	if err != nil {
+		return nil, err
+	}
+
 	s.Lock()
 	defer s.Unlock()
 	c, ok := s.clients[id]
@@ -47,7 +52,7 @@ func (s *Server) Join(ctx context.Context, id string, sm Streamer) *Client {
 	sm.Header().Set("Cache-Control", "no-cache")
 	sm.Header().Set("Connection", "keep-alive")
 
-	return c
+	return c, nil
 }
 
 // Leave removes a client from the server's client list by its ID.
@@ -87,7 +92,10 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 			default:
 				err := c.Send(event)
 				if err != nil {
-					return fmt.Errorf("%s: %w", c.ID, err)
+					return &Error{
+						ClientID: c.ID,
+						error:    err,
+					}
 				}
 
 				return nil

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/yaitoo/async"
 )
 
 func TestServer(t *testing.T) {
@@ -15,9 +16,19 @@ func TestServer(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c1 := srv.Join(context.TODO(), "join", rw)
+		c1, err := srv.Join(context.TODO(), "join", nil)
+		require.Nil(t, c1)
+		require.ErrorIs(t, err, ErrNotStreamer)
 
-		c2 := srv.Join(context.TODO(), "join", rw)
+		c1, err = srv.Join(context.TODO(), "join", &notStreamer{})
+		require.Nil(t, c1)
+		require.ErrorIs(t, err, ErrNotStreamer)
+
+		c1, err = srv.Join(context.TODO(), "join", rw)
+		require.NoError(t, err)
+
+		c2, err := srv.Join(context.TODO(), "join", rw)
+		require.NoError(t, err)
 
 		require.Equal(t, c1, c2)
 		require.Equal(t, "join", c1.ID)
@@ -37,9 +48,10 @@ func TestServer(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c := srv.Join(context.TODO(), "send", rw)
+		c, err := srv.Join(context.TODO(), "send", rw)
+		require.NoError(t, err)
 
-		err := c.Send(Event{Name: "event1", Data: "data1"})
+		err = c.Send(Event{Name: "event1", Data: "data1"})
 		require.NoError(t, err)
 		buf := rw.Body.Bytes()
 		require.Equal(t, "event: event1\ndata: \"data1\"\n\n", string(buf))
@@ -56,11 +68,13 @@ func TestServer(t *testing.T) {
 		rw1 := httptest.NewRecorder()
 		rw2 := httptest.NewRecorder()
 
-		c1 := srv.Join(context.TODO(), "c1", rw1)
+		c1, err := srv.Join(context.TODO(), "c1", rw1)
 		require.NotNil(t, c1)
+		require.NoError(t, err)
 
-		c2 := srv.Join(context.TODO(), "c2", rw2)
+		c2, err := srv.Join(context.TODO(), "c2", rw2)
 		require.NotNil(t, c2)
+		require.NoError(t, err)
 
 		errs, err := srv.Broadcast(context.TODO(), Event{Name: "event1", Data: "data1"})
 		require.NoError(t, err)
@@ -71,6 +85,13 @@ func TestServer(t *testing.T) {
 
 		require.Equal(t, buf1, buf2)
 		require.Equal(t, "event: event1\ndata: \"data1\"\n\n", string(buf1))
+
+		ctx, cancel := context.WithCancel(context.TODO())
+		cancel()
+
+		_, err = srv.Broadcast(ctx, Event{Name: "event1", Data: "data1"})
+		require.ErrorIs(t, err, context.Canceled)
+
 	})
 
 	t.Run("invalid", func(t *testing.T) {
@@ -82,9 +103,10 @@ func TestServer(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.TODO())
 
-		c := srv.Join(ctx, "invalid", rw)
+		c, err := srv.Join(ctx, "invalid", rw)
+		require.NoError(t, err)
 
-		err := c.Send(Event{Name: "event1", Data: make(chan int)})
+		err = c.Send(Event{Name: "event1", Data: make(chan int)})
 		require.Error(t, err)
 
 		err = c.Send(Event{Name: "event1"})
@@ -95,8 +117,25 @@ func TestServer(t *testing.T) {
 		err = c.Send(Event{Name: "event1"})
 		require.ErrorIs(t, err, ErrClientClosed)
 
+		errs, err := srv.Broadcast(context.TODO(), Event{Name: "event1", Data: "data1"})
+		require.ErrorIs(t, err, async.ErrTooLessDone)
+		require.Len(t, errs, 1)
+
 	})
 }
+
+type notStreamer struct {
+}
+
+func (s *notStreamer) Header() http.Header {
+	return http.Header{}
+}
+
+func (s *notStreamer) Write([]byte) (int, error) {
+	return 0, errors.New("mock: invalid")
+}
+
+func (s *notStreamer) WriteHeader(int) {}
 
 type streamerMock struct {
 	http.ResponseWriter

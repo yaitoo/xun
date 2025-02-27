@@ -7,7 +7,9 @@ import (
 	"fmt"
 )
 
-var ErrClientClosed = errors.New("sse: client closed")
+var (
+	ErrClientClosed = errors.New("sse: client closed")
+)
 
 // Client represents a WebSocket client that handles HTTP responses and supports
 // flushing data to the client. It contains a response writer, a flusher for
@@ -32,7 +34,10 @@ func (c *Client) Connect(ctx context.Context, s Streamer) {
 func (c *Client) Send(event Event) error {
 	select {
 	case <-c.ctx.Done():
-		return ErrClientClosed
+		return &Error{
+			ClientID: c.ID,
+			error:    ErrClientClosed,
+		}
 	default:
 		buf, err := json.Marshal(event.Data)
 		if err != nil {
@@ -40,7 +45,10 @@ func (c *Client) Send(event Event) error {
 		}
 		_, err = fmt.Fprintf(c.s, "event: %s\ndata: %s\n\n", event.Name, string(buf))
 		if err != nil {
-			return err
+			return &Error{
+				ClientID: c.ID,
+				error:    err,
+			}
 		}
 
 		c.s.Flush()
