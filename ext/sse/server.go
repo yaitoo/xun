@@ -4,6 +4,7 @@ package sse
 
 import (
 	"context"
+	"net/http"
 	"sync"
 
 	"github.com/yaitoo/async"
@@ -28,13 +29,20 @@ func New() *Server {
 // Join adds a new client to the server or retrieves an existing one based on the provided ID.
 // It establishes a connection with the specified Streamer and sets the appropriate headers
 // for Server-Sent Events (SSE). If a client with the given ID already exists, it reuses that client.
-func (s *Server) Join(ctx context.Context, id string, sm Streamer) *Client {
+func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*Client, error) {
+	sm, err := NewStreamer(rw)
+	if err != nil {
+		return nil, err
+	}
+
 	s.Lock()
 	defer s.Unlock()
 	c, ok := s.clients[id]
 
 	if !ok {
-		c = &Client{}
+		c = &Client{
+			ID: id,
+		}
 		s.clients[id] = c
 	}
 
@@ -44,7 +52,7 @@ func (s *Server) Join(ctx context.Context, id string, sm Streamer) *Client {
 	sm.Header().Set("Cache-Control", "no-cache")
 	sm.Header().Set("Connection", "keep-alive")
 
-	return c
+	return c, nil
 }
 
 // Leave removes a client from the server's client list by its ID.
@@ -74,13 +82,32 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 	s.RLock()
 	defer s.RUnlock()
 
-	task := async.NewA()
+	tasks := async.NewA()
 
 	for _, c := range s.clients {
-		task.Add(func(ctx context.Context) error {
-			return c.Send(event)
+
+		tasks.Add(func(ctx context.Context) error {
+			if err := ctx.Err(); err != nil {
+				return NewError(c.ID, err)
+			}
+			if err := c.Send(event); err != nil {
+				return NewError(c.ID, err)
+			}
+			return nil
 		})
 	}
 
-	return task.Wait(ctx)
+	return tasks.Wait(ctx)
+}
+
+// Shutdown gracefully closes all active client connections and cleans up the client list.
+// It locks the server to ensure thread safety during the shutdown process.
+func (s *Server) Shutdown() {
+	s.Lock()
+	defer s.Unlock()
+	for _, c := range s.clients {
+		c.Close()
+	}
+
+	s.clients = make(map[string]*Client)
 }

@@ -696,7 +696,7 @@ func main(){
 ```
 
 
-#### Access Control List
+#### Access Control List ([ACL](./ext/acl/))
 The ACL filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
 
 ##### Core Filtering Dimensions
@@ -785,6 +785,67 @@ status_code=302
 > use middleware with config
 ```go
 app.Use(acl.New(acl.WithConfig("./acl.ini")))
+```
+
+#### Server-Sent Events ([SSE](./ext/sse/))
+Server-Sent Events (SSE) is a server push technology enabling a client to receive automatic updates from a server via an HTTP connection.
+
+> use `sse` extension to handle SSE request
+```go
+ss := sse.New()
+
+app.Get("/chatroom/{id}", func(ctx *xun.Context)error {
+	id := c.Request.PathValue("id")
+	room, err := ss.Join(c.Request.Context(), id, c.Response)
+	if err != nil {
+		c.WriteStatus(http.StatusBadRequest)
+		return xun.ErrCancelled
+	}
+
+	room.Wait()
+
+	ss.Leave(id)
+
+	return nil
+})
+
+```
+
+> push an event to the chatroom
+```go
+r := ss.Get("room_id")
+if r != nil {
+	r.Send(sse.TextEvent{
+		Name:"showMessage",
+		Data:"Hello",
+	})
+}
+```
+
+> broadcast an event to all chatroom
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+ss.Broadcast(ctx, sse.TextEvent{
+	Name:"shutdown",
+	Data:"Server is shutting down",
+}
+```
+
+> shutdown server and close all chatrooms
+```go
+ss.Shutdown()
+```
+
+> use [htmx-ext-sse](https://htmx.org/extensions/sse/) extension to send SSE request
+```html
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/ext/sse.min.js" integrity="sha512-uROW42fbC8XT6OsVXUC00tuak//shtU8zZE9BwxkT2kOxnZux0Ws8kypRr2UV4OhTEVmUSPIoUOrBN5DXeRNAQ==" 
+crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<div class="w-full" hx-ext="sse" sse-connect="/chatroom/{id}" >
+...
+</div>
 ```
 
 ### Deploy your application
