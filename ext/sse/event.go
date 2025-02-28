@@ -1,8 +1,6 @@
 package sse
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,30 +25,24 @@ type TextEvent struct {
 // It outputs the event name and data in the SSE format, followed by two newlines.
 // Returns an error if the write operation fails.
 func (e *TextEvent) Write(w io.Writer) error {
-	_, err := fmt.Fprintf(w, "event: %s\n", e.Name)
-	if err != nil {
-		return err
+	// Write event header.
+	var b strings.Builder
+	b.WriteString("event: ")
+	b.WriteString(e.Name)
+	b.WriteString("\n")
+
+	// Split the data into lines.
+	lines := strings.Split(e.Data, "\n")
+	// Build the SSE response.
+	for _, line := range lines {
+		b.WriteString("data: ")
+		b.WriteString(line)
+		b.WriteString("\n")
 	}
+	b.WriteString("data:\n\n")
 
-	buf := &bytes.Buffer{}
-
-	scanner := bufio.NewScanner(strings.NewReader(e.Data))
-	scanner.Split(bufio.ScanLines)
-
-	for scanner.Scan() {
-		_, err = fmt.Fprintf(buf, "data: %s\n", scanner.Text())
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = fmt.Fprint(buf, "data:\n\n")
-	if err != nil {
-		return err
-	}
-
-	_, err = buf.WriteTo(w)
-
+	// Write the complete output.
+	_, err := io.WriteString(w, b.String())
 	return err
 }
 
