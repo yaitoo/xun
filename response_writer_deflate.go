@@ -25,6 +25,13 @@ func (rw *deflateResponseWriter) Close() {
 	rw.w.Close()
 }
 
+// Flush writes any buffered data to the underlying writer and ensures that
+// the response is sent to the client. It locks the response writer to
+// prevent concurrent writes, flushes the compressed data, and then
+// flushes the standard response writer.
 func (rw *deflateResponseWriter) Flush() {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
 	rw.w.Flush()
+	rw.stdResponseWriter.Flush()
 }
