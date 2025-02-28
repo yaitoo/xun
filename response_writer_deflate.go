@@ -24,3 +24,7 @@ func (rw *deflateResponseWriter) Write(p []byte) (int, error) {
 func (rw *deflateResponseWriter) Close() {
 	rw.w.Close()
 }
+
+func (rw *deflateResponseWriter) Flush() {
+	rw.w.Flush()
+}

@@ -1,9 +1,12 @@
 package sse
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // Event represents an interface for writing event data to an io.Writer.
@@ -24,7 +27,30 @@ type TextEvent struct {
 // It outputs the event name and data in the SSE format, followed by two newlines.
 // Returns an error if the write operation fails.
 func (e *TextEvent) Write(w io.Writer) error {
-	_, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.Name, e.Data)
+	_, err := fmt.Fprintf(w, "event: %s\n", e.Name)
+	if err != nil {
+		return err
+	}
+
+	buf := &bytes.Buffer{}
+
+	scanner := bufio.NewScanner(strings.NewReader(e.Data))
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+		_, err = fmt.Fprintf(buf, "data: %s\n", scanner.Text())
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = fmt.Fprint(buf, "data:\n\n")
+	if err != nil {
+		return err
+	}
+
+	_, err = buf.WriteTo(w)
+
 	return err
 }
 

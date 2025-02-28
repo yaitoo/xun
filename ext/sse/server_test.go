@@ -65,12 +65,12 @@ func TestServer(t *testing.T) {
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
 		require.NoError(t, err)
 		buf := rw.Body.Bytes()
-		require.Equal(t, "event: event1\ndata: data1\n\n", string(buf))
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf))
 
 		err = c.Send(&JsonEvent{Name: "event2", Data: "data2"})
 		require.NoError(t, err)
 		buf = rw.Body.Bytes()
-		require.Equal(t, "event: event1\ndata: data1\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
 	})
 
 	t.Run("broadcast", func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestServer(t *testing.T) {
 		buf2 := rw2.Body.Bytes()
 
 		require.Equal(t, buf1, buf2)
-		require.Equal(t, "event: event1\ndata: data1\n\n", string(buf1))
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf1))
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		cancel()

@@ -14,6 +14,10 @@ type stdResponseWriter struct {
 func (*stdResponseWriter) Close() {
 }
 
+func (rw *stdResponseWriter) Header() http.Header {
+	return rw.ResponseWriter.Header()
+}
+
 // WriteHeader sends an HTTP response header with the specified status code.
 // It ensures that the header is only written once by checking if the statusCode
 // has already been set. If the statusCode is zero, it updates the statusCode
