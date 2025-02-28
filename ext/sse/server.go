@@ -51,6 +51,7 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 	sm.Header().Set("Content-Type", "text/event-stream")
 	sm.Header().Set("Cache-Control", "no-cache")
 	sm.Header().Set("Connection", "keep-alive")
+	sm.Flush()
 
 	return c, nil
 }
