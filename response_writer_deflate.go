@@ -30,8 +30,6 @@ func (rw *deflateResponseWriter) Close() {
 // prevent concurrent writes, flushes the compressed data, and then
 // flushes the standard response writer.
 func (rw *deflateResponseWriter) Flush() {
-	rw.mu.Lock()
-	defer rw.mu.Unlock()
 	rw.w.Flush()
 	rw.stdResponseWriter.Flush()
 }
