@@ -1,8 +1,12 @@
 package sse
 
 import (
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/yaitoo/async"
+	"github.com/yaitoo/xun"
 )
 
 func TestServer(t *testing.T) {
@@ -65,12 +70,12 @@ func TestServer(t *testing.T) {
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
 		require.NoError(t, err)
 		buf := rw.Body.Bytes()
-		require.Equal(t, "event: event1\ndata: data1\n\n", string(buf))
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf))
 
 		err = c.Send(&JsonEvent{Name: "event2", Data: "data2"})
 		require.NoError(t, err)
 		buf = rw.Body.Bytes()
-		require.Equal(t, "event: event1\ndata: data1\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
 	})
 
 	t.Run("broadcast", func(t *testing.T) {
@@ -95,7 +100,7 @@ func TestServer(t *testing.T) {
 		buf2 := rw2.Body.Bytes()
 
 		require.Equal(t, buf1, buf2)
-		require.Equal(t, "event: event1\ndata: data1\n\n", string(buf1))
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf1))
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		cancel()
@@ -149,6 +154,62 @@ func TestServer(t *testing.T) {
 		c2.Wait()
 
 		require.Len(t, srv.clients, 0)
+	})
+
+	t.Run("send_with_gzip", func(t *testing.T) {
+		srv := New()
+		rw := httptest.NewRecorder()
+
+		gc := &xun.GzipCompressor{}
+
+		c, err := srv.Join(context.TODO(), "send", gc.New(rw))
+		require.NoError(t, err)
+
+		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
+		require.NoError(t, err)
+
+		r, _ := gzip.NewReader(bytes.NewReader(rw.Body.Bytes()))
+
+		buf, _ := io.ReadAll(r)
+
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf))
+
+		err = c.Send(&JsonEvent{Name: "event2", Data: "data2"})
+		require.NoError(t, err)
+
+		r, _ = gzip.NewReader(bytes.NewReader(rw.Body.Bytes()))
+
+		buf, _ = io.ReadAll(r)
+
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
+	})
+
+	t.Run("send_with_deflate", func(t *testing.T) {
+		srv := New()
+		rw := httptest.NewRecorder()
+
+		gc := &xun.DeflateCompressor{}
+
+		c, err := srv.Join(context.TODO(), "send", gc.New(rw))
+		require.NoError(t, err)
+
+		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
+		require.NoError(t, err)
+
+		r := flate.NewReader(bytes.NewReader(rw.Body.Bytes()))
+
+		buf, _ := io.ReadAll(r)
+
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf))
+
+		err = c.Send(&JsonEvent{Name: "event2", Data: "data2"})
+		require.NoError(t, err)
+
+		r = flate.NewReader(bytes.NewReader(rw.Body.Bytes()))
+
+		buf, _ = io.ReadAll(r)
+
+		require.Equal(t, "event: event1\ndata: data1\ndata:\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
 	})
 }
 

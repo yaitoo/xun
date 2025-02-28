@@ -23,3 +23,12 @@ func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
 func (rw *gzipResponseWriter) Close() {
 	rw.w.Close()
 }
+
+// Flush writes any buffered data to the underlying writer and ensures that
+// the gzip response writer is properly synchronized. It locks the mutex
+// to prevent concurrent access, flushes the gzip writer, and then flushes
+// the standard response writer.
+func (rw *gzipResponseWriter) Flush() {
+	rw.w.Flush()
+	rw.stdResponseWriter.Flush()
+}
