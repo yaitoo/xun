@@ -11,7 +11,7 @@ require (
 	github.com/go-playground/validator/v10 v10.25.0
 	github.com/stretchr/testify v1.10.0
 	github.com/yaitoo/async v1.0.4
-	golang.org/x/crypto v0.35.0
+	golang.org/x/crypto v0.36.0
 )
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
