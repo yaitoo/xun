@@ -26,8 +26,6 @@ func (r *EventReader) Next() (*TextEvent, error) {
 
 		evt   TextEvent
 		retry int
-
-		breakLines int
 	)
 
 	for {
@@ -58,15 +56,8 @@ func (r *EventReader) Next() (*TextEvent, error) {
 			} else {
 				evt.Data += "\n" + strings.TrimSpace(line[5:])
 			}
-		} else {
-			if line == "\n" {
-				breakLines++
-			}
-		}
-
-		if breakLines == 2 {
+		} else if line == "\n" {
 			return &evt, nil
 		}
-
 	}
 }

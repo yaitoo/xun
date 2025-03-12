@@ -103,6 +103,15 @@ func TestServer(t *testing.T) {
 		require.Equal(t, 1000, evt.Retry)
 		require.Equal(t, "data1", evt.Data)
 
+		err = c.Send(&PingEvent{})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "", evt.Data)
+
 		err = c.Send(&JsonEvent{Data: "data2"})
 		require.NoError(t, err)
 		evt, err = r.Next()

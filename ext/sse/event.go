@@ -75,7 +75,7 @@ func (e *TextEvent) Write(w io.Writer) error {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
 
 	// Write the complete output.
 	_, err := io.WriteString(w, sb.String())
@@ -139,9 +139,17 @@ func (e *JsonEvent) Write(w io.Writer) error {
 		}
 	}
 
-	sb.WriteString("\n\n")
+	sb.WriteString("\n")
 
 	// Write the complete output.
 	_, err = io.WriteString(w, sb.String())
+	return err
+}
+
+type PingEvent struct {
+}
+
+func (evt *PingEvent) Write(w io.Writer) error {
+	_, err := io.WriteString(w, ": ping\n\n")
 	return err
 }
