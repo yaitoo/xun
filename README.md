@@ -848,51 +848,6 @@ crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </div>
 ```
 
-### Deploy your application
-Leveraging Go's built-in `//go:embed` directive and the standard library's `fs.FS` interface, we can compile all static assets and configuration files into a single self-contained binary. This dependency-free approach enables seamless deployment to any server environment.
-
-```go
-
-//go:embed app
-var fsys embed.FS
-
-func main() {
-	var dev bool
-	flag.BoolVar(&dev, "dev", false, "it is development environment")
-
-	flag.Parse()
-
-	var opts []xun.Option
-	if dev {
-		// use local filesystem in development, and watch files to reload automatically
-		opts = []xun.Option{xun.WithFsys(os.DirFS("./app")), xun.WithWatch()}
-	} else {
-		// use embed resources in production environment
-		views, _ := fs.Sub(fsys, "app")
-		opts = []xun.Option{xun.WithFsys(views)}
-	}
-
-	app := xun.New(opts...)
-	//...
-
-	app.Start()
-	defer app.Close()
-
-	if dev {
-		slog.Default().Info("xun-admin is running in development")
-	} else {
-		slog.Default().Info("xun-admin is running in production")
-	}
-
-	err := http.ListenAndServe(":80", http.DefaultServeMux)
-	if err != nil {
-		panic(err)
-	}
-}
-```
-
-
-
 ### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
 #### 1. Install Tailwind CSS
 Install tailwindcss via npm, and create your tailwind.config.js file.
@@ -1138,6 +1093,48 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 	})
 ```
 
+## Deploy your application
+Leveraging Go's built-in `//go:embed` directive and the standard library's `fs.FS` interface, we can compile all static assets and configuration files into a single self-contained binary. This dependency-free approach enables seamless deployment to any server environment.
+
+```go
+
+//go:embed app
+var fsys embed.FS
+
+func main() {
+	var dev bool
+	flag.BoolVar(&dev, "dev", false, "it is development environment")
+
+	flag.Parse()
+
+	var opts []xun.Option
+	if dev {
+		// use local filesystem in development, and watch files to reload automatically
+		opts = []xun.Option{xun.WithFsys(os.DirFS("./app")), xun.WithWatch()}
+	} else {
+		// use embed resources in production environment
+		views, _ := fs.Sub(fsys, "app")
+		opts = []xun.Option{xun.WithFsys(views)}
+	}
+
+	app := xun.New(opts...)
+	//...
+
+	app.Start()
+	defer app.Close()
+
+	if dev {
+		slog.Default().Info("xun-admin is running in development")
+	} else {
+		slog.Default().Info("xun-admin is running in production")
+	}
+
+	err := http.ListenAndServe(":80", http.DefaultServeMux)
+	if err != nil {
+		panic(err)
+	}
+}
+```
 
 ## Contributing
 Contributions are welcome! If you're interested in contributing, please feel free to [contribute to Xun](CONTRIBUTING.md)

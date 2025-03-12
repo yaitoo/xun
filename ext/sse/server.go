@@ -16,13 +16,13 @@ import (
 // active Client instances identified by their unique keys.
 type Server struct {
 	sync.RWMutex
-	clients map[string]*Conn
+	conns map[string]*Conn
 }
 
 // New creates and returns a new instance of the Server struct.
 func New() *Server {
 	return &Server{
-		clients: make(map[string]*Conn),
+		conns: make(map[string]*Conn),
 	}
 }
 
@@ -37,13 +37,13 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 
 	s.Lock()
 	defer s.Unlock()
-	c, ok := s.clients[id]
+	c, ok := s.conns[id]
 
 	if !ok {
 		c = &Conn{
 			ID: id,
 		}
-		s.clients[id] = c
+		s.conns[id] = c
 	}
 
 	c.Connect(ctx, sm)
@@ -64,7 +64,7 @@ func (s *Server) Leave(id string) {
 	s.Lock()
 	defer s.Unlock()
 
-	delete(s.clients, id)
+	delete(s.conns, id)
 }
 
 // Get retrieves the Client associated with the given id from the Server.
@@ -73,7 +73,7 @@ func (s *Server) Leave(id string) {
 func (s *Server) Get(id string) *Conn {
 	s.RLock()
 	defer s.RUnlock()
-	return s.clients[id]
+	return s.conns[id]
 }
 
 // Broadcast sends the specified event to all connected clients.
@@ -85,7 +85,7 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 
 	tasks := async.NewA()
 
-	for _, c := range s.clients {
+	for _, c := range s.conns {
 
 		tasks.Add(func(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
@@ -106,9 +106,9 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 func (s *Server) Shutdown() {
 	s.Lock()
 	defer s.Unlock()
-	for _, c := range s.clients {
+	for _, c := range s.conns {
 		c.Close()
 	}
 
-	s.clients = make(map[string]*Conn)
+	s.conns = make(map[string]*Conn)
 }

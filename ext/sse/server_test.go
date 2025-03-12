@@ -215,7 +215,7 @@ func TestServer(t *testing.T) {
 		c1.Wait()
 		c2.Wait()
 
-		require.Len(t, srv.clients, 0)
+		require.Len(t, srv.conns, 0)
 	})
 
 	t.Run("send_with_gzip", func(t *testing.T) {
