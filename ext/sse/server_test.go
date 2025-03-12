@@ -1,7 +1,6 @@
 package sse
 
 import (
-	"bytes"
 	"compress/flate"
 	"compress/gzip"
 	"context"
@@ -67,15 +66,88 @@ func TestServer(t *testing.T) {
 		c, err := srv.Join(context.TODO(), "send", rw)
 		require.NoError(t, err)
 
-		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
-		require.NoError(t, err)
-		buf := rw.Body.Bytes()
-		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf))
+		r := NewReader(rw.Body)
 
-		err = c.Send(&JsonEvent{Name: "event2", Data: "data2"})
+		err = c.Send(&TextEvent{Data: "data1"})
 		require.NoError(t, err)
-		buf = rw.Body.Bytes()
-		require.Equal(t, "event: event1\ndata: data1\ndata:\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
+		evt, err := r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "data1", evt.Data)
+
+		err = c.Send(&TextEvent{ID: "id1", Data: "data1"})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "id1", evt.ID)
+		require.Equal(t, "", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "data1", evt.Data)
+
+		err = c.Send(&TextEvent{ID: "id1", Name: "event1", Data: "data1"})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "id1", evt.ID)
+		require.Equal(t, "event1", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "data1", evt.Data)
+
+		err = c.Send(&TextEvent{ID: "id1", Name: "event1", Retry: 1000, Data: "data1"})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "id1", evt.ID)
+		require.Equal(t, "event1", evt.Name)
+		require.Equal(t, 1000, evt.Retry)
+		require.Equal(t, "data1", evt.Data)
+
+		err = c.Send(&PingEvent{})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "", evt.Data)
+
+		err = c.Send(&JsonEvent{Data: "data2"})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "\"data2\"", evt.Data)
+
+		err = c.Send(&JsonEvent{ID: "id2", Data: "data2"})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "id2", evt.ID)
+		require.Equal(t, "", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "\"data2\"", evt.Data)
+
+		err = c.Send(&JsonEvent{ID: "id2", Name: "event2", Data: "data2"})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "id2", evt.ID)
+		require.Equal(t, "event2", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "\"data2\"", evt.Data)
+
+		err = c.Send(&JsonEvent{ID: "id2", Name: "event2", Retry: 1000, Data: "data2"})
+		require.NoError(t, err)
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "id2", evt.ID)
+		require.Equal(t, "event2", evt.Name)
+		require.Equal(t, 1000, evt.Retry)
+		require.Equal(t, "\"data2\"", evt.Data)
 	})
 
 	t.Run("broadcast", func(t *testing.T) {
@@ -96,17 +168,31 @@ func TestServer(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, errs)
 
-		buf1 := rw1.Body.Bytes()
-		buf2 := rw2.Body.Bytes()
+		r1 := NewReader(rw1.Body)
+		r2 := NewReader(rw2.Body)
 
-		require.Equal(t, buf1, buf2)
-		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf1))
+		evt1, err1 := r1.Next()
+		evt2, err2 := r2.Next()
+
+		require.NoError(t, err1)
+		require.NoError(t, err2)
+
+		require.Equal(t, "event1", evt1.Name)
+		require.Equal(t, "data1", evt1.Data)
+		require.Equal(t, "event1", evt2.Name)
+		require.Equal(t, "data1", evt2.Data)
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		cancel()
 
 		_, err = srv.Broadcast(ctx, &TextEvent{Name: "event1", Data: "data1"})
 		require.ErrorIs(t, err, context.Canceled)
+
+		evt1, err1 = r1.Next()
+		evt2, err2 = r2.Next()
+
+		require.ErrorIs(t, err1, io.EOF)
+		require.ErrorIs(t, err2, io.EOF)
 
 	})
 
@@ -153,7 +239,7 @@ func TestServer(t *testing.T) {
 		c1.Wait()
 		c2.Wait()
 
-		require.Len(t, srv.clients, 0)
+		require.Len(t, srv.conns, 0)
 	})
 
 	t.Run("send_with_gzip", func(t *testing.T) {
@@ -168,20 +254,26 @@ func TestServer(t *testing.T) {
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
 		require.NoError(t, err)
 
-		r, _ := gzip.NewReader(bytes.NewReader(rw.Body.Bytes()))
+		gr, _ := gzip.NewReader(rw.Body)
 
-		buf, _ := io.ReadAll(r)
+		r := NewReader(gr)
 
-		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf))
+		evt, err := r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "event1", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "data1", evt.Data)
 
 		err = c.Send(&JsonEvent{Name: "event2", Data: "data2"})
 		require.NoError(t, err)
 
-		r, _ = gzip.NewReader(bytes.NewReader(rw.Body.Bytes()))
-
-		buf, _ = io.ReadAll(r)
-
-		require.Equal(t, "event: event1\ndata: data1\ndata:\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "event2", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "\"data2\"", evt.Data)
 	})
 
 	t.Run("send_with_deflate", func(t *testing.T) {
@@ -196,20 +288,26 @@ func TestServer(t *testing.T) {
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
 		require.NoError(t, err)
 
-		r := flate.NewReader(bytes.NewReader(rw.Body.Bytes()))
+		fr := flate.NewReader(rw.Body)
 
-		buf, _ := io.ReadAll(r)
+		r := NewReader(fr)
 
-		require.Equal(t, "event: event1\ndata: data1\ndata:\n\n", string(buf))
+		evt, err := r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "event1", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "data1", evt.Data)
 
 		err = c.Send(&JsonEvent{Name: "event2", Data: "data2"})
 		require.NoError(t, err)
 
-		r = flate.NewReader(bytes.NewReader(rw.Body.Bytes()))
-
-		buf, _ = io.ReadAll(r)
-
-		require.Equal(t, "event: event1\ndata: data1\ndata:\n\nevent: event2\ndata: \"data2\"\n\n", string(buf))
+		evt, err = r.Next()
+		require.NoError(t, err)
+		require.Equal(t, "", evt.ID)
+		require.Equal(t, "event2", evt.Name)
+		require.Equal(t, 0, evt.Retry)
+		require.Equal(t, "\"data2\"", evt.Data)
 	})
 }
 
