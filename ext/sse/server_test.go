@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -167,17 +168,31 @@ func TestServer(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, errs)
 
-		buf1 := rw1.Body.Bytes()
-		buf2 := rw2.Body.Bytes()
+		r1 := NewReader(rw1.Body)
+		r2 := NewReader(rw2.Body)
 
-		require.Equal(t, buf1, buf2)
-		require.Equal(t, "event: event1\ndata: data1\n\n\n", string(buf1))
+		evt1, err1 := r1.Next()
+		evt2, err2 := r2.Next()
+
+		require.NoError(t, err1)
+		require.NoError(t, err2)
+
+		require.Equal(t, "event1", evt1.Name)
+		require.Equal(t, "data1", evt1.Data)
+		require.Equal(t, "event1", evt2.Name)
+		require.Equal(t, "data1", evt2.Data)
 
 		ctx, cancel := context.WithCancel(context.TODO())
 		cancel()
 
 		_, err = srv.Broadcast(ctx, &TextEvent{Name: "event1", Data: "data1"})
 		require.ErrorIs(t, err, context.Canceled)
+
+		evt1, err1 = r1.Next()
+		evt2, err2 = r2.Next()
+
+		require.ErrorIs(t, err1, io.EOF)
+		require.ErrorIs(t, err2, io.EOF)
 
 	})
 

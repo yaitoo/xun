@@ -15,7 +15,7 @@ func NewReader(r io.Reader) *EventReader {
 	return &EventReader{r: r}
 }
 
-func (r *EventReader) Next() (*TextEvent, error) {
+func (r *EventReader) Next() (TextEvent, error) {
 
 	reader := bufio.NewReader(r.r)
 
@@ -32,16 +32,22 @@ func (r *EventReader) Next() (*TextEvent, error) {
 		buf, err = reader.ReadBytes('\n')
 		if err != nil {
 			if err != io.EOF {
-				return nil, err
+				return evt, err
 			}
 
-			return &evt, io.EOF
+			return evt, io.EOF
 		}
 
 		line = string(buf)
 		if strings.HasPrefix(line, ":") {
 			continue
-		} else if strings.HasPrefix(line, "id:") {
+		}
+
+		if line == "\n" {
+			return evt, nil
+		}
+
+		if strings.HasPrefix(line, "id:") {
 			evt.ID = strings.TrimSpace(line[3:])
 		} else if strings.HasPrefix(line, "event:") {
 			evt.Name = strings.TrimSpace(line[6:])
@@ -56,8 +62,6 @@ func (r *EventReader) Next() (*TextEvent, error) {
 			} else {
 				evt.Data += "\n" + strings.TrimSpace(line[5:])
 			}
-		} else if line == "\n" {
-			return &evt, nil
 		}
 	}
 }
