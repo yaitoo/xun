@@ -8,10 +8,10 @@ import (
 )
 
 type EventReader struct {
-	r io.Reader
+	r io.ReadCloser
 }
 
-func NewReader(r io.Reader) *EventReader {
+func NewReader(r io.ReadCloser) *EventReader {
 	return &EventReader{r: r}
 }
 
@@ -64,4 +64,8 @@ func (r *EventReader) Next() (TextEvent, error) {
 			}
 		}
 	}
+}
+
+func (r *EventReader) Close() error {
+	return r.r.Close()
 }

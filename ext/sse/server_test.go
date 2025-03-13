@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"bytes"
 	"compress/flate"
 	"compress/gzip"
 	"context"
@@ -66,7 +67,8 @@ func TestServer(t *testing.T) {
 		c, err := srv.Join(context.TODO(), "send", rw)
 		require.NoError(t, err)
 
-		r := NewReader(rw.Body)
+		r := NewReader(&readCloser{Buffer: rw.Body})
+		defer r.Close()
 
 		err = c.Send(&TextEvent{Data: "data1"})
 		require.NoError(t, err)
@@ -168,8 +170,10 @@ func TestServer(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, errs)
 
-		r1 := NewReader(rw1.Body)
-		r2 := NewReader(rw2.Body)
+		r1 := NewReader(&readCloser{Buffer: rw1.Body})
+		defer r1.Close()
+		r2 := NewReader(&readCloser{Buffer: rw2.Body})
+		defer r2.Close()
 
 		evt1, err1 := r1.Next()
 		evt2, err2 := r2.Next()
@@ -333,3 +337,11 @@ func (*streamerMock) Write([]byte) (int, error) {
 }
 
 func (*streamerMock) Flush() {}
+
+type readCloser struct {
+	*bytes.Buffer
+}
+
+func (r *readCloser) Close() error {
+	return nil
+}
