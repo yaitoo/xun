@@ -66,6 +66,6 @@ func (r *EventReader) Next() (TextEvent, error) {
 	}
 }
 
-func (r *EventReader) Close() {
-	r.r.Close()
+func (r *EventReader) Close() error {
+	return r.r.Close()
 }
