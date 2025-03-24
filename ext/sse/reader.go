@@ -52,6 +52,7 @@ func (r *EventReader) Next() (TextEvent, error) {
 			continue
 		}
 
+		breakLineNum = 0
 		if strings.HasPrefix(line, "id:") {
 			evt.ID = strings.TrimSpace(line[3:])
 		} else if strings.HasPrefix(line, "event:") {
