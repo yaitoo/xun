@@ -3,6 +3,7 @@ package sse
 import (
 	"context"
 	"errors"
+	"sync"
 )
 
 var (
@@ -13,6 +14,7 @@ var (
 // It holds the client's ID, a Streamer instance for managing the stream,
 // a context for cancellation and timeout, and a channel for signaling closure.
 type Conn struct {
+	sync.Mutex
 	ID     string
 	s      Streamer
 	ctx    context.Context
@@ -31,17 +33,19 @@ func (c *Conn) Connect(ctx context.Context, s Streamer) {
 // It marshals the event data into JSON format and flushes the output to ensure the data is sent immediately.
 // This method is part of the Client struct and is intended for use in server-sent events (SSE) communication.
 func (c *Conn) Send(evt Event) error {
-	select {
-	case <-c.ctx.Done():
+	if c.ctx.Err() != nil {
 		return NewError(c.ID, ErrClientClosed)
-	default:
-		err := evt.Write(c.s)
-		if err != nil {
-			return NewError(c.ID, err)
-		}
-
-		c.s.Flush()
 	}
+
+	c.Lock()
+	defer c.Unlock()
+
+	err := evt.Write(c.s)
+	if err != nil {
+		return NewError(c.ID, err)
+	}
+
+	c.s.Flush()
 
 	return nil
 }
