@@ -24,8 +24,9 @@ func (r *EventReader) Next() (TextEvent, error) {
 		line string
 		err  error
 
-		evt   TextEvent
-		retry int
+		evt          TextEvent
+		retry        int
+		breakLineNum int
 	)
 
 	for {
@@ -44,7 +45,11 @@ func (r *EventReader) Next() (TextEvent, error) {
 		}
 
 		if line == "\n" {
-			return evt, nil
+			breakLineNum++
+			if breakLineNum > 1 {
+				return evt, nil
+			}
+			continue
 		}
 
 		if strings.HasPrefix(line, "id:") {
