@@ -114,7 +114,7 @@ func (ve *HtmlViewEngine) loadLayouts() {
 
 		if d != nil && !d.IsDir() {
 			if _, err := ve.loadTemplate(path); err != nil {
-				ve.app.logger.Error("html: load html layuots", slog.String("path", path), slog.Any("err", err))
+				ve.app.logger.Error("html: load html layouts", slog.String("path", path), slog.Any("err", err))
 			}
 		}
 
