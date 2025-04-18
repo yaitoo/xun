@@ -77,7 +77,7 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 
 func (ve *HtmlViewEngine) loadComponents() {
 	fs.WalkDir(ve.fsys, "components", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
-		if d == nil || d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".html") {
+		if !strings.EqualFold(filepath.Ext(path), ".html") {
 			return nil
 		}
 
@@ -112,7 +112,7 @@ func (ve *HtmlViewEngine) loadTemplate(path string) (*HtmlTemplate, error) {
 func (ve *HtmlViewEngine) loadLayouts() {
 	fs.WalkDir(ve.fsys, "layouts", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
 
-		if d != nil && !d.IsDir() {
+		if strings.EqualFold(filepath.Ext(path), ".html") {
 			if _, err := ve.loadTemplate(path); err != nil {
 				ve.app.logger.Error("html: load html layouts", slog.String("path", path), slog.Any("err", err))
 			}
@@ -125,7 +125,7 @@ func (ve *HtmlViewEngine) loadLayouts() {
 func (ve *HtmlViewEngine) loadPages() {
 	fs.WalkDir(ve.fsys, "pages", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
 
-		if d == nil || d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".html") {
+		if !strings.EqualFold(filepath.Ext(path), ".html") {
 			return nil
 		}
 
@@ -166,7 +166,7 @@ func (ve *HtmlViewEngine) loadPage(path string) error {
 func (ve *HtmlViewEngine) loadViews() {
 	fs.WalkDir(ve.fsys, "views", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
 
-		if d == nil || d.IsDir() || !strings.EqualFold(filepath.Ext(path), ".html") {
+		if !strings.EqualFold(filepath.Ext(path), ".html") {
 			return nil
 		}
 

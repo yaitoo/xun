@@ -25,14 +25,16 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012
-		if strings.HasPrefix(addr, "abc.com") {
-			return net.Dial("tcp", strings.TrimPrefix(addr, "abc.com"))
-		}
-		return net.Dial("tcp", addr)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012
+			if strings.HasPrefix(addr, "abc.com") {
+				return net.Dial("tcp", "127.0.0.1"+strings.TrimPrefix(addr, "abc.com"))
+			}
+			return net.Dial("tcp", addr)
+		},
 	}
+
 	client = http.Client{
 		Transport: tr,
 	}
