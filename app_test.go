@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012
 			if strings.HasPrefix(addr, "abc.com") {
-				return net.Dial("tcp", net.JoinHostPort("127.0.0.1", strings.TrimPrefix(addr, "abc.com")))
+				return net.Dial("tcp", net.JoinHostPort("127.0.0.1", strings.TrimPrefix(addr, "abc.com:")))
 			}
 			return net.Dial("tcp", addr)
 		},
