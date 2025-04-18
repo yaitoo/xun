@@ -82,7 +82,7 @@ func (ve *HtmlViewEngine) loadComponents() {
 		}
 
 		if _, err := ve.loadTemplate(path); err != nil {
-			ve.app.logger.Error("xun: load html components", slog.String("path", path), slog.Any("err", err))
+			ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
 		}
 		return nil
 	})
@@ -114,7 +114,7 @@ func (ve *HtmlViewEngine) loadLayouts() {
 
 		if strings.EqualFold(filepath.Ext(path), ".html") {
 			if _, err := ve.loadTemplate(path); err != nil {
-				ve.app.logger.Error("html: load html layouts", slog.String("path", path), slog.Any("err", err))
+				ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
 			}
 		}
 
@@ -130,7 +130,7 @@ func (ve *HtmlViewEngine) loadPages() {
 		}
 
 		if err := ve.loadPage(path); err != nil {
-			ve.app.logger.Error("xun: load html page", slog.String("path", path), slog.Any("err", err))
+			ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
 		}
 
 		return nil
@@ -171,7 +171,7 @@ func (ve *HtmlViewEngine) loadViews() {
 		}
 
 		if err := ve.loadView(path); err != nil {
-			ve.app.logger.Error("xun: load html view", slog.String("path", path), slog.Any("err", err))
+			ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
 		}
 
 		return nil
