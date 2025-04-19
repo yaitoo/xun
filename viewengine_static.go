@@ -1,7 +1,6 @@
 package xun
 
 import (
-	"errors"
 	"io/fs"
 	"reflect"
 	"strings"
@@ -19,7 +18,7 @@ type StaticViewEngine struct {
 // It scans the "public" directory in the given file system and registers each file
 // with the application. It also handles file changes for the "public" directory
 // and updates the application accordingly.
-func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
+func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) {
 	root, err := fsys.Open(".")
 	if err == nil {
 		t := reflect.TypeOf(root)
@@ -28,23 +27,13 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) error {
 		}
 	}
 
-	err = fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !d.IsDir() {
+	fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error { // nolint: errcheck
+		if d != nil && !d.IsDir() {
 			ve.handle(fsys, app, path)
 		}
 
 		return nil
 	})
-
-	if err != nil && errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-
-	return err
 }
 
 // FileChanged handles file changes for the given file system and updates the
