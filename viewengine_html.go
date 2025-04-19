@@ -75,16 +75,22 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 
 }
 
-func (ve *HtmlViewEngine) loadComponents() {
-	fs.WalkDir(ve.fsys, "components", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
+func (ve *HtmlViewEngine) loadFiles(dir string, process func(path string) error) {
+	fs.WalkDir(ve.fsys, dir, func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
 		if !strings.EqualFold(filepath.Ext(path), ".html") {
 			return nil
 		}
-
-		if _, err := ve.loadTemplate(path); err != nil {
+		if err := process(path); err != nil {
 			ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
 		}
 		return nil
+	})
+}
+
+func (ve *HtmlViewEngine) loadComponents() {
+	ve.loadFiles("components", func(path string) error {
+		_, err := ve.loadTemplate(path)
+		return err
 	})
 }
 
@@ -110,30 +116,15 @@ func (ve *HtmlViewEngine) loadTemplate(path string) (*HtmlTemplate, error) {
 }
 
 func (ve *HtmlViewEngine) loadLayouts() {
-	fs.WalkDir(ve.fsys, "layouts", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
-
-		if strings.EqualFold(filepath.Ext(path), ".html") {
-			if _, err := ve.loadTemplate(path); err != nil {
-				ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
-			}
-		}
-
-		return nil
+	ve.loadFiles("layouts", func(path string) error {
+		_, err := ve.loadTemplate(path)
+		return err
 	})
 }
 
 func (ve *HtmlViewEngine) loadPages() {
-	fs.WalkDir(ve.fsys, "pages", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
-
-		if !strings.EqualFold(filepath.Ext(path), ".html") {
-			return nil
-		}
-
-		if err := ve.loadPage(path); err != nil {
-			ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
-		}
-
-		return nil
+	ve.loadFiles("pages", func(path string) error { // nolint: errcheck
+		return ve.loadPage(path)
 	})
 }
 
@@ -164,17 +155,8 @@ func (ve *HtmlViewEngine) loadPage(path string) error {
 }
 
 func (ve *HtmlViewEngine) loadViews() {
-	fs.WalkDir(ve.fsys, "views", func(path string, d fs.DirEntry, _ error) error { // nolint: errcheck
-
-		if !strings.EqualFold(filepath.Ext(path), ".html") {
-			return nil
-		}
-
-		if err := ve.loadView(path); err != nil {
-			ve.app.logger.Error("xun: load html", slog.String("path", path), slog.Any("err", err))
-		}
-
-		return nil
+	ve.loadFiles("views", func(path string) error {
+		return ve.loadView(path)
 	})
 }
 
