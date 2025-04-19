@@ -1,8 +1,8 @@
 package xun
 
 import (
-	"errors"
 	"io/fs"
+	"log/slog"
 	"strings"
 
 	"github.com/yaitoo/xun/fsnotify"
@@ -18,7 +18,7 @@ type TextViewEngine struct {
 
 // Load walks the file system and loads all text-based templates that match the TextViewEngine's pattern.
 // It calls the handle method for each matching file to add the template to the app's viewers.
-func (ve *TextViewEngine) Load(fsys fs.FS, app *App) error {
+func (ve *TextViewEngine) Load(fsys fs.FS, app *App) {
 	if ve.templates == nil {
 		ve.templates = map[string]*TextTemplate{}
 	}
@@ -26,25 +26,16 @@ func (ve *TextViewEngine) Load(fsys fs.FS, app *App) error {
 	ve.fsys = fsys
 	ve.app = app
 
-	err := fs.WalkDir(fsys, "text", func(path string, d fs.DirEntry, err error) error {
-
-		if err != nil {
-			return err
-		}
-
-		if !d.IsDir() {
-			return ve.loadText(path)
-
+	fs.WalkDir(fsys, "text", func(path string, d fs.DirEntry, err error) error { // nolint: errcheck
+		if d != nil && !d.IsDir() {
+			if err := ve.loadText(path); err != nil {
+				slog.Error("text: load text", slog.String("path", path), slog.Any("err", err))
+			}
+			return nil
 		}
 
 		return nil
 	})
-
-	if err != nil && errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-
-	return err
 }
 
 func (ve *TextViewEngine) loadText(path string) error {

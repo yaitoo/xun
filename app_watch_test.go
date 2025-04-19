@@ -286,8 +286,8 @@ func TestWatchOnHtml(t *testing.T) {
 type mockViewEngine struct {
 }
 
-func (*mockViewEngine) Load(fsys fs.FS, app *App) error { // skipcq: RVV-B0012
-	return nil
+func (*mockViewEngine) Load(fsys fs.FS, app *App) { // skipcq: RVV-B0012
+
 }
 func (*mockViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { // skipcq: RVV-B0012
 	return errors.New("err: unhandled error")

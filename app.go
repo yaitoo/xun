@@ -79,10 +79,7 @@ func New(opts ...Option) *App {
 
 	if app.fsys != nil {
 		for _, ve := range app.engines {
-			err := ve.Load(app.fsys, app)
-			if err != nil {
-				app.logger.Error("xun: load views", slog.Any("err", err))
-			}
+			ve.Load(app.fsys, app)
 		}
 
 		if app.watch {
