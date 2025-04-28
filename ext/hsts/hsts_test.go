@@ -119,7 +119,7 @@ func TestRedirect(t *testing.T) {
 		require.NoError(t, err)
 		resp, err := c.Do(req)
 		require.NoError(t, err)
-		require.Equal(t, http.StatusFound, resp.StatusCode)
+		require.Equal(t, RedirectStatusCode, resp.StatusCode)
 		require.Equal(t, l, resp.Header.Get("Location"))
 		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
 	})
@@ -164,7 +164,7 @@ func TestRedirect(t *testing.T) {
 		require.NoError(t, err)
 		resp, err := c.Do(req)
 		require.NoError(t, err)
-		require.Equal(t, http.StatusFound, resp.StatusCode)
+		require.Equal(t, RedirectStatusCode, resp.StatusCode)
 		require.Equal(t, l, resp.Header.Get("Location"))
 		require.Equal(t, "", resp.Header.Get("Strict-Transport-Security"))
 
