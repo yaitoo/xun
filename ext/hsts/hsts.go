@@ -28,7 +28,7 @@ import (
 
 const defaultMaxAge = int64(365 * 24 * time.Hour / time.Second)
 
-var RedirectCode = http.StatusMovedPermanently
+var RedirectStatusCode = http.StatusMovedPermanently
 
 // WriteHeader is a middleware that sets the STS response header for a HTTPs request.
 func WriteHeader(opts ...Option) xun.Middleware {
@@ -74,7 +74,7 @@ func Redirect(rules ...IgnoreRule) xun.Middleware {
 
 				target := "https://" + stripPort(c.Request.Host) + c.Request.URL.RequestURI()
 
-				c.Redirect(target, RedirectCode)
+				c.Redirect(target, RedirectStatusCode)
 				return xun.ErrCancelled
 			}
 
