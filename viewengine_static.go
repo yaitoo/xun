@@ -1,7 +1,10 @@
 package xun
 
 import (
+	"bytes"
+	"io"
 	"io/fs"
+	"path"
 	"reflect"
 	"strings"
 
@@ -46,7 +49,7 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) {
 // directory, nothing will be done.
 func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
 	// Nothing should be updated for Write/Remove events.
-	if event.Has(fsnotify.Create) && strings.HasPrefix(event.Name, "public/") {
+	if strings.HasPrefix(event.Name, "public/") && (event.Has(fsnotify.Create) || event.Has(fsnotify.Write)) {
 		ve.handle(fsys, app, event.Name)
 	}
 
@@ -55,13 +58,38 @@ func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Eve
 
 func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 
-	name := path
+	pattern := path
 
-	if strings.HasSuffix(name, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
-		name = name[:len(name)-10]
+	if strings.HasSuffix(pattern, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
+		pattern = pattern[:len(pattern)-10]
 	}
 
-	name = strings.TrimPrefix(name, "public/")
+	pattern = strings.TrimPrefix(pattern, "public/")
 
-	app.HandleFile(name, NewFileViewer(fsys, path, ve.isEmbedFsys))
+	app.HandleFile(pattern, NewFileViewer(fsys, path, ve.isEmbedFsys, "", ""))
+
+	for _, m := range app.buildAssetURLs {
+		if m("/" + pattern) {
+			ve.handleAssetUrl(fsys, app, path, pattern)
+			break
+		}
+	}
+}
+
+const cacheControl = "public, max-age=31536000, immutable"
+
+func (ve *StaticViewEngine) handleAssetUrl(fsys fs.FS, app *App, fileName, pattern string) {
+	f, _ := fsys.Open(fileName) // nolint: errcheck
+	defer f.Close()
+
+	buf, _ := io.ReadAll(f) // nolint: errcheck
+	etag := ComputeETag(bytes.NewReader(buf))
+	ext := path.Ext(pattern)
+
+	assetURL := strings.TrimRight(pattern, ext) + "-" + strings.Trim(etag, "\"") + ext
+
+	app.HandleFile(assetURL,
+		NewFileViewer(fsys, fileName, ve.isEmbedFsys, etag, cacheControl))
+
+	app.AssetURLs["/"+pattern] = "/" + assetURL
 }

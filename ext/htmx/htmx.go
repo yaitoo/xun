@@ -3,6 +3,7 @@ package htmx
 import (
 	"bytes"
 	"embed"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"time"
@@ -89,6 +90,7 @@ func WriteHeader(c *xun.Context, key string, value any) {
 }
 
 //go:embed htmx.js
+//go:embed htmx.min.js
 var fsys embed.FS
 
 var zeroTime time.Time
@@ -96,7 +98,8 @@ var zeroTime time.Time
 // HandleFunc serves the htmx.js library for the htmx extension.
 func HandleFunc() xun.HandleFunc {
 	buf := loadJavaScript()
-	etag := xun.ComputeETag(bytes.NewReader(buf))
+
+	etag := xun.ComputeETagWith(bytes.NewReader(buf), crc32.NewIEEE())
 
 	return func(c *xun.Context) error {
 		c.Response.Header().Set("ETag", etag)
@@ -112,7 +115,7 @@ func HandleFunc() xun.HandleFunc {
 }
 
 func loadJavaScript() []byte {
-	f, _ := fsys.Open("htmx.js") // nolint: errcheck
+	f, _ := fsys.Open("htmx.min.js") // nolint: errcheck
 	defer f.Close()
 
 	buf, _ := io.ReadAll(f) // nolint: errcheck

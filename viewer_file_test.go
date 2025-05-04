@@ -21,7 +21,7 @@ func TestFileViewer(t *testing.T) {
 
 	// https://github.com/yaitoo/xun/issues/32
 	t.Run("etag_should_work_without_mod_time", func(t *testing.T) {
-		v := NewFileViewer(fsys, "public/index.html", true)
+		v := NewFileViewer(fsys, "public/index.html", true, "", "")
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 
@@ -52,12 +52,13 @@ func TestFileViewer(t *testing.T) {
 		err = v.Render(ctx, nil)
 		require.NoError(t, err)
 
+		etag = w.Header().Get("ETag")
 		require.NotEmpty(t, etag)
 		require.Equal(t, http.StatusNotModified, w.Code)
 	})
 
 	t.Run("last_modified_should_work", func(t *testing.T) {
-		v := NewFileViewer(fsys, "public/index.html", false)
+		v := NewFileViewer(fsys, "public/index.html", false, "", "")
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 		ctx := &Context{
@@ -95,7 +96,7 @@ func TestFileViewer(t *testing.T) {
 	})
 
 	t.Run("file_not_found_should_work", func(t *testing.T) {
-		v := NewFileViewer(fsys, "public/notfound.html", false)
+		v := NewFileViewer(fsys, "public/notfound.html", false, "", "")
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		w := httptest.NewRecorder()
 
@@ -109,7 +110,7 @@ func TestFileViewer(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusNotFound, w.Code)
 
-		v = NewFileViewer(fsys, "public/notfound.html", true)
+		v = NewFileViewer(fsys, "public/notfound.html", true, "", "")
 		r = httptest.NewRequest(http.MethodGet, "/", nil)
 		w = httptest.NewRecorder()
 
@@ -130,7 +131,7 @@ func TestFileViewer(t *testing.T) {
 			CanOpen: true,
 			CanRead: false,
 		}
-		v := NewFileViewer(mfs, "public/home.html", true)
+		v := NewFileViewer(mfs, "public/home.html", true, "", "")
 		require.Empty(t, v.etag)
 	})
 
@@ -140,7 +141,7 @@ func TestFileViewer(t *testing.T) {
 			CanRead: false,
 			CanStat: false,
 		}
-		v := NewFileViewer(mfs, "public/home.html", true)
+		v := NewFileViewer(mfs, "public/home.html", true, "", "")
 		require.Empty(t, v.etag)
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil)

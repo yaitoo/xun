@@ -2,6 +2,7 @@ package xun
 
 import (
 	"errors"
+	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -44,6 +45,10 @@ type App struct {
 	watcher        *fsnotify.Watcher
 	interceptor    Interceptor
 	compressors    []Compressor
+
+	funcMap        template.FuncMap
+	buildAssetURLs []func(string) bool
+	AssetURLs      map[string]string
 }
 
 // New allocates an App instance and loads all view engines.
@@ -56,6 +61,8 @@ func New(opts ...Option) *App {
 		routes:         make(map[string]*Routing),
 		viewers:        make(map[string]Viewer),
 		handlerViewers: []Viewer{&JsonViewer{}},
+		funcMap:        builtins,
+		AssetURLs:      make(map[string]string),
 	}
 
 	for _, o := range opts {
@@ -78,6 +85,8 @@ func New(opts ...Option) *App {
 	}
 
 	if app.fsys != nil {
+		app.funcMap["asset"] = app.getAssetUrl
+
 		for _, ve := range app.engines {
 			ve.Load(app.fsys, app)
 		}
@@ -93,6 +102,15 @@ func New(opts ...Option) *App {
 	}
 
 	return app
+}
+
+func (app *App) getAssetUrl(pattern string) string {
+	// lock-free, because AssetURLs is initialized in New() in production
+	if _, ok := app.AssetURLs[pattern]; ok {
+		return app.AssetURLs[pattern]
+	}
+
+	return pattern
 }
 
 // Group creates a new router group with the specified prefix.

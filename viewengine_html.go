@@ -55,7 +55,7 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 	if event.Has(fsnotify.Write) {
 		t, ok := ve.templates[name]
 		if ok {
-			return t.Reload(fsys, ve.templates)
+			return t.Reload(fsys, ve.templates, app.funcMap)
 		}
 	} else if event.Has(fsnotify.Create) {
 
@@ -99,7 +99,7 @@ func (ve *HtmlViewEngine) loadTemplate(path string) (*HtmlTemplate, error) {
 
 	t := NewHtmlTemplate(name, path)
 
-	if err := t.Load(ve.fsys, ve.templates); err != nil {
+	if err := t.Load(ve.fsys, ve.templates, ve.app.funcMap); err != nil {
 		return nil, err
 	}
 
@@ -133,7 +133,7 @@ func (ve *HtmlViewEngine) loadPage(path string) error {
 
 	t := NewHtmlTemplate(name, path)
 
-	if err := t.Load(ve.fsys, ve.templates); err != nil {
+	if err := t.Load(ve.fsys, ve.templates, ve.app.funcMap); err != nil {
 		return err
 	}
 
