@@ -7,20 +7,21 @@ import (
 )
 
 // NewFileViewer creates a new FileViewer instance.
-func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
+func NewFileViewer(fsys fs.FS, path string, isEmbed bool, etag, cache string) *FileViewer {
 	v := &FileViewer{
-		fsys: fsys,
-		path: path,
+		fsys:  fsys,
+		path:  path,
+		etag:  etag,
+		cache: cache,
 	}
 
-	if isEmbed {
+	if isEmbed && etag == "" {
 		f, err := fsys.Open(path)
 		if err != nil {
 			return v
 		}
 		defer f.Close()
 
-		v.isEmbed = true
 		v.etag = ComputeETag(f)
 	}
 
@@ -48,8 +49,8 @@ type FileViewer struct {
 	fsys fs.FS
 	path string
 
-	isEmbed bool
-	etag    string
+	etag  string
+	cache string
 }
 
 var fileViewerMime = &MimeType{Type: "*", SubType: "*"}
@@ -64,13 +65,11 @@ func (*FileViewer) MimeType() *MimeType {
 // Render serves a file from the file system using the FileViewer.
 // It writes the file to the http.ResponseWriter.
 func (v *FileViewer) Render(ctx *Context, data any) error {
-	if !v.isEmbed {
-		return v.serveContent(ctx.Response, ctx.Request)
-	}
-
-	ctx.Response.Header().Set("ETag", v.etag)
-	if WriteIfNoneMatch(ctx.Response, ctx.Request) {
-		return nil
+	if v.etag != "" {
+		ctx.Response.Header().Set("ETag", v.etag)
+		if WriteIfNoneMatch(ctx.Response, ctx.Request) {
+			return nil
+		}
 	}
 
 	return v.serveContent(ctx.Response, ctx.Request)
@@ -88,7 +87,12 @@ func (v *FileViewer) serveContent(w http.ResponseWriter, r *http.Request) error 
 
 	fi, err := f.Stat()
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		return err
+	}
+
+	if v.cache != "" {
+		w.Header().Set("Cache-Control", v.cache)
 	}
 
 	http.ServeContent(w, r, v.path, fi.ModTime(), f.(io.ReadSeeker))

@@ -52,7 +52,7 @@ func (ve *TextViewEngine) loadText(path string) error {
 // FileChanged is called when a file in the file system has changed. It checks if the change is a
 // file creation event in the "text/" directory, and if so, calls the handle method to update the
 // corresponding view in the app.
-func (ve *TextViewEngine) FileChanged(fsys fs.FS, _ *App, event fsnotify.Event) error { // skipcq: RVV-B0012
+func (ve *TextViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error { // skipcq: RVV-B0012
 	if event.Has(fsnotify.Remove) {
 		return nil
 	}
@@ -60,7 +60,7 @@ func (ve *TextViewEngine) FileChanged(fsys fs.FS, _ *App, event fsnotify.Event) 
 	if event.Has(fsnotify.Write) {
 		t, ok := ve.templates[event.Name]
 		if ok {
-			return t.Reload(fsys)
+			return t.Reload(fsys, app.funcMap)
 		}
 	} else if event.Has(fsnotify.Create) {
 
@@ -81,7 +81,7 @@ func (ve *TextViewEngine) loadTemplate(path string) (*TextTemplate, error) {
 		name: path,
 	}
 
-	if err := t.Load(ve.fsys); err != nil {
+	if err := t.Load(ve.fsys, ve.app.funcMap); err != nil {
 		return nil, err
 	}
 

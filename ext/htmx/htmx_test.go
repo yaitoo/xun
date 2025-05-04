@@ -92,7 +92,7 @@ func TestHandleFunc(t *testing.T) {
 	})
 
 	t.Run("etag", func(t *testing.T) {
-		f, _ := fsys.Open("htmx.js") // nolint: errcheck
+		f, _ := fsys.Open("htmx.min.js") // nolint: errcheck
 		defer f.Close()
 
 		buf, _ := io.ReadAll(f) // nolint: errcheck

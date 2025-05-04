@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -83,5 +84,28 @@ func WithInterceptor(i Interceptor) Option {
 func WithCompressor(c ...Compressor) Option {
 	return func(app *App) {
 		app.compressors = c
+	}
+}
+
+// WithTemplateFunc adds a custom template function to the application's function map.
+func WithTemplateFunc(name string, fn any) Option {
+	return func(app *App) {
+		app.funcMap[name] = fn
+	}
+}
+
+// WithTemplateFuncMap adds multiple template functions from the provided map.
+func WithTemplateFuncMap(fm template.FuncMap) Option {
+	return func(app *App) {
+		for name, fn := range fm {
+			app.funcMap[name] = fn
+		}
+	}
+}
+
+// WithBuildAssetURL adds a matcher function for identifying assets that need URL processing.
+func WithBuildAssetURL(match func(string) bool) Option {
+	return func(app *App) {
+		app.buildAssetURLs = append(app.buildAssetURLs, match)
 	}
 }

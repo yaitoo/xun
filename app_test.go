@@ -649,13 +649,11 @@ func TestDataBindOnHtml(t *testing.T) {
 		},
 	}
 
-	FuncMap["ToUpper"] = strings.ToUpper
-
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithMux(mux), WithFsys(fsys))
+	app := New(WithMux(mux), WithFsys(fsys), WithTemplateFunc("ToUpper", strings.ToUpper))
 
 	app.Get("/users", func(c *Context) error {
 		return c.View(users)
@@ -825,4 +823,57 @@ func TestUnhandledError(t *testing.T) {
 	require.Contains(t, w.String(), logId)
 	resp.Body.Close()
 
+}
+
+func TestAssetURL(t *testing.T) {
+	fsys := fstest.MapFS{
+		"pages/index.html": &fstest.MapFile{
+			Data: []byte(`{{asset "/assets/skin.css"}}`),
+		},
+		"pages/home.html": &fstest.MapFile{
+			Data: []byte(`{{asset "/assets/app.js"}}`),
+		},
+		"public/assets/skin.css": &fstest.MapFile{
+			Data: []byte(`body {background: red;}`),
+		},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithBuildAssetURL(func(s string) bool {
+		return strings.HasPrefix(s, "/assets/")
+	}))
+
+	app.Start()
+	defer app.Close()
+
+	req, err := http.NewRequest("GET", srv.URL, nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	etag := ComputeETag(bytes.NewReader(fsys["public/assets/skin.css"].Data))
+	buf, _ := io.ReadAll(resp.Body)
+	require.Equal(t, "/assets/skin-"+strings.Trim(etag, "\"")+".css", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/assets/skin-"+strings.Trim(etag, "\"")+".css", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	buf, _ = io.ReadAll(resp.Body)
+	require.Equal(t, fsys["public/assets/skin.css"].Data, buf)
+	cc := resp.Header.Get("Cache-Control")
+	require.Equal(t, cacheControl, cc)
+
+	req, err = http.NewRequest("GET", srv.URL+"/home", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	buf, _ = io.ReadAll(resp.Body)
+	require.Equal(t, "/assets/app.js", string(buf))
 }
