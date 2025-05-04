@@ -50,7 +50,7 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) {
 // directory, nothing will be done.
 func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
 	// Nothing should be updated for Write/Remove events.
-	if event.Has(fsnotify.Create) && strings.HasPrefix(event.Name, "public/") {
+	if strings.HasPrefix(event.Name, "public/") && (event.Has(fsnotify.Create) || event.Has(fsnotify.Write)) {
 		ve.handle(fsys, app, event.Name)
 	}
 
@@ -103,5 +103,5 @@ func (ve *StaticViewEngine) handleAssetUrl(fsys fs.FS, app *App, fileName, patte
 	app.HandleFile(assetURL,
 		NewFileViewer(fsys, fileName, ve.isEmbedFsys, etag, cacheControl))
 
-	app.AssetURLs["/"+pattern] = assetURL
+	app.AssetURLs["/"+pattern] = "/" + assetURL
 }
