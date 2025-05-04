@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"io/fs"
-	"log/slog"
 	"path"
 	"reflect"
 	"strings"
@@ -80,22 +79,11 @@ func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 const cacheControl = "public, max-age=31536000, immutable"
 
 func (ve *StaticViewEngine) handleAssetUrl(fsys fs.FS, app *App, fileName, pattern string) {
-
-	f, err := fsys.Open(fileName)
-	if err != nil {
-		app.logger.Error("xun: handleAssetUrl", slog.String("file", fileName), slog.Any("err", err))
-		return
-	}
+	f, _ := fsys.Open(fileName) // nolint: errcheck
 	defer f.Close()
 
-	buf, err := io.ReadAll(f)
-	if err != nil {
-		app.logger.Error("xun: handleAssetUrl", slog.String("file", fileName), slog.Any("err", err))
-		return
-	}
-
+	buf, _ := io.ReadAll(f) // nolint: errcheck
 	etag := ComputeETag(bytes.NewReader(buf))
-
 	ext := path.Ext(pattern)
 
 	assetURL := strings.TrimRight(pattern, ext) + "-" + strings.Trim(etag, "\"") + ext

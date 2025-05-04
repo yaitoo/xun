@@ -24,6 +24,16 @@ func TestFuncMap(t *testing.T) {
 		"pages/contains.html": &fstest.MapFile{
 			Data: []byte(`{{Contains "hello world" "world"}}`),
 		},
+
+		"pages/builtin/upper.html": &fstest.MapFile{
+			Data: []byte(`{{upper "upper"}}`),
+		},
+		"pages/builtin/lower.html": &fstest.MapFile{
+			Data: []byte(`{{lower "Lower"}}`),
+		},
+		"pages/builtin/join.html": &fstest.MapFile{
+			Data: []byte(`{{join " " "hello" "world"}}`),
+		},
 	}
 
 	mux := http.NewServeMux()
@@ -64,4 +74,28 @@ func TestFuncMap(t *testing.T) {
 	defer resp.Body.Close()
 	buf, _ = io.ReadAll(resp.Body)
 	require.Equal(t, "true", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/builtin/upper", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	buf, _ = io.ReadAll(resp.Body)
+	require.Equal(t, "UPPER", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/builtin/lower", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	buf, _ = io.ReadAll(resp.Body)
+	require.Equal(t, "lower", string(buf))
+
+	req, err = http.NewRequest("GET", srv.URL+"/builtin/join", nil)
+	require.NoError(t, err)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	buf, _ = io.ReadAll(resp.Body)
+	require.Equal(t, "hello world", string(buf))
 }
