@@ -2,10 +2,7 @@ package csrf
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"html/template"
-	"io"
+	"hash/crc32"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -141,7 +138,10 @@ func TestNew(t *testing.T) {
 
 func TestHandleFunc(t *testing.T) {
 
-	fn := HandleFunc([]byte("secret"), WithCookie("test_token"))
+	secretKey := []byte("secret")
+	cookieName := "test_token"
+
+	fn := HandleFunc(secretKey, WithCookie(cookieName))
 
 	t.Run("load", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -158,21 +158,15 @@ func TestHandleFunc(t *testing.T) {
 	})
 
 	t.Run("etag", func(t *testing.T) {
-		f, _ := fsys.Open("csrf.js") // nolint: errcheck
-		defer f.Close()
-
-		buf, _ := io.ReadAll(f) // nolint: errcheck
-
-		p, _ := template.New("token").Parse(string(buf)) // nolint: errcheck
-
-		var body bytes.Buffer
-		// nolint: errcheck
-		p.Execute(&body, &Options{
-			SecretKey:  []byte("secret"),
-			CookieName: "test_token",
+		buf := loadJavaScript(&Options{
+			SecretKey:  secretKey,
+			CookieName: cookieName,
 		})
 
-		etag := xun.ComputeETagWith(&body, hmac.New(sha256.New, []byte("secret")))
+		hashBuf := bytes.NewBuffer(buf)
+		hashBuf.Write(secretKey)
+
+		etag := xun.ComputeETagWith(hashBuf, crc32.NewIEEE())
 
 		w := httptest.NewRecorder()
 		ctx := &xun.Context{

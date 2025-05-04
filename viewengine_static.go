@@ -1,7 +1,11 @@
 package xun
 
 import (
+	"bytes"
+	"io"
 	"io/fs"
+	"log/slog"
+	"path"
 	"reflect"
 	"strings"
 
@@ -55,13 +59,49 @@ func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Eve
 
 func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 
-	name := path
+	pattern := path
 
-	if strings.HasSuffix(name, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
-		name = name[:len(name)-10]
+	if strings.HasSuffix(pattern, "/index.html") { // remove it, because index.html will be redirected to ./ in http.ServeFileFS
+		pattern = pattern[:len(pattern)-10]
 	}
 
-	name = strings.TrimPrefix(name, "public/")
+	pattern = strings.TrimPrefix(pattern, "public/")
 
-	app.HandleFile(name, NewFileViewer(fsys, path, ve.isEmbedFsys))
+	app.HandleFile(pattern, NewFileViewer(fsys, path, ve.isEmbedFsys, "", ""))
+
+	for _, m := range app.buildAssetURLs {
+		if m("/" + pattern) {
+			ve.handleAssetUrl(fsys, app, path, pattern)
+			break
+		}
+	}
+}
+
+const cacheControl = "public, max-age=31536000, immutable"
+
+func (ve *StaticViewEngine) handleAssetUrl(fsys fs.FS, app *App, fileName, pattern string) {
+
+	f, err := fsys.Open(fileName)
+	if err != nil {
+		app.logger.Error("xun: handleAssetUrl", slog.String("file", fileName), slog.Any("err", err))
+		return
+	}
+	defer f.Close()
+
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		app.logger.Error("xun: handleAssetUrl", slog.String("file", fileName), slog.Any("err", err))
+		return
+	}
+
+	etag := ComputeETag(bytes.NewReader(buf))
+
+	ext := path.Ext(pattern)
+
+	assetURL := strings.TrimRight(pattern, ext) + "-" + strings.Trim(etag, "\"") + ext
+
+	app.HandleFile(assetURL,
+		NewFileViewer(fsys, fileName, ve.isEmbedFsys, etag, cacheControl))
+
+	app.AssetURLs["/"+pattern] = assetURL
 }

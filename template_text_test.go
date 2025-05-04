@@ -20,7 +20,7 @@ func TestTextTemplate(t *testing.T) {
 			name: "foo.txt",
 		}
 
-		err := tmpl.Load(fsys)
+		err := tmpl.Load(fsys, builtins)
 		require.ErrorIs(t, err, fs.ErrNotExist)
 	})
 
@@ -29,7 +29,7 @@ func TestTextTemplate(t *testing.T) {
 			name: "invalid.txt",
 		}
 
-		err := tmpl.Load(fsys)
+		err := tmpl.Load(fsys, builtins)
 		require.NotNil(t, err)
 	})
 

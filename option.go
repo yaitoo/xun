@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -83,5 +84,25 @@ func WithInterceptor(i Interceptor) Option {
 func WithCompressor(c ...Compressor) Option {
 	return func(app *App) {
 		app.compressors = c
+	}
+}
+
+func WithTempalteFunc(name string, fn any) Option {
+	return func(app *App) {
+		app.funcMap[name] = fn
+	}
+}
+
+func WithTempalteFuncMap(fm template.FuncMap) Option {
+	return func(app *App) {
+		for name, fn := range fm {
+			app.funcMap[name] = fn
+		}
+	}
+}
+
+func WithBuildAssetURL(match func(string) bool) Option {
+	return func(app *App) {
+		app.buildAssetURLs = append(app.buildAssetURLs, match)
 	}
 }

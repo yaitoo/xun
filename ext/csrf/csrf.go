@@ -2,9 +2,8 @@ package csrf
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
 	"embed"
+	"hash/crc32"
 	"html/template"
 	"io"
 	"net/http"
@@ -51,6 +50,7 @@ func New(secretKey []byte, opts ...Option) xun.Middleware {
 }
 
 //go:embed csrf.js
+//go:embed csrf.min.js
 var fsys embed.FS
 
 var zeroTime time.Time
@@ -70,8 +70,10 @@ func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 
 	buf := loadJavaScript(o)
 
-	mac := hmac.New(sha256.New, o.SecretKey)
-	etag := xun.ComputeETagWith(bytes.NewReader(buf), mac)
+	hashBuf := bytes.NewBuffer(buf)
+	hashBuf.Write(o.SecretKey)
+
+	etag := xun.ComputeETagWith(hashBuf, crc32.NewIEEE())
 
 	return func(c *xun.Context) error {
 		c.Response.Header().Set("ETag", etag)
@@ -88,7 +90,7 @@ func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 }
 
 func loadJavaScript(o *Options) []byte {
-	f, _ := fsys.Open("csrf.js") // nolint: errcheck
+	f, _ := fsys.Open("csrf.min.js") // nolint: errcheck
 	defer f.Close()
 
 	buf, _ := io.ReadAll(f) // nolint: errcheck

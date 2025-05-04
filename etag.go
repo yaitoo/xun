@@ -1,9 +1,10 @@
 package xun
 
 import (
-	"crypto/md5" // skipcq: GSC-G401, GSC-G501, GO-S1023
+	// skipcq: GSC-G401, GSC-G501, GO-S1023
 	"encoding/hex"
 	"hash"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/textproto"
@@ -12,10 +13,11 @@ import (
 
 // ComputeETag returns the ETag header value for the given reader content.
 //
-// The value is computed by taking the md5 of the content and encoding it
+// The value is computed by taking the crc32 of the content and encoding it
 // as a hexadecimal string.
 func ComputeETag(r io.Reader) string {
-	return ComputeETagWith(r, md5.New()) // skipcq: GSC-G401, GSC-G501, GO-S1023
+	h := crc32.NewIEEE()
+	return ComputeETagWith(r, h)
 }
 
 // ComputeETagWith returns the ETag header value for the given reader content

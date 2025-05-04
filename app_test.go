@@ -649,13 +649,11 @@ func TestDataBindOnHtml(t *testing.T) {
 		},
 	}
 
-	FuncMap["ToUpper"] = strings.ToUpper
-
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithMux(mux), WithFsys(fsys))
+	app := New(WithMux(mux), WithFsys(fsys), WithTempalteFunc("ToUpper", strings.ToUpper))
 
 	app.Get("/users", func(c *Context) error {
 		return c.View(users)

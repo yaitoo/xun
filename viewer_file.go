@@ -7,13 +7,15 @@ import (
 )
 
 // NewFileViewer creates a new FileViewer instance.
-func NewFileViewer(fsys fs.FS, path string, isEmbed bool) *FileViewer {
+func NewFileViewer(fsys fs.FS, path string, isEmbed bool, etag, cache string) *FileViewer {
 	v := &FileViewer{
-		fsys: fsys,
-		path: path,
+		fsys:  fsys,
+		path:  path,
+		etag:  etag,
+		cache: cache,
 	}
 
-	if isEmbed {
+	if isEmbed && etag == "" {
 		f, err := fsys.Open(path)
 		if err != nil {
 			return v
@@ -50,6 +52,7 @@ type FileViewer struct {
 
 	isEmbed bool
 	etag    string
+	cache   string
 }
 
 var fileViewerMime = &MimeType{Type: "*", SubType: "*"}
@@ -92,6 +95,14 @@ func (v *FileViewer) serveContent(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	http.ServeContent(w, r, v.path, fi.ModTime(), f.(io.ReadSeeker))
+
+	if v.etag != "" {
+		w.Header().Set("ETag", v.etag)
+	}
+
+	if v.cache != "" {
+		w.Header().Set("Cache-Control", v.cache)
+	}
 
 	return nil
 }

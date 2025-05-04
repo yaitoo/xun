@@ -20,13 +20,13 @@ type TextTemplate struct {
 }
 
 // Load loads the template from the given file system.
-func (t *TextTemplate) Load(fsys fs.FS) error {
+func (t *TextTemplate) Load(fsys fs.FS, fm template.FuncMap) error {
 	buf, err := fs.ReadFile(fsys, t.name)
 	if err != nil {
 		return err
 	}
 
-	nt := template.New(t.name).Funcs(FuncMap)
+	nt := template.New(t.name).Funcs(fm)
 
 	if len(buf) == 0 {
 		nt, _ = nt.Parse("")
@@ -48,8 +48,8 @@ func (t *TextTemplate) Load(fsys fs.FS) error {
 }
 
 // Reload reloads the template from the given file system.
-func (t *TextTemplate) Reload(fsys fs.FS) error {
-	return t.Load(fsys)
+func (t *TextTemplate) Reload(fsys fs.FS, fm template.FuncMap) error {
+	return t.Load(fsys, fm)
 }
 
 // Execute executes the template with the given data and writes the result to the given writer.
