@@ -87,13 +87,15 @@ func WithCompressor(c ...Compressor) Option {
 	}
 }
 
-func WithTempalteFunc(name string, fn any) Option {
+// WithTemplateFunc adds a custom template function to the application's function map.
+func WithTemplateFunc(name string, fn any) Option {
 	return func(app *App) {
 		app.funcMap[name] = fn
 	}
 }
 
-func WithTempalteFuncMap(fm template.FuncMap) Option {
+// WithTemplateFuncMap adds multiple template functions from the provided map.
+func WithTemplateFuncMap(fm template.FuncMap) Option {
 	return func(app *App) {
 		for name, fn := range fm {
 			app.funcMap[name] = fn
@@ -101,6 +103,7 @@ func WithTempalteFuncMap(fm template.FuncMap) Option {
 	}
 }
 
+// WithBuildAssetURL adds a matcher function for identifying assets that need URL processing.
 func WithBuildAssetURL(match func(string) bool) Option {
 	return func(app *App) {
 		app.buildAssetURLs = append(app.buildAssetURLs, match)
