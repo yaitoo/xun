@@ -36,27 +36,30 @@ func TestServer(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		c2, err := srv.Join(ctx, "join", rw)
-		require.NoError(t, err)
+		require.Nil(t, c2)
+		require.ErrorIs(t, err, ErrClientJoined)
 
-		require.Equal(t, c1, c2)
+		c3, err := srv.MustJoin(ctx, "join", rw)
+		require.NoError(t, err)
+		require.Equal(t, c1, c3)
 		require.Equal(t, "join", c1.ID)
 
-		c3 := srv.Get("join")
+		c4 := srv.Get("join")
 
-		require.Equal(t, c1, c3)
+		require.Equal(t, c1, c4)
 
 		go func() {
 			time.Sleep(1 * time.Second)
 			c3.Close()
 		}()
 
-		c2.Wait()
 		c3.Wait()
+		c4.Wait()
 
 		srv.Leave("join")
 
-		c4 := srv.Get("join")
-		require.Nil(t, c4)
+		c5 := srv.Get("join")
+		require.Nil(t, c5)
 
 	})
 
@@ -236,7 +239,7 @@ func TestServer(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, c1)
 
-		c2, err := srv.Join(context.TODO(), "c1", httptest.NewRecorder())
+		c2, err := srv.MustJoin(context.TODO(), "c1", httptest.NewRecorder())
 		require.NoError(t, err)
 		require.NotNil(t, c2)
 		srv.Shutdown()
