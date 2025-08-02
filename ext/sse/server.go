@@ -4,14 +4,11 @@ package sse
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"sync"
 
 	"github.com/yaitoo/async"
 )
-
-var ErrClientJoined = errors.New("sse: client already joined")
 
 // Server represents a structure that manages connected clients
 // in a concurrent environment. It uses a read-write mutex to
@@ -42,8 +39,8 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 	_, ok := s.conns[id]
 	s.RUnlock()
 
-	if !ok {
-		return nil, ErrClientClosed
+	if ok {
+		return nil, ErrClientJoined
 	}
 
 	c := &Conn{

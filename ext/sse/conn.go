@@ -8,6 +8,7 @@ import (
 
 var (
 	ErrClientClosed = errors.New("sse: client closed")
+	ErrClientJoined = errors.New("sse: client already joined")
 )
 
 // Conn represents a connection to a streaming service.
