@@ -47,7 +47,7 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 		ID: id,
 	}
 
-	s.Unlock()
+	s.Lock()
 	s.conns[id] = c
 	s.Unlock()
 
