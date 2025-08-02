@@ -35,11 +35,11 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 		return nil, err
 	}
 
-	s.RLock()
+	s.Lock()
 	_, ok := s.conns[id]
-	s.RUnlock()
 
 	if ok {
+		s.Unlock()
 		return nil, ErrClientJoined
 	}
 
@@ -47,11 +47,44 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 		ID: id,
 	}
 
-	s.Lock()
 	s.conns[id] = c
-	s.Unlock()
 
 	c.Connect(ctx, sm)
+	s.Unlock()
+
+	sm.Header().Set("Content-Type", "text/event-stream")
+	sm.Header().Set("Cache-Control", "no-cache")
+	sm.Header().Set("Connection", "keep-alive")
+	sm.Flush()
+
+	return c, nil
+}
+
+// MustJoin creates or replaces a connection with the given id, associates it with the provided
+// http.ResponseWriter, and initializes a new SSE (Server-Sent Events) stream. If a connection
+// with the same id already exists, it is closed and replaced. The function sets appropriate
+// headers for SSE, flushes the initial response, and returns the new connection. If the
+// streamer cannot be created, an error is returned.
+func (s *Server) MustJoin(ctx context.Context, id string, rw http.ResponseWriter) (*Conn, error) {
+	sm, err := NewStreamer(rw)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Lock()
+	c, ok := s.conns[id]
+
+	if ok {
+		c.Close()
+	}
+	c = &Conn{
+		ID: id,
+	}
+
+	s.conns[id] = c
+
+	c.Connect(ctx, sm)
+	s.Unlock()
 
 	sm.Header().Set("Content-Type", "text/event-stream")
 	sm.Header().Set("Cache-Control", "no-cache")

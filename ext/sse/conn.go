@@ -8,6 +8,7 @@ import (
 
 var (
 	ErrClientClosed = errors.New("sse: client closed")
+	ErrServerClosed = errors.New("sse: server closed")
 	ErrClientJoined = errors.New("sse: client already joined")
 )
 
@@ -19,7 +20,7 @@ type Conn struct {
 	ID     string
 	s      Streamer
 	ctx    context.Context
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 }
 
 // Connect establishes a connection for the Client using the provided Streamer.
@@ -27,7 +28,7 @@ type Conn struct {
 // the http.Flusher interface for flushing data.
 func (c *Conn) Connect(ctx context.Context, s Streamer) {
 	c.s = s
-	c.ctx, c.cancel = context.WithCancel(ctx)
+	c.ctx, c.cancel = context.WithCancelCause(ctx)
 }
 
 // Send sends an event to the client by writing the event name and data to the response writer.
@@ -58,12 +59,15 @@ func (c *Conn) Context() context.Context {
 // Wait blocks until the context is done or the client is closed.
 // It listens for either the cancellation of the context or a signal
 // to close the client, allowing for graceful shutdown.
-func (c *Conn) Wait() {
-	<-c.ctx.Done()
+func (c *Conn) Wait() error {
+	ctx := c.ctx
+	<-ctx.Done()
+
+	return ctx.Err()
 }
 
 // Close gracefully shuts down the Client by sending a signal to the close channel.
 // This method should be called to ensure that any ongoing operations are properly terminated.
 func (c *Conn) Close() {
-	c.cancel()
+	c.cancel(ErrServerClosed)
 }
