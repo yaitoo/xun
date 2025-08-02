@@ -15,7 +15,7 @@ import (
 // ensure safe access to the clients map, which holds the
 // active Client instances identified by their unique keys.
 type Server struct {
-	sync.RWMutex
+	mu    sync.RWMutex
 	conns map[string]*Conn
 }
 
@@ -35,11 +35,11 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 		return nil, err
 	}
 
-	s.Lock()
+	s.mu.Lock()
 	_, ok := s.conns[id]
 
 	if ok {
-		s.Unlock()
+		s.mu.Unlock()
 		return nil, ErrClientJoined
 	}
 
@@ -50,7 +50,7 @@ func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*
 	s.conns[id] = c
 
 	c.Connect(ctx, sm)
-	s.Unlock()
+	s.mu.Unlock()
 
 	sm.Header().Set("Content-Type", "text/event-stream")
 	sm.Header().Set("Cache-Control", "no-cache")

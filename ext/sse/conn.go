@@ -16,7 +16,7 @@ var (
 // It holds the client's ID, a Streamer instance for managing the stream,
 // a context for cancellation and timeout, and a channel for signaling closure.
 type Conn struct {
-	sync.Mutex
+	mu     sync.Mutex
 	ID     string
 	s      Streamer
 	ctx    context.Context
@@ -39,8 +39,8 @@ func (c *Conn) Send(evt Event) error {
 		return NewError(c.ID, ErrClientClosed)
 	}
 
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	err := evt.Write(c.s)
 	if err != nil {
