@@ -50,6 +50,10 @@ func (c *Conn) Send(evt Event) error {
 	return nil
 }
 
+func (c *Conn) Context() context.Context {
+	return c.ctx
+}
+
 // Wait blocks until the context is done or the client is closed.
 // It listens for either the cancellation of the context or a signal
 // to close the client, allowing for graceful shutdown.

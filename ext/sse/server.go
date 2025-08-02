@@ -4,11 +4,14 @@ package sse
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync"
 
 	"github.com/yaitoo/async"
 )
+
+var ErrClientJoined = errors.New("sse: client already joined")
 
 // Server represents a structure that manages connected clients
 // in a concurrent environment. It uses a read-write mutex to
@@ -26,25 +29,30 @@ func New() *Server {
 	}
 }
 
-// Join adds a new client to the server or retrieves an existing one based on the provided ID.
+// Join adds a new client to the server.
 // It establishes a connection with the specified Streamer and sets the appropriate headers
-// for Server-Sent Events (SSE). If a client with the given ID already exists, it reuses that client.
+// for Server-Sent Events (SSE).
 func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*Conn, error) {
 	sm, err := NewStreamer(rw)
 	if err != nil {
 		return nil, err
 	}
 
-	s.Lock()
-	defer s.Unlock()
-	c, ok := s.conns[id]
+	s.RLock()
+	_, ok := s.conns[id]
+	s.RUnlock()
 
 	if !ok {
-		c = &Conn{
-			ID: id,
-		}
-		s.conns[id] = c
+		return nil, ErrClientClosed
 	}
+
+	c := &Conn{
+		ID: id,
+	}
+
+	s.Unlock()
+	s.conns[id] = c
+	s.Unlock()
 
 	c.Connect(ctx, sm)
 
