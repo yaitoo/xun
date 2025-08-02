@@ -71,20 +71,20 @@ func (s *Server) MustJoin(ctx context.Context, id string, rw http.ResponseWriter
 		return nil, err
 	}
 
-	s.Lock()
+	s.mu.Lock()
 	c, ok := s.conns[id]
 
 	if ok {
 		c.Close()
+	} else {
+		c = &Conn{
+			ID: id,
+		}
+		s.conns[id] = c
 	}
-	c = &Conn{
-		ID: id,
-	}
-
-	s.conns[id] = c
 
 	c.Connect(ctx, sm)
-	s.Unlock()
+	s.mu.Unlock()
 
 	sm.Header().Set("Content-Type", "text/event-stream")
 	sm.Header().Set("Cache-Control", "no-cache")
@@ -99,8 +99,8 @@ func (s *Server) MustJoin(ctx context.Context, id string, rw http.ResponseWriter
 // before modifying the clients map and ensures that the lock is
 // released afterward.
 func (s *Server) Leave(id string) {
-	s.Lock()
-	defer s.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	delete(s.conns, id)
 }
@@ -109,8 +109,8 @@ func (s *Server) Leave(id string) {
 // It uses a read lock to ensure thread-safe access to the clients map.
 // Returns nil if no Client is found for the specified id.
 func (s *Server) Get(id string) *Conn {
-	s.RLock()
-	defer s.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.conns[id]
 }
 
@@ -118,8 +118,8 @@ func (s *Server) Get(id string) *Conn {
 // It acquires a read lock to ensure thread-safe access to the clients slice,
 // and spawns a goroutine for each client to handle the sending of the event.
 func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
-	s.RLock()
-	defer s.RUnlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	tasks := async.NewA()
 
@@ -142,8 +142,8 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 // Shutdown gracefully closes all active client connections and cleans up the client list.
 // It locks the server to ensure thread safety during the shutdown process.
 func (s *Server) Shutdown() {
-	s.Lock()
-	defer s.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, c := range s.conns {
 		c.Close()
 	}
