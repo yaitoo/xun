@@ -16,7 +16,7 @@ func createContext(w http.ResponseWriter) *xun.Context {
 		w = httptest.NewRecorder()
 	}
 	return &xun.Context{
-		Request:  httptest.NewRequest(http.MethodGet, "/", nil),
+		Request:  httptest.NewRequest(http.MethodGet, "/", http.NoBody),
 		Response: xun.NewResponseWriter(w),
 	}
 }
@@ -54,19 +54,19 @@ func TestHosts(t *testing.T) {
 
 		ctx := createContext(nil)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/status", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/status", http.NoBody)
 		err := m(nop)(ctx)
 		require.NoError(t, err)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/ping", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/ping", http.NoBody)
 		err = m(nop)(ctx)
 		require.NoError(t, err)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/home", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/home", http.NoBody)
 		err = m(nop)(ctx)
 		require.ErrorIs(t, err, xun.ErrCancelled)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://abc.com/home", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://abc.com/home", http.NoBody)
 		err = m(nop)(ctx)
 		require.NoError(t, err)
 
