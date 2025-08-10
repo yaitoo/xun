@@ -185,6 +185,7 @@ func TestBinder(t *testing.T) {
 			require.Len(t, result.Errors, 2)
 			require.Equal(t, "Email必须是一个有效的邮箱", result.Errors["Email"])
 			require.Equal(t, "Passwd为必填字段", result.Errors["Passwd"])
+
 		})
 	}
 
@@ -202,4 +203,16 @@ func TestInvalid(t *testing.T) {
 		_, err := BindJson[int](httptest.NewRequest(http.MethodGet, "/", strings.NewReader(`"`)))
 		require.NotNil(t, err)
 	})
+}
+
+func TestError(t *testing.T) {
+	e := TEntity[any]{
+		Data:   nil,
+		Errors: map[string]string{"key": "value"},
+	}
+
+	e.Errors["key"] = "value"
+
+	require.Equal(t, "key: value", e.Error())
+
 }
