@@ -15,75 +15,52 @@ import (
 // ensure safe access to the clients map, which holds the
 // active Client instances identified by their unique keys.
 type Server struct {
-	mu    sync.RWMutex
-	conns map[string]*Conn
+	mu      sync.RWMutex
+	clients map[string]*Client
+	conns   map[string]int
+	ctx     context.Context
+	cancel  context.CancelCauseFunc
 }
 
 // New creates and returns a new instance of the Server struct.
 func New() *Server {
+	ctx, cf := context.WithCancelCause(context.Background())
 	return &Server{
-		conns: make(map[string]*Conn),
+		clients: make(map[string]*Client),
+		conns:   make(map[string]int),
+		ctx:     ctx,
+		cancel:  cf,
 	}
 }
 
 // Join adds a new client to the server.
 // It establishes a connection with the specified Streamer and sets the appropriate headers
 // for Server-Sent Events (SSE).
-func (s *Server) Join(ctx context.Context, id string, rw http.ResponseWriter) (*Conn, error) {
+func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, error) {
 	sm, err := NewStreamer(rw)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	s.mu.Lock()
-	_, ok := s.conns[id]
+	c, ok := s.clients[clientID]
 
-	if ok {
-		s.mu.Unlock()
-		return nil, ErrClientJoined
-	}
-
-	c := &Conn{
-		ID: id,
-	}
-
-	s.conns[id] = c
-
-	c.Connect(ctx, sm)
-	s.mu.Unlock()
-
-	sm.Header().Set("Content-Type", "text/event-stream")
-	sm.Header().Set("Cache-Control", "no-cache")
-	sm.Header().Set("Connection", "keep-alive")
-	sm.Flush()
-
-	return c, nil
-}
-
-// MustJoin creates or replaces a connection with the given id, associates it with the provided
-// http.ResponseWriter, and initializes a new SSE (Server-Sent Events) stream. If a connection
-// with the same id already exists, it is closed and replaced. The function sets appropriate
-// headers for SSE, flushes the initial response, and returns the new connection. If the
-// streamer cannot be created, an error is returned.
-func (s *Server) MustJoin(ctx context.Context, id string, rw http.ResponseWriter) (*Conn, error) {
-	sm, err := NewStreamer(rw)
-	if err != nil {
-		return nil, err
-	}
-
-	s.mu.Lock()
-	c, ok := s.conns[id]
-
-	if ok {
-		c.Close()
-	} else {
-		c = &Conn{
-			ID: id,
+	if !ok {
+		c = &Client{
+			ID:     clientID,
+			connID: 1,
 		}
-		s.conns[id] = c
+
+		s.clients[clientID] = c
+		s.conns[clientID] = 1
+		c.ctx, c.cancel = context.WithCancelCause(s.ctx)
+
+	} else {
+		c.connID = s.conns[clientID] + 1
+		s.conns[clientID] = c.connID
 	}
 
-	c.Connect(ctx, sm)
+	c.sm = sm
 	s.mu.Unlock()
 
 	sm.Header().Set("Content-Type", "text/event-stream")
@@ -91,27 +68,41 @@ func (s *Server) MustJoin(ctx context.Context, id string, rw http.ResponseWriter
 	sm.Header().Set("Connection", "keep-alive")
 	sm.Flush()
 
-	return c, nil
+	return c, c.connID, nil
 }
 
 // Leave removes a client from the server's client list by its ID.
 // This method is safe for concurrent use, as it locks the server
 // before modifying the clients map and ensures that the lock is
 // released afterward.
-func (s *Server) Leave(id string) {
+func (s *Server) Leave(clientID string, connID int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.conns, id)
+	c, ok := s.clients[clientID]
+	if !ok {
+		return true
+	}
+
+	if c.connID != connID {
+		return false
+	}
+
+	delete(s.clients, clientID)
+	delete(s.conns, clientID)
+
+	c.cancel(ErrServerClosed)
+
+	return true
 }
 
 // Get retrieves the Client associated with the given id from the Server.
 // It uses a read lock to ensure thread-safe access to the clients map.
 // Returns nil if no Client is found for the specified id.
-func (s *Server) Get(id string) *Conn {
+func (s *Server) Get(id string) *Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.conns[id]
+	return s.clients[id]
 }
 
 // Broadcast sends the specified event to all connected clients.
@@ -123,11 +114,11 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 
 	tasks := async.NewA()
 
-	for _, c := range s.conns {
+	for _, c := range s.clients {
 
 		tasks.Add(func(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
-				return NewError(c.ID, err)
+				return NewError(c.ID, context.Cause(ctx))
 			}
 			if err := c.Send(event); err != nil {
 				return NewError(c.ID, err)
@@ -144,9 +135,8 @@ func (s *Server) Broadcast(ctx context.Context, event Event) ([]error, error) {
 func (s *Server) Shutdown() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, c := range s.conns {
-		c.Close()
-	}
+	s.cancel(ErrServerClosed)
 
-	s.conns = make(map[string]*Conn)
+	s.clients = make(map[string]*Client)
+	s.conns = make(map[string]int)
 }
