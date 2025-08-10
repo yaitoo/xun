@@ -1,14 +1,11 @@
 package acl
 
 import (
-	"errors"
 	"net"
 	"net/http"
 
 	"github.com/yaitoo/xun"
 )
-
-var ErrInvalidRemoteAddr = errors.New("acl: invalid_remote_addr")
 
 // ParseIPNet parses the given IP address and returns its IPNet.
 // If the IP address does not have a netmask, the default netmask is used.

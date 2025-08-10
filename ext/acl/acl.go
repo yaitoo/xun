@@ -42,7 +42,7 @@ func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 
 			addr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 			if err != nil {
-				return ErrInvalidRemoteAddr
+				return next(c)
 			}
 
 			m := Model{
@@ -73,7 +73,7 @@ func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 
 			ip := net.ParseIP(addr)
 			if ip == nil {
-				return ErrInvalidRemoteAddr
+				return next(c)
 			}
 
 			// in allow list

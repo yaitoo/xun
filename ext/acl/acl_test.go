@@ -16,7 +16,7 @@ func createContext(w http.ResponseWriter) *xun.Context {
 		w = httptest.NewRecorder()
 	}
 	return &xun.Context{
-		Request:  httptest.NewRequest(http.MethodGet, "/", nil),
+		Request:  httptest.NewRequest(http.MethodGet, "/", http.NoBody),
 		Response: xun.NewResponseWriter(w),
 	}
 }
@@ -54,19 +54,19 @@ func TestHosts(t *testing.T) {
 
 		ctx := createContext(nil)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/status", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/status", http.NoBody)
 		err := m(nop)(ctx)
 		require.NoError(t, err)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/ping", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/ping", http.NoBody)
 		err = m(nop)(ctx)
 		require.NoError(t, err)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/home", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://123.com/home", http.NoBody)
 		err = m(nop)(ctx)
 		require.ErrorIs(t, err, xun.ErrCancelled)
 
-		ctx.Request = httptest.NewRequest(http.MethodGet, "http://abc.com/home", nil)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "http://abc.com/home", http.NoBody)
 		err = m(nop)(ctx)
 		require.NoError(t, err)
 
@@ -303,14 +303,14 @@ func TestCountries(t *testing.T) {
 	})
 }
 
-func TestInvalid(t *testing.T) {
+func TestIgnoreWhenConfigInvalid(t *testing.T) {
 	t.Run("invalid_remote_addr", func(t *testing.T) {
 		m := New()
 
 		ctx := createContext(nil)
 		ctx.Request.RemoteAddr = "2001:db8:85a3:0:0:8a2e:370:1]:1111"
 		err := m(nop)(ctx)
-		require.ErrorIs(t, err, ErrInvalidRemoteAddr)
+		require.NoError(t, err)
 	})
 	t.Run("invalid_remote_ip", func(t *testing.T) {
 		m := New()
@@ -318,6 +318,6 @@ func TestInvalid(t *testing.T) {
 		ctx := createContext(nil)
 		ctx.Request.RemoteAddr = "172.0:1"
 		err := m(nop)(ctx)
-		require.ErrorIs(t, err, ErrInvalidRemoteAddr)
+		require.NoError(t, err)
 	})
 }

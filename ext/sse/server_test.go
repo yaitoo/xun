@@ -10,10 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/yaitoo/async"
 	"github.com/yaitoo/xun"
 )
 
@@ -22,49 +20,55 @@ func TestServer(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c1, err := srv.Join(context.TODO(), "join", nil)
+		c1, id, err := srv.Join("join", nil)
 		require.Nil(t, c1)
+		require.Equal(t, 0, id)
 		require.ErrorIs(t, err, ErrNotStreamer)
 
-		c1, err = srv.Join(context.TODO(), "join", &notStreamer{})
+		c1, id, err = srv.Join("join", &notFlusher{})
 		require.Nil(t, c1)
+		require.Equal(t, 0, id)
 		require.ErrorIs(t, err, ErrNotStreamer)
 
-		c1, err = srv.Join(context.TODO(), "join", rw)
+		c1, id, err = srv.Join("join", rw)
+		require.NotNil(t, c1)
 		require.NoError(t, err)
+		require.Equal(t, 1, id)
+		require.Equal(t, 1, c1.connID)
+		require.Nil(t, err)
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		c2, err := srv.Join(ctx, "join", rw)
+		c2, id2, err := srv.Join("join", rw)
+		require.NotNil(t, c2)
+		require.Equal(t, 2, id2)
+		require.Equal(t, 2, c2.connID)
+		require.Equal(t, "join", c2.ID)
 		require.NoError(t, err)
-
 		require.Equal(t, c1, c2)
-		require.Equal(t, "join", c1.ID)
 
 		c3 := srv.Get("join")
-
 		require.Equal(t, c1, c3)
 
-		go func() {
-			time.Sleep(1 * time.Second)
-			c3.Close()
-		}()
+		ok := srv.Leave(c1.ID, id)
+		require.False(t, ok)
 
-		c2.Wait()
-		c3.Wait()
+		c3 = srv.Get("join")
+		require.Equal(t, c1, c3)
 
-		srv.Leave("join")
+		ok = srv.Leave(c1.ID, id2)
+		require.True(t, ok)
 
-		c4 := srv.Get("join")
-		require.Nil(t, c4)
+		c3 = srv.Get("join")
+		require.Nil(t, c3)
 
+		ok = srv.Leave(c1.ID, id2)
+		require.True(t, ok)
 	})
 
 	t.Run("send", func(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c, err := srv.Join(context.TODO(), "send", rw)
+		c, _, err := srv.Join("send", rw)
 		require.NoError(t, err)
 
 		r := NewReader(&readCloser{Buffer: rw.Body})
@@ -158,11 +162,11 @@ func TestServer(t *testing.T) {
 		rw1 := httptest.NewRecorder()
 		rw2 := httptest.NewRecorder()
 
-		c1, err := srv.Join(context.TODO(), "c1", rw1)
+		c1, _, err := srv.Join("c1", rw1)
 		require.NotNil(t, c1)
 		require.NoError(t, err)
 
-		c2, err := srv.Join(context.TODO(), "c2", rw2)
+		c2, _, err := srv.Join("c2", rw2)
 		require.NotNil(t, c2)
 		require.NoError(t, err)
 
@@ -200,16 +204,14 @@ func TestServer(t *testing.T) {
 
 	})
 
-	t.Run("invalid", func(t *testing.T) {
+	t.Run("fail_to_send", func(t *testing.T) {
 		srv := New()
 
 		rw := &streamerMock{
 			ResponseWriter: httptest.NewRecorder(),
 		}
 
-		ctx, cancel := context.WithCancel(context.TODO())
-
-		c, err := srv.Join(ctx, "invalid", rw)
+		c, id, err := srv.Join("invalid", rw)
 		require.NoError(t, err)
 
 		err = c.Send(&JsonEvent{Name: "event1", Data: make(chan int)})
@@ -218,32 +220,60 @@ func TestServer(t *testing.T) {
 		err = c.Send(&TextEvent{Name: "event1"})
 		require.Error(t, err)
 
-		cancel()
+		srv.Leave(c.ID, id)
 
 		err = c.Send(&TextEvent{Name: "event1"})
-		require.ErrorIs(t, err, ErrClientClosed)
+		require.ErrorIs(t, err, ErrServerClosed)
 
-		errs, err := srv.Broadcast(context.TODO(), &TextEvent{Name: "event1", Data: "data1"})
-		require.ErrorIs(t, err, async.ErrTooLessDone)
-		require.Len(t, errs, 1)
+		c, id, err = srv.Join("invalid", rw)
+		require.NoError(t, err)
+		require.NotNil(t, c)
+		require.Equal(t, 1, id)
+
+		ctx, cf := context.WithCancelCause(context.Background())
+		cf(context.Canceled)
+
+		_, err = srv.Broadcast(ctx, &TextEvent{Name: "event1", Data: "data1"})
+		require.ErrorIs(t, err, context.Canceled)
 
 	})
 
 	t.Run("shutdown", func(t *testing.T) {
 		srv := New()
 
-		c1, err := srv.Join(context.TODO(), "c1", httptest.NewRecorder())
+		c1, _, err := srv.Join("c1", httptest.NewRecorder())
 		require.NoError(t, err)
 		require.NotNil(t, c1)
 
-		c2, err := srv.Join(context.TODO(), "c1", httptest.NewRecorder())
-		require.NoError(t, err)
-		require.NotNil(t, c2)
 		srv.Shutdown()
-		c1.Wait()
-		c2.Wait()
 
-		require.Len(t, srv.conns, 0)
+		err = context.Cause(c1.Context())
+		require.ErrorIs(t, err, ErrServerClosed)
+
+		require.Len(t, srv.clients, 0)
+	})
+
+	t.Run("client_wait", func(t *testing.T) {
+		srv := New()
+
+		rw := httptest.NewRecorder()
+
+		c, _, err := srv.Join("closed", rw)
+		require.NoError(t, err)
+		ctx, cf := context.WithCancel(context.Background())
+
+		c.Close()
+
+		err = c.Wait(ctx)
+		require.ErrorIs(t, err, ErrServerClosed)
+
+		c2, _, err := srv.Join("cancelled", rw)
+		require.NoError(t, err)
+		cf()
+
+		err = c2.Wait(ctx)
+		require.ErrorIs(t, err, context.Canceled)
+
 	})
 
 	t.Run("send_with_gzip", func(t *testing.T) {
@@ -252,7 +282,7 @@ func TestServer(t *testing.T) {
 
 		gc := &xun.GzipCompressor{}
 
-		c, err := srv.Join(context.TODO(), "send", gc.New(rw))
+		c, _, err := srv.Join("send", gc.New(rw))
 		require.NoError(t, err)
 
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
@@ -286,7 +316,7 @@ func TestServer(t *testing.T) {
 
 		gc := &xun.DeflateCompressor{}
 
-		c, err := srv.Join(context.TODO(), "send", gc.New(rw))
+		c, _, err := srv.Join("send", gc.New(rw))
 		require.NoError(t, err)
 
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
@@ -315,18 +345,18 @@ func TestServer(t *testing.T) {
 	})
 }
 
-type notStreamer struct {
+type notFlusher struct {
 }
 
-func (s *notStreamer) Header() http.Header {
+func (*notFlusher) Header() http.Header {
 	return http.Header{}
 }
 
-func (s *notStreamer) Write([]byte) (int, error) {
+func (*notFlusher) Write([]byte) (int, error) {
 	return 0, errors.New("mock: invalid")
 }
 
-func (s *notStreamer) WriteHeader(int) {}
+func (*notFlusher) WriteHeader(int) {}
 
 type streamerMock struct {
 	http.ResponseWriter
@@ -342,6 +372,6 @@ type readCloser struct {
 	*bytes.Buffer
 }
 
-func (r *readCloser) Close() error {
+func (*readCloser) Close() error {
 	return nil
 }

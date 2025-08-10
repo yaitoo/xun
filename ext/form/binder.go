@@ -2,6 +2,7 @@ package form
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-playground/form/v4"
 	"github.com/go-playground/validator/v10"
@@ -105,4 +106,12 @@ func (t *TEntity[T]) Validate(languages ...string) bool {
 	}
 
 	return false
+}
+
+func (t *TEntity[T]) Error() string {
+	var errs []string
+	for k, v := range t.Errors {
+		errs = append(errs, k+": "+v)
+	}
+	return strings.Join(errs, "\n")
 }
