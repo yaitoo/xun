@@ -351,7 +351,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
-		srv := New(WithTimeout(3 * time.Second))
+		srv := New(WithClientTimeout(3 * time.Second))
 		rw := &stdWriter{ResponseRecorder: httptest.NewRecorder()}
 
 		_, _, _, err := srv.Join("keepalive", rw)
@@ -362,7 +362,9 @@ func TestServer(t *testing.T) {
 		}
 		c, _, _, err := srv.Join("timeout", sm)
 		require.NoError(t, err)
+		sm.mu.Lock()
 		sm.isWorking = false
+		sm.mu.Unlock()
 
 		time.Sleep(2 * time.Second)
 		body := rw.GetBody()
@@ -390,6 +392,7 @@ func (*notFlusher) Write([]byte) (int, error) {
 func (*notFlusher) WriteHeader(int) {}
 
 type streamerMock struct {
+	mu        sync.Mutex
 	isWorking bool
 	http.ResponseWriter
 }
@@ -399,6 +402,8 @@ func (*streamerMock) Header() http.Header {
 }
 
 func (s *streamerMock) Write(buf []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.isWorking {
 		return len(buf), nil
 	}

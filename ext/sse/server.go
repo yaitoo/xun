@@ -16,13 +16,12 @@ import (
 // ensure safe access to the clients map, which holds the
 // active Client instances identified by their unique keys.
 type Server struct {
-	mu      sync.RWMutex
-	clients map[string]*Client
-	conns   map[string]int
-	ctx     context.Context
-	cancel  context.CancelCauseFunc
-
-	timeout time.Duration
+	mu            sync.RWMutex
+	clients       map[string]*Client
+	conns         map[string]int
+	ctx           context.Context
+	cancel        context.CancelCauseFunc
+	clientTimeout time.Duration
 }
 
 // New creates and returns a new instance of the Server struct.
@@ -39,16 +38,16 @@ func New(opts ...Option) *Server {
 		opt(s)
 	}
 
-	go s.startKeepAlive()
+	go s.startHealthCheck()
 	return s
 }
 
-func (s *Server) startKeepAlive() {
-	if s.timeout <= 0 {
+func (s *Server) startHealthCheck() {
+	if s.clientTimeout <= 0 {
 		return
 	}
 
-	ticker := time.NewTicker(s.timeout / 2)
+	ticker := time.NewTicker(s.clientTimeout / 2)
 	defer ticker.Stop()
 
 	var lastSeen, now, dead, needPing time.Time
@@ -62,8 +61,8 @@ func (s *Server) startKeepAlive() {
 			s.mu.RLock()
 			deadClients = make([]*Client, 0, len(s.clients))
 			now = time.Now()
-			dead = now.Add(-s.timeout)
-			needPing = now.Add(-s.timeout / 2)
+			dead = now.Add(-s.clientTimeout)
+			needPing = now.Add(-s.clientTimeout / 2)
 
 			for _, c := range s.clients {
 				// lastSeen + timeout < now
