@@ -4,6 +4,7 @@ package sse
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -22,7 +23,7 @@ type Server struct {
 	ctx     context.Context
 	cancel  context.CancelCauseFunc
 
-	keepalive time.Duration
+	timeout time.Duration
 }
 
 // New creates and returns a new instance of the Server struct.
@@ -39,19 +40,20 @@ func New(opts ...Option) *Server {
 		opt(s)
 	}
 
-	go s.keepAlive()
+	go s.startKeepAlive()
 	return s
 }
 
-func (s *Server) keepAlive() {
-	if s.keepalive <= 0 {
+func (s *Server) startKeepAlive() {
+	if s.timeout <= 0 {
 		return
 	}
 
-	ticker := time.NewTicker(s.keepalive)
+	ticker := time.NewTicker(s.timeout / 2)
 	defer ticker.Stop()
 
-	var now, timeout, ping time.Time
+	var now, dead, needPing time.Time
+
 	var deadClients []*Client
 	for {
 		select {
@@ -61,18 +63,20 @@ func (s *Server) keepAlive() {
 			s.mu.RLock()
 			deadClients = make([]*Client, 0, len(s.clients))
 			now = time.Now()
-			timeout = now.Add(-s.keepalive)
-			ping = now.Add(-s.keepalive / 2)
+			dead = now.Add(-s.timeout)
+			needPing = now.Add(-s.timeout / 2)
 			for _, c := range s.clients {
-				if c.lastSeen.Before(timeout) {
-					if c.lastSeen.Before(ping) {
-						c.Send(&PingEvent{}) //nolint: errcheck
-					}
-
+				// lastSeen + timeout < now
+				if c.lastSeen.Before(dead) {
+					deadClients = append(deadClients, c)
 					continue
 				}
 
-				deadClients = append(deadClients, c)
+				// lastSeen + timeout/2 < now
+				if c.lastSeen.Before(needPing) {
+					log.Println("ping: ", c.ID, c.lastSeen.Second(), now.Second())
+					go c.Send(&PingEvent{}) //nolint: errcheck
+				}
 
 			}
 			s.mu.RUnlock()
@@ -100,7 +104,7 @@ func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, bo
 	}
 
 	var isNewClient bool
-
+	now := time.Now()
 	s.mu.Lock()
 	c, ok := s.clients[clientID]
 
@@ -119,6 +123,8 @@ func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, bo
 		c.connID = s.conns[clientID] + 1
 		s.conns[clientID] = c.connID
 	}
+
+	c.lastSeen = now
 
 	c.sm = sm
 	s.mu.Unlock()

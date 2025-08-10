@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/yaitoo/xun"
@@ -347,6 +348,31 @@ func TestServer(t *testing.T) {
 		require.Equal(t, 0, evt.Retry)
 		require.Equal(t, "\"data2\"", evt.Data)
 	})
+
+	t.Run("timeout", func(t *testing.T) {
+		srv := New(WithTimeout(3 * time.Second))
+		rw := httptest.NewRecorder()
+
+		_, _, _, err := srv.Join("keepalive", rw)
+		require.NoError(t, err)
+
+		sm := &streamerMock{
+			isWorking: true,
+		}
+		c, _, _, err := srv.Join("timeout", sm)
+		require.NoError(t, err)
+		sm.isWorking = false
+
+		time.Sleep(2 * time.Second)
+		body := rw.Body.String()
+		require.Equal(t, body, ": ping\n\n\n")
+		time.Sleep(2 * time.Second)
+
+		err = context.Cause(c.Context())
+
+		require.ErrorIs(t, err, ErrClientTimeout)
+
+	})
 }
 
 type notFlusher struct {
@@ -363,10 +389,19 @@ func (*notFlusher) Write([]byte) (int, error) {
 func (*notFlusher) WriteHeader(int) {}
 
 type streamerMock struct {
+	isWorking bool
 	http.ResponseWriter
 }
 
-func (*streamerMock) Write([]byte) (int, error) {
+func (*streamerMock) Header() http.Header {
+	return http.Header{}
+}
+
+func (s *streamerMock) Write(buf []byte) (int, error) {
+	if s.isWorking {
+		return len(buf), nil
+	}
+
 	return 0, errors.New("mock: invalid")
 }
 
