@@ -96,7 +96,7 @@ func TestBinder(t *testing.T) {
 		{
 			"BindQuery",
 			func(it Login) *http.Request {
-				req, _ := http.NewRequest("GET", srv.URL+"/login?email="+url.QueryEscape(it.Email)+"&Passwd="+url.QueryEscape(it.Passwd), nil)
+				req, _ := http.NewRequest("GET", srv.URL+"/login?email="+url.QueryEscape(it.Email)+"&Passwd="+url.QueryEscape(it.Passwd), http.NoBody)
 				return req
 			},
 		},
@@ -194,7 +194,7 @@ func TestBinder(t *testing.T) {
 func TestInvalid(t *testing.T) {
 
 	t.Run("invalid_form", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 		req.Body = nil
 		_, err := BindForm[int](req)
 		require.NotNil(t, err)
