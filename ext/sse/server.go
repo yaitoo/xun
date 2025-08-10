@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/yaitoo/async"
 )
@@ -20,16 +21,72 @@ type Server struct {
 	conns   map[string]int
 	ctx     context.Context
 	cancel  context.CancelCauseFunc
+
+	keepalive time.Duration
 }
 
 // New creates and returns a new instance of the Server struct.
-func New() *Server {
+func New(opts ...Option) *Server {
 	ctx, cf := context.WithCancelCause(context.Background())
-	return &Server{
+	s := &Server{
 		clients: make(map[string]*Client),
 		conns:   make(map[string]int),
 		ctx:     ctx,
 		cancel:  cf,
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	go s.keepAlive()
+	return s
+}
+
+func (s *Server) keepAlive() {
+	if s.keepalive <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(s.keepalive)
+	defer ticker.Stop()
+
+	var now, timeout, ping time.Time
+	var deadClients []*Client
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.mu.RLock()
+			deadClients = make([]*Client, 0, len(s.clients))
+			now = time.Now()
+			timeout = now.Add(-s.keepalive)
+			ping = now.Add(-s.keepalive / 2)
+			for _, c := range s.clients {
+				if c.lastSeen.Before(timeout) {
+					if c.lastSeen.Before(ping) {
+						c.Send(&PingEvent{}) //nolint: errcheck
+					}
+
+					continue
+				}
+
+				deadClients = append(deadClients, c)
+
+			}
+			s.mu.RUnlock()
+
+			if len(deadClients) > 0 {
+				s.mu.Lock()
+				for _, c := range deadClients {
+					c.cancel(ErrClientTimeout)
+					delete(s.clients, c.ID)
+					delete(s.conns, c.ID)
+				}
+				s.mu.Unlock()
+			}
+		}
 	}
 }
 
