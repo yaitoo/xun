@@ -54,9 +54,9 @@ func (c *Client) Wait(ctx context.Context) error {
 
 	select {
 	case <-c.ctx.Done():
-		return c.ctx.Err()
+		return context.Cause(c.ctx)
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	}
 }
 

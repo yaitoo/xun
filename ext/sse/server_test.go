@@ -247,6 +247,29 @@ func TestServer(t *testing.T) {
 		require.Len(t, srv.clients, 0)
 	})
 
+	t.Run("client_wait", func(t *testing.T) {
+		srv := New()
+
+		rw := httptest.NewRecorder()
+
+		c, _, err := srv.Join("closed", rw)
+		require.NoError(t, err)
+		ctx, cf := context.WithCancel(context.Background())
+
+		c.Close()
+
+		err = c.Wait(ctx)
+		require.ErrorIs(t, err, ErrServerClosed)
+
+		c2, _, err := srv.Join("cancelled", rw)
+		require.NoError(t, err)
+		cf()
+
+		err = c2.Wait(ctx)
+		require.ErrorIs(t, err, context.Canceled)
+
+	})
+
 	t.Run("send_with_gzip", func(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
