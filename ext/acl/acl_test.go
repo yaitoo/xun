@@ -303,14 +303,14 @@ func TestCountries(t *testing.T) {
 	})
 }
 
-func TestInvalid(t *testing.T) {
+func TestIgnoreWhenConfigInvalid(t *testing.T) {
 	t.Run("invalid_remote_addr", func(t *testing.T) {
 		m := New()
 
 		ctx := createContext(nil)
 		ctx.Request.RemoteAddr = "2001:db8:85a3:0:0:8a2e:370:1]:1111"
 		err := m(nop)(ctx)
-		require.ErrorIs(t, err, ErrInvalidRemoteAddr)
+		require.NoError(t, err)
 	})
 	t.Run("invalid_remote_ip", func(t *testing.T) {
 		m := New()
@@ -318,6 +318,6 @@ func TestInvalid(t *testing.T) {
 		ctx := createContext(nil)
 		ctx.Request.RemoteAddr = "172.0:1"
 		err := m(nop)(ctx)
-		require.ErrorIs(t, err, ErrInvalidRemoteAddr)
+		require.NoError(t, err)
 	})
 }

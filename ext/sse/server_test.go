@@ -319,15 +319,15 @@ func TestServer(t *testing.T) {
 type notFlusher struct {
 }
 
-func (s *notFlusher) Header() http.Header {
+func (*notFlusher) Header() http.Header {
 	return http.Header{}
 }
 
-func (s *notFlusher) Write([]byte) (int, error) {
+func (*notFlusher) Write([]byte) (int, error) {
 	return 0, errors.New("mock: invalid")
 }
 
-func (s *notFlusher) WriteHeader(int) {}
+func (*notFlusher) WriteHeader(int) {}
 
 type streamerMock struct {
 	http.ResponseWriter
@@ -343,6 +343,6 @@ type readCloser struct {
 	*bytes.Buffer
 }
 
-func (r *readCloser) Close() error {
+func (*readCloser) Close() error {
 	return nil
 }
