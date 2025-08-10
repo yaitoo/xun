@@ -93,11 +93,13 @@ func (s *Server) keepAlive() {
 // Join adds a new client to the server.
 // It establishes a connection with the specified Streamer and sets the appropriate headers
 // for Server-Sent Events (SSE).
-func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, error) {
+func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, bool, error) {
 	sm, err := NewStreamer(rw)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, false, err
 	}
+
+	var isNewClient bool
 
 	s.mu.Lock()
 	c, ok := s.clients[clientID]
@@ -111,6 +113,7 @@ func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, er
 		s.clients[clientID] = c
 		s.conns[clientID] = 1
 		c.ctx, c.cancel = context.WithCancelCause(s.ctx)
+		isNewClient = true
 
 	} else {
 		c.connID = s.conns[clientID] + 1
@@ -125,7 +128,7 @@ func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, er
 	sm.Header().Set("Connection", "keep-alive")
 	sm.Flush()
 
-	return c, c.connID, nil
+	return c, c.connID, isNewClient, nil
 }
 
 // Leave removes a client from the server's client list by its ID.
