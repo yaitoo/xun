@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -351,7 +352,7 @@ func TestServer(t *testing.T) {
 
 	t.Run("timeout", func(t *testing.T) {
 		srv := New(WithTimeout(3 * time.Second))
-		rw := httptest.NewRecorder()
+		rw := &stdWriter{ResponseRecorder: httptest.NewRecorder()}
 
 		_, _, _, err := srv.Join("keepalive", rw)
 		require.NoError(t, err)
@@ -364,7 +365,7 @@ func TestServer(t *testing.T) {
 		sm.isWorking = false
 
 		time.Sleep(2 * time.Second)
-		body := rw.Body.String()
+		body := rw.GetBody()
 		require.Equal(t, body, ": ping\n\n\n")
 		time.Sleep(2 * time.Second)
 
@@ -413,4 +414,23 @@ type readCloser struct {
 
 func (*readCloser) Close() error {
 	return nil
+}
+
+type stdWriter struct {
+	mu sync.Mutex
+	*httptest.ResponseRecorder
+}
+
+func (s *stdWriter) Write(buf []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.Body.Write(buf)
+}
+
+func (s *stdWriter) GetBody() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.Body.String()
 }

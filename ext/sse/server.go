@@ -4,7 +4,6 @@ package sse
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -78,7 +77,6 @@ func (s *Server) startKeepAlive() {
 
 				// lastSeen + timeout/2 < now
 				if lastSeen.Before(needPing) {
-					log.Println("ping: ", c.ID, c.lastSeen.Second(), now.Second())
 					go c.Send(&PingEvent{}) //nolint: errcheck
 				}
 
