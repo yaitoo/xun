@@ -52,7 +52,7 @@ func (s *Server) startKeepAlive() {
 	ticker := time.NewTicker(s.timeout / 2)
 	defer ticker.Stop()
 
-	var now, dead, needPing time.Time
+	var lastSeen, now, dead, needPing time.Time
 
 	var deadClients []*Client
 	for {
@@ -65,15 +65,19 @@ func (s *Server) startKeepAlive() {
 			now = time.Now()
 			dead = now.Add(-s.timeout)
 			needPing = now.Add(-s.timeout / 2)
+
 			for _, c := range s.clients {
 				// lastSeen + timeout < now
-				if c.lastSeen.Before(dead) {
+				c.mu.Lock()
+				lastSeen = c.lastSeen
+				c.mu.Unlock()
+				if lastSeen.Before(dead) {
 					deadClients = append(deadClients, c)
 					continue
 				}
 
 				// lastSeen + timeout/2 < now
-				if c.lastSeen.Before(needPing) {
+				if lastSeen.Before(needPing) {
 					log.Println("ping: ", c.ID, c.lastSeen.Second(), now.Second())
 					go c.Send(&PingEvent{}) //nolint: errcheck
 				}
