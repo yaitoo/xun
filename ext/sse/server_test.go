@@ -59,6 +59,9 @@ func TestServer(t *testing.T) {
 
 		c3 = srv.Get("join")
 		require.Nil(t, c3)
+
+		ok = srv.Leave(c1.ID, id2)
+		require.True(t, ok)
 	})
 
 	t.Run("send", func(t *testing.T) {
@@ -243,6 +246,9 @@ func TestServer(t *testing.T) {
 		require.NotNil(t, c1)
 
 		srv.Shutdown()
+
+		err = context.Cause(c1.Context())
+		require.ErrorIs(t, err, ErrServerClosed)
 
 		require.Len(t, srv.clients, 0)
 	})
