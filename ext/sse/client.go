@@ -4,22 +4,25 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 )
 
 var (
-	ErrServerClosed = errors.New("sse: server closed")
+	ErrServerClosed  = errors.New("sse: server closed")
+	ErrClientTimeout = errors.New("sse: client timeout")
 )
 
 // Client represents a connection to a streaming service.
 // It holds the client's ID, a Streamer instance for managing the stream,
 // a context for cancellation and timeout, and a channel for signaling closure.
 type Client struct {
-	mu     sync.Mutex
-	ID     string
-	connID int
-	sm     Streamer
-	ctx    context.Context
-	cancel context.CancelCauseFunc
+	mu       sync.Mutex
+	ID       string
+	connID   int
+	sm       Streamer
+	ctx      context.Context
+	cancel   context.CancelCauseFunc
+	lastSeen time.Time
 }
 
 // Send sends an event to the client by writing the event name and data to the response writer.
@@ -38,6 +41,7 @@ func (c *Client) Send(evt Event) error {
 		return NewError(c.ID, err)
 	}
 
+	c.lastSeen = time.Now()
 	c.sm.Flush()
 
 	return nil

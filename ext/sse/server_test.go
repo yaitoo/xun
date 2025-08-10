@@ -9,7 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/yaitoo/xun"
@@ -20,35 +22,39 @@ func TestServer(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c1, id, err := srv.Join("join", nil)
+		c1, id, ok, err := srv.Join("join", nil)
 		require.Nil(t, c1)
 		require.Equal(t, 0, id)
+		require.False(t, ok)
 		require.ErrorIs(t, err, ErrNotStreamer)
 
-		c1, id, err = srv.Join("join", &notFlusher{})
+		c1, id, ok, err = srv.Join("join", &notFlusher{})
 		require.Nil(t, c1)
 		require.Equal(t, 0, id)
+		require.False(t, ok)
 		require.ErrorIs(t, err, ErrNotStreamer)
 
-		c1, id, err = srv.Join("join", rw)
+		c1, id, ok, err = srv.Join("join", rw)
 		require.NotNil(t, c1)
 		require.NoError(t, err)
 		require.Equal(t, 1, id)
 		require.Equal(t, 1, c1.connID)
+		require.True(t, ok)
 		require.Nil(t, err)
 
-		c2, id2, err := srv.Join("join", rw)
+		c2, id2, ok, err := srv.Join("join", rw)
 		require.NotNil(t, c2)
 		require.Equal(t, 2, id2)
 		require.Equal(t, 2, c2.connID)
 		require.Equal(t, "join", c2.ID)
+		require.False(t, ok)
 		require.NoError(t, err)
 		require.Equal(t, c1, c2)
 
 		c3 := srv.Get("join")
 		require.Equal(t, c1, c3)
 
-		ok := srv.Leave(c1.ID, id)
+		ok = srv.Leave(c1.ID, id)
 		require.False(t, ok)
 
 		c3 = srv.Get("join")
@@ -68,7 +74,7 @@ func TestServer(t *testing.T) {
 		srv := New()
 		rw := httptest.NewRecorder()
 
-		c, _, err := srv.Join("send", rw)
+		c, _, _, err := srv.Join("send", rw)
 		require.NoError(t, err)
 
 		r := NewReader(&readCloser{Buffer: rw.Body})
@@ -162,11 +168,11 @@ func TestServer(t *testing.T) {
 		rw1 := httptest.NewRecorder()
 		rw2 := httptest.NewRecorder()
 
-		c1, _, err := srv.Join("c1", rw1)
+		c1, _, _, err := srv.Join("c1", rw1)
 		require.NotNil(t, c1)
 		require.NoError(t, err)
 
-		c2, _, err := srv.Join("c2", rw2)
+		c2, _, _, err := srv.Join("c2", rw2)
 		require.NotNil(t, c2)
 		require.NoError(t, err)
 
@@ -211,7 +217,7 @@ func TestServer(t *testing.T) {
 			ResponseWriter: httptest.NewRecorder(),
 		}
 
-		c, id, err := srv.Join("invalid", rw)
+		c, id, _, err := srv.Join("invalid", rw)
 		require.NoError(t, err)
 
 		err = c.Send(&JsonEvent{Name: "event1", Data: make(chan int)})
@@ -225,7 +231,7 @@ func TestServer(t *testing.T) {
 		err = c.Send(&TextEvent{Name: "event1"})
 		require.ErrorIs(t, err, ErrServerClosed)
 
-		c, id, err = srv.Join("invalid", rw)
+		c, id, _, err = srv.Join("invalid", rw)
 		require.NoError(t, err)
 		require.NotNil(t, c)
 		require.Equal(t, 1, id)
@@ -241,7 +247,7 @@ func TestServer(t *testing.T) {
 	t.Run("shutdown", func(t *testing.T) {
 		srv := New()
 
-		c1, _, err := srv.Join("c1", httptest.NewRecorder())
+		c1, _, _, err := srv.Join("c1", httptest.NewRecorder())
 		require.NoError(t, err)
 		require.NotNil(t, c1)
 
@@ -258,7 +264,7 @@ func TestServer(t *testing.T) {
 
 		rw := httptest.NewRecorder()
 
-		c, _, err := srv.Join("closed", rw)
+		c, _, _, err := srv.Join("closed", rw)
 		require.NoError(t, err)
 		ctx, cf := context.WithCancel(context.Background())
 
@@ -267,7 +273,7 @@ func TestServer(t *testing.T) {
 		err = c.Wait(ctx)
 		require.ErrorIs(t, err, ErrServerClosed)
 
-		c2, _, err := srv.Join("cancelled", rw)
+		c2, _, _, err := srv.Join("cancelled", rw)
 		require.NoError(t, err)
 		cf()
 
@@ -282,7 +288,7 @@ func TestServer(t *testing.T) {
 
 		gc := &xun.GzipCompressor{}
 
-		c, _, err := srv.Join("send", gc.New(rw))
+		c, _, _, err := srv.Join("send", gc.New(rw))
 		require.NoError(t, err)
 
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
@@ -316,7 +322,7 @@ func TestServer(t *testing.T) {
 
 		gc := &xun.DeflateCompressor{}
 
-		c, _, err := srv.Join("send", gc.New(rw))
+		c, _, _, err := srv.Join("send", gc.New(rw))
 		require.NoError(t, err)
 
 		err = c.Send(&TextEvent{Name: "event1", Data: "data1"})
@@ -343,6 +349,33 @@ func TestServer(t *testing.T) {
 		require.Equal(t, 0, evt.Retry)
 		require.Equal(t, "\"data2\"", evt.Data)
 	})
+
+	t.Run("timeout", func(t *testing.T) {
+		srv := New(WithClientTimeout(3 * time.Second))
+		rw := &stdWriter{ResponseRecorder: httptest.NewRecorder()}
+
+		_, _, _, err := srv.Join("keepalive", rw)
+		require.NoError(t, err)
+
+		sm := &streamerMock{
+			isWorking: true,
+		}
+		c, _, _, err := srv.Join("timeout", sm)
+		require.NoError(t, err)
+		sm.mu.Lock()
+		sm.isWorking = false
+		sm.mu.Unlock()
+
+		time.Sleep(2 * time.Second)
+		body := rw.GetBody()
+		require.Equal(t, body, ": ping\n\n\n")
+		time.Sleep(2 * time.Second)
+
+		err = context.Cause(c.Context())
+
+		require.ErrorIs(t, err, ErrClientTimeout)
+
+	})
 }
 
 type notFlusher struct {
@@ -359,10 +392,22 @@ func (*notFlusher) Write([]byte) (int, error) {
 func (*notFlusher) WriteHeader(int) {}
 
 type streamerMock struct {
+	mu        sync.Mutex
+	isWorking bool
 	http.ResponseWriter
 }
 
-func (*streamerMock) Write([]byte) (int, error) {
+func (*streamerMock) Header() http.Header {
+	return http.Header{}
+}
+
+func (s *streamerMock) Write(buf []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.isWorking {
+		return len(buf), nil
+	}
+
 	return 0, errors.New("mock: invalid")
 }
 
@@ -374,4 +419,23 @@ type readCloser struct {
 
 func (*readCloser) Close() error {
 	return nil
+}
+
+type stdWriter struct {
+	mu sync.Mutex
+	*httptest.ResponseRecorder
+}
+
+func (s *stdWriter) Write(buf []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.Body.Write(buf)
+}
+
+func (s *stdWriter) GetBody() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.Body.String()
 }

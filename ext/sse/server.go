@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/yaitoo/async"
 )
@@ -15,33 +16,96 @@ import (
 // ensure safe access to the clients map, which holds the
 // active Client instances identified by their unique keys.
 type Server struct {
-	mu      sync.RWMutex
-	clients map[string]*Client
-	conns   map[string]int
-	ctx     context.Context
-	cancel  context.CancelCauseFunc
+	mu            sync.RWMutex
+	clients       map[string]*Client
+	conns         map[string]int
+	ctx           context.Context
+	cancel        context.CancelCauseFunc
+	clientTimeout time.Duration
 }
 
 // New creates and returns a new instance of the Server struct.
-func New() *Server {
+func New(opts ...Option) *Server {
 	ctx, cf := context.WithCancelCause(context.Background())
-	return &Server{
+	s := &Server{
 		clients: make(map[string]*Client),
 		conns:   make(map[string]int),
 		ctx:     ctx,
 		cancel:  cf,
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	go s.startHealthCheck()
+	return s
+}
+
+func (s *Server) startHealthCheck() {
+	if s.clientTimeout <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(s.clientTimeout / 2)
+	defer ticker.Stop()
+
+	var lastSeen, now, dead, needPing time.Time
+
+	var deadClients []*Client
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.mu.RLock()
+			deadClients = make([]*Client, 0, len(s.clients))
+			now = time.Now()
+			dead = now.Add(-s.clientTimeout)
+			needPing = now.Add(-s.clientTimeout / 2)
+
+			for _, c := range s.clients {
+				// lastSeen + timeout < now
+				c.mu.Lock()
+				lastSeen = c.lastSeen
+				c.mu.Unlock()
+				if lastSeen.Before(dead) {
+					deadClients = append(deadClients, c)
+					continue
+				}
+
+				// lastSeen + timeout/2 < now
+				if lastSeen.Before(needPing) {
+					go c.Send(&PingEvent{}) //nolint: errcheck
+				}
+
+			}
+			s.mu.RUnlock()
+
+			if len(deadClients) > 0 {
+				s.mu.Lock()
+				for _, c := range deadClients {
+					c.cancel(ErrClientTimeout)
+					delete(s.clients, c.ID)
+					delete(s.conns, c.ID)
+				}
+				s.mu.Unlock()
+			}
+		}
 	}
 }
 
 // Join adds a new client to the server.
 // It establishes a connection with the specified Streamer and sets the appropriate headers
 // for Server-Sent Events (SSE).
-func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, error) {
+func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, bool, error) {
 	sm, err := NewStreamer(rw)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, false, err
 	}
 
+	var isNewClient bool
+	now := time.Now()
 	s.mu.Lock()
 	c, ok := s.clients[clientID]
 
@@ -54,11 +118,14 @@ func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, er
 		s.clients[clientID] = c
 		s.conns[clientID] = 1
 		c.ctx, c.cancel = context.WithCancelCause(s.ctx)
+		isNewClient = true
 
 	} else {
 		c.connID = s.conns[clientID] + 1
 		s.conns[clientID] = c.connID
 	}
+
+	c.lastSeen = now
 
 	c.sm = sm
 	s.mu.Unlock()
@@ -68,7 +135,7 @@ func (s *Server) Join(clientID string, rw http.ResponseWriter) (*Client, int, er
 	sm.Header().Set("Connection", "keep-alive")
 	sm.Flush()
 
-	return c, c.connID, nil
+	return c, c.connID, isNewClient, nil
 }
 
 // Leave removes a client from the server's client list by its ID.
