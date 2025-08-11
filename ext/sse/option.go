@@ -1,6 +1,8 @@
 package sse
 
-import "time"
+import (
+	"time"
+)
 
 type Option func(*Server)
 
