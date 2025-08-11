@@ -11,6 +11,10 @@ import (
 	"github.com/yaitoo/async"
 )
 
+var (
+	ClientTimeout = 10 * time.Second // Default client timeout for SSE connections
+)
+
 // Server represents a structure that manages connected clients
 // in a concurrent environment. It uses a read-write mutex to
 // ensure safe access to the clients map, which holds the
@@ -26,29 +30,27 @@ type Server struct {
 
 // New creates and returns a new instance of the Server struct.
 func New(opts ...Option) *Server {
-	ctx, cf := context.WithCancelCause(context.Background())
+
 	s := &Server{
-		clients: make(map[string]*Client),
-		conns:   make(map[string]int),
-		ctx:     ctx,
-		cancel:  cf,
+		clients:       make(map[string]*Client),
+		conns:         make(map[string]int),
+		clientTimeout: ClientTimeout,
 	}
+
+	s.ctx, s.cancel = context.WithCancelCause(context.Background())
 
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	go s.startHealthCheck()
 	return s
 }
 
-func (s *Server) startHealthCheck() {
+func (s *Server) KeepAlive() {
 	if s.clientTimeout <= 0 {
 		return
 	}
-
-	ticker := time.NewTicker(s.clientTimeout / 2)
-	defer ticker.Stop()
+	timeout := s.clientTimeout / 2
 
 	var lastSeen, now, dead, needPing time.Time
 
@@ -57,7 +59,8 @@ func (s *Server) startHealthCheck() {
 		select {
 		case <-s.ctx.Done():
 			return
-		case <-ticker.C:
+		default:
+			time.Sleep(timeout)
 			s.mu.RLock()
 			deadClients = make([]*Client, 0, len(s.clients))
 			now = time.Now()
