@@ -46,7 +46,7 @@ func New(opts ...Option) *Server {
 	return s
 }
 
-func (s *Server) KeepAlive() {
+func (s *Server) KeepAlive(ctx context.Context) {
 	if s.clientTimeout <= 0 {
 		return
 	}
@@ -59,8 +59,9 @@ func (s *Server) KeepAlive() {
 		select {
 		case <-s.ctx.Done():
 			return
-		default:
-			time.Sleep(timeout)
+		case <-ctx.Done():
+			return
+		case <-time.After(timeout):
 			s.mu.RLock()
 			deadClients = make([]*Client, 0, len(s.clients))
 			now = time.Now()
