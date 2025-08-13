@@ -353,7 +353,7 @@ func TestServer(t *testing.T) {
 	t.Run("timeout", func(t *testing.T) {
 		srv := New(WithClientTimeout(3 * time.Second))
 		defer srv.Shutdown()
-		go srv.KeepAlive()
+		go srv.KeepAlive(context.TODO())
 		rw := &stdWriter{ResponseRecorder: httptest.NewRecorder()}
 
 		_, _, _, err := srv.Join("keepalive", rw)
