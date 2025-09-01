@@ -30,7 +30,10 @@ func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
-			host, _, _ := net.SplitHostPort(c.Request.Host)
+			host, _, err := net.SplitHostPort(c.Request.Host)
+			if err != nil {
+				host = c.Request.Host
+			}
 			host = strings.ToLower(host)
 			it := get(host, strings.TrimPrefix(host, "www."))
 

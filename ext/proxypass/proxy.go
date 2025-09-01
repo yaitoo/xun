@@ -7,7 +7,6 @@ import (
 )
 
 type Proxy struct {
-	Domain string
 	Target *url.URL
 	proxy  *httputil.ReverseProxy
 }
@@ -16,9 +15,8 @@ func (s *Proxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	s.proxy.ServeHTTP(rw, req)
 }
 
-func create(domain string, target *url.URL) *Proxy {
+func create(target *url.URL) *Proxy {
 	return &Proxy{
-		Domain: domain,
 		Target: target,
 		proxy:  httputil.NewSingleHostReverseProxy(target),
 	}

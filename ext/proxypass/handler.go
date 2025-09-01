@@ -5,16 +5,19 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/yaitoo/xun"
 )
 
 func HandleConnect(c *xun.Context) error {
 	code := c.Request.Header.Get("X-Code")
-	domain := c.Request.Header.Get("X-Domain")
+	domains := strings.Split(c.Request.Header.Get("X-Domain"), ",")
 	target, _ := url.Parse(c.Request.Header.Get("X-Target"))
 
-	if target.Host == "0.0.0.0" {
+	hostname := target.Hostname()
+
+	if hostname == "0.0.0.0" {
 		ip, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
 		port := target.Port()
 		if port == "" {
@@ -24,7 +27,7 @@ func HandleConnect(c *xun.Context) error {
 		}
 	}
 
-	s := create(domain, target)
+	s := create(target)
 
 	client, cid, _, err := connections.Join(code, c.Response)
 	if err != nil {
@@ -32,14 +35,21 @@ func HandleConnect(c *xun.Context) error {
 		return xun.ErrCancelled
 	}
 
-	log.Println("conn: online", domain, "=>", target.String())
-	up(domain, s)
+	log.Println("proxypass: online", code, "=>", target.String())
+	for _, d := range domains {
+		up(d, s)
+	}
+
 	err = client.Wait(c.Request.Context()) //nolint: errcheck
-	down(domain)
+
+	for _, d := range domains {
+		down(d)
+	}
+
 	connections.Leave(code, cid)
 	client.Close()
 
-	log.Println("server: offline", domain, err)
+	log.Println("proxypass: offline", code, err)
 
 	return xun.ErrCancelled
 }

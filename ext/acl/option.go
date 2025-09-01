@@ -139,7 +139,6 @@ func WithViewer(v string) Option {
 func WithConfig(file string) Option {
 	return func(o *Options) {
 		o.Config = file
-		loadOptions(file, o)
 	}
 }
 
