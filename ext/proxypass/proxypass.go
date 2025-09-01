@@ -2,8 +2,18 @@ package proxypass
 
 import (
 	"net"
+	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/yaitoo/xun"
+	"github.com/yaitoo/xun/ext/sse"
+)
+
+var (
+	connections *sse.Server
+	servers     *atomic.Value
+	mu          sync.Mutex
 )
 
 func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
@@ -13,20 +23,17 @@ func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 		opt(options)
 	}
 
-	if options.GetVisitor == nil {
-		options.GetVisitor = func(c *xun.Context) (string, string) {
-			ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-			if err != nil {
-				return c.Request.RemoteAddr, ""
-			}
-			return ip, ""
-		}
-	}
+	connections = sse.New()
+
+	servers = &atomic.Value{}
+	servers.Store(make(map[string]*Proxy))
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
+			host, _, _ := net.SplitHostPort(c.Request.Host)
+			host = strings.ToLower(host)
+			it := get(host, strings.TrimPrefix(host, "www."))
 
-			it := getReverseProxy(c, options)
 			if it == nil {
 				return next(c)
 			}

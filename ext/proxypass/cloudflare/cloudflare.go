@@ -4,13 +4,10 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/yaitoo/xun"
 )
 
 // Cloudflare IP ranges URLs
@@ -61,7 +58,6 @@ type Cloudflare struct {
 
 // New creates a new CloudflareIPChecker instance
 func New(ctx context.Context) *Cloudflare {
-
 	c := &Cloudflare{
 		defaultNets: toIPNets(DefaultIPNets),
 	}
@@ -143,20 +139,21 @@ func (c *Cloudflare) Contains(s string) bool {
 	return nets.Contains(s)
 }
 
-func (c *Cloudflare) GetClientIP(ctx *xun.Context) string {
+func (c *Cloudflare) GetVisitor(r *http.Request) (string, string) {
+	// ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	// if err != nil {
+	// 	return r.RemoteAddr, ""
+	// }
 
-	ip, _, err := net.SplitHostPort(ctx.Request.RemoteAddr)
-	if err != nil {
-		return ctx.Request.RemoteAddr
+	// if c.Contains(ip) {
+	country := r.Header.Get("Cf-Ipcountry")
+
+	if r.Header.Get("Cf-Pseudo-Ipv4") != "" {
+		return r.Header.Get("Cf-Connecting-Ipv6"), country
+	} else {
+		return r.Header.Get("Cf-Connecting-Ip"), country
 	}
+	// }
 
-	if c.Contains(ip) {
-		if ctx.Request.Header.Get("Cf-Pseudo-Ipv4") != "" {
-			return ctx.Request.Header.Get("Cf-Connecting-Ipv6")
-		} else {
-			return ctx.Request.Header.Get("Cf-Connecting-Ip")
-		}
-	}
-
-	return ip
+	// return ip, ""
 }
