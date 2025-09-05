@@ -12,7 +12,7 @@ import (
 
 func HandleConnect(c *xun.Context) error {
 	code := c.Request.Header.Get("X-Code")
-	domains := strings.Split(c.Request.Header.Get("X-Domain"), ",")
+	domain := strings.Split(c.Request.Header.Get("X-Domain"), ",")
 	target, _ := url.Parse(c.Request.Header.Get("X-Target"))
 
 	hostname := target.Hostname()
@@ -35,21 +35,21 @@ func HandleConnect(c *xun.Context) error {
 		return xun.ErrCancelled
 	}
 
-	log.Println("proxypass: online", code, "=>", target.String())
-	for _, d := range domains {
+	log.Println("proxypass: online", code, "[", domain, "] =>", target.String())
+	for _, d := range domain {
 		up(d, s)
 	}
 
 	err = client.Wait(c.Request.Context()) //nolint: errcheck
 
-	for _, d := range domains {
+	for _, d := range domain {
 		down(d)
 	}
 
 	connections.Leave(code, cid)
 	client.Close()
 
-	log.Println("proxypass: offline", code, err)
+	log.Println("proxypass: offline", code, "[", domain, "]", err)
 
 	return xun.ErrCancelled
 }
