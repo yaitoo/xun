@@ -14,7 +14,7 @@ Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signif
 ## Features
 - Works with Go's built-in `net/http.ServeMux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
 - Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
-- Built-in response compression support for `gzip` and `deflate`. 
+- Built-in response compression support for `gzip` and `deflate`.
 - Built-in Form and Validate feature with i18n support.
 - Built-in `AutoTLS` feature. It automatic SSL certificate issuance and renewal through Let's Encrypt and other ACME-based CAs
 - Support Page Router in `StaticViewEngine` and `HtmlViewEngine`.
@@ -39,7 +39,7 @@ go get github.com/yaitoo/xun@latest
 
 ### Project structure
 `Xun` has some specified directories that is used to organize code, routing and static assets.
-- `public`: Static assets to be served. 
+- `public`: Static assets to be served.
 - `components` A partial view that is shared between layouts/pages/views.
 - `views`: An internal page view that can be referenced in `context.View` to render different UI for current routing.
 - `layouts`: A layout is shared between multiple pages/views
@@ -76,7 +76,7 @@ A page is UI that is rendered on a specific route. To create a page, add a page 
 ```
 
 #### Creating a layout
-A layout is UI that is shared between multiple pages/views. 
+A layout is UI that is shared between multiple pages/views.
 
 You can create a layout(.html) file inside the `layouts` directory.
 ```
@@ -115,7 +115,7 @@ You can store static files, like images, fonts, js and css, under a directory ca
 **NOTE: `public/index.html` will be exposed by `/` instead of `/index.html`.**
 
 #### Creating a component
-A component is a partial view that is shared between multiple layouts/pages/views. 
+A component is a partial view that is shared between multiple layouts/pages/views.
 
 ```
 └── app
@@ -128,7 +128,7 @@ A component is a partial view that is shared between multiple layouts/pages/view
     └── public
         ├── app.js
         └── skin.css
-```      
+```
 > components/assets.html
 ```html
 <link rel="stylesheet" href="/skin.css">
@@ -213,7 +213,7 @@ A text view is UI that is referenced in `context.View` to render the view with a
 ## Building your application
 ### Routing
 #### Route Handler
-Page Router only serve static content from html files. We have to define router handler in go to process request and bind data to the template file via `HtmlViewer`. 
+Page Router only serve static content from html files. We have to define router handler in go to process request and bind data to the template file via `HtmlViewer`.
 
 > pages/index.html
 ```html
@@ -237,10 +237,10 @@ Page Router only serve static content from html files. We have to define router 
 > There is one last bit of syntax. As we showed above, patterns ending in a slash, like /posts/, match all paths beginning with that string. To match only the path with the trailing slash, you can write /posts/{$}. That will match /posts/ but not /posts or /posts/234.
 
 #### Dynamic Routes
-When you don't know the exact segment names ahead of time and want to create routes from dynamic data, you can use Dynamic Segments that are filled in at request time. `{var}` can be used in folder name and file name as same as router handler in `http.ServeMux`. 
+When you don't know the exact segment names ahead of time and want to create routes from dynamic data, you can use Dynamic Segments that are filled in at request time. `{var}` can be used in folder name and file name as same as router handler in `http.ServeMux`.
 
 For examples, below patterns will be generated automatically, and registered in routing table.
-- `/user/{id}.html` generates pattern `/user/{id}` 
+- `/user/{id}.html` generates pattern `/user/{id}`
 - `/{id}/user.html` generates pattern `/{id}/user`
 
 ```
@@ -372,7 +372,7 @@ Integrating Middleware into your application can lead to significant improvement
 ```
 
 ### Multiple VirtualHosts
-`net/http` package's router supports multiple host names that resolve to a single address by precedence rule. 
+`net/http` package's router supports multiple host names that resolve to a single address by precedence rule.
 For examples
 ```go
  mux.HandleFunc("GET /", func(w http.ResponseWriter, req *http.Request) {...})
@@ -403,7 +403,7 @@ In Page Router, we use `@` in top folder name to setup host rules in routing tab
 ### Form and Validate
 In an api application, we always need to collect data from request, and validate them. It is integrated with i18n feature as built-in feature now.
 
-> check full examples on [Tests](binder_test.go)
+> check full examples on [Tests](./ext/form/binder_test.go)
 
 
 ```go
@@ -533,14 +533,14 @@ v, err := cookie.Get(ctx,"test")
 fmt.Println(v) // value
 ```
 
-When signed, the cookies can't be forged, because their values are validated using HMAC. 
+When signed, the cookies can't be forged, because their values are validated using HMAC.
 ```go
 ts, err := cookie.SetSigned(ctx,http.Cookie{Name: "test", Value: "value"},[]byte("secret")) // ts is current timestamp
 
 v, ts, err := cookie.GetSigned(ctx, "test",[]byte("secret")) // v is value, ts is the timestamp that was signed
 ```
 
-> Delete a cookie 
+> Delete a cookie
 ```go
 cookie.Delete(ctx, http.Cookie{Name: "test", Value: "dmFsdWU="}) // Set-Cookie: test=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0
 ```
@@ -580,7 +580,7 @@ The PROXY protocol allows our application to receive client connection informati
 	app.Start()
 	defer app.Close()
 
-	//   srv.ListenAndServe() 
+	//   srv.ListenAndServe()
 	proxyproto.ListenAndServe(srv)
 ```
 
@@ -596,15 +596,15 @@ The PROXY protocol allows our application to receive client connection informati
 		autotls.WithHosts("yaitoo.cn", "www.yaitoo.cn")).
 		Configure(srv, httpsServer)
 
-  // httpsServer.ListenAndServeTLS( "", "") 
-	proxyproto.ListenAndServeTLS(httpsServer, "", "") 
+  // httpsServer.ListenAndServeTLS( "", "")
+	proxyproto.ListenAndServeTLS(httpsServer, "", "")
 ```
 
-#### Logging 
+#### Logging
 
 Logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
 
-> Enable `reqlog` middleware 
+> Enable `reqlog` middleware
 
 ```go
 func main(){
@@ -692,7 +692,7 @@ func main(){
 
 - load `csrf.js` on html
 ```html
-<script type="text/javascript" src="/assets/csrf.js" defer></script>	
+<script type="text/javascript" src="/assets/csrf.js" defer></script>
 ```
 
 
@@ -713,7 +713,7 @@ The ACL filters and monitors HTTP traffic through granular rule sets, designed t
 ##### Enforcement Actions
 - Block unauthorized requests with 403 Forbidden status
 - Host Redirection (Conditional):
-  
+
     When AllowHosts validation fails:
     - Redirect to HostRedirectURL
     - Use customizable HTTP status HostRedirectStatusCode (e.g., 307 Temporary Redirect)
@@ -729,7 +729,7 @@ app.Use(acl.New(acl.AllowHosts("abc.com","123.com"), acl.WithHostRedirect("https
 
 > Whitelist Mode by IPNets
 ```go
-app.Use(acl.New(acl.AllowIPNets("172.0.0.1","2000::1/8")),acl.DenyIPNets("*")) 
+app.Use(acl.New(acl.AllowIPNets("172.0.0.1","2000::1/8")),acl.DenyIPNets("*"))
 ```
 
 > Whitelist Mode by Countries
@@ -749,7 +749,7 @@ app.Use(acl.New(acl.WithLookupFunc(lookup),
 
 > Blacklist Mode by IPNets
 ```go
-app.Use(acl.DenyIPNets("172.0.0.0/24")) 
+app.Use(acl.DenyIPNets("172.0.0.0/24"))
 ```
 
 > Blacklist Mode by Countries
@@ -758,7 +758,7 @@ app.Use(acl.New(acl.WithLookupFunc(lookup),acl.DenyCountries("us","cn")))
 ```
 
 ##### Config Example
-The optimal solution is to load the rules from a configuration file rather than hard-coding them. The ACL system also monitors the configuration file for changes and automatically reloads the rules. see more [examples](./ext/acl//config_test.go) 
+The optimal solution is to load the rules from a configuration file rather than hard-coding them. The ACL system also monitors the configuration file for changes and automatically reloads the rules. see more [examples](./ext/acl/config_test.go)
 
 > config file
 ```ini
@@ -767,7 +767,7 @@ abc.com
 www.abc.com
 [allow_ipnets]
 89.207.132.170/24
-# ::1  
+# ::1
 ; 127.0.0.1
 [deny_ipnets]
 *
@@ -840,7 +840,7 @@ ss.Shutdown()
 > use [htmx-ext-sse](https://htmx.org/extensions/sse/) extension to send SSE request
 ```html
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/ext/sse.min.js" integrity="sha512-uROW42fbC8XT6OsVXUC00tuak//shtU8zZE9BwxkT2kOxnZux0Ws8kypRr2UV4OhTEVmUSPIoUOrBN5DXeRNAQ==" 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/ext/sse.min.js" integrity="sha512-uROW42fbC8XT6OsVXUC00tuak//shtU8zZE9BwxkT2kOxnZux0Ws8kypRr2UV4OhTEVmUSPIoUOrBN5DXeRNAQ=="
 crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <div class="w-full" hx-ext="sse" sse-connect="/topic/{id}" >
@@ -951,8 +951,8 @@ The library to enable seamless integration between native JavaScript methods and
 			{{ if .TempData.Session }}
 				Hello {{ .TempData.Session }}, go <a href="/admin">Admin</>
 			{{ else }}
-        Hello guest, please <a href="/login">Login</a>	
-			{{ end }}    
+        Hello guest, please <a href="/login">Login</a>
+			{{ end }}
     </div>
 
 {{ end }}
@@ -1017,7 +1017,7 @@ $x.ready(function(evt) {
 
 ```
 
-#### 6. Apply `htmx` interceptor 
+#### 6. Apply `htmx` interceptor
 ```go
 
 	app := xun.New(xun.WithInterceptor(htmx.New()))
@@ -1039,7 +1039,7 @@ create an `admin` group router, and apply a middleware to check if it's logged. 
 				return xun.ErrCancelled
 			}
 
-			// set session in Context.TempData, 
+			// set session in Context.TempData,
 			// and get it by `.TempData.Session on text/html template files
 			c.Set("Session", s.Value)
 			return next(c)
