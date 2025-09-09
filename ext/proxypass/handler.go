@@ -35,7 +35,7 @@ func HandleConnect(c *xun.Context) error {
 		return xun.ErrCancelled
 	}
 
-	log.Println("proxypass: online", code, "[", domain, "] =>", target.String())
+	log.Println("proxypass: online", code, domain, "=>", target.String())
 	for _, d := range domain {
 		up(d, s)
 	}
@@ -49,7 +49,7 @@ func HandleConnect(c *xun.Context) error {
 	connections.Leave(code, cid)
 	client.Close()
 
-	log.Println("proxypass: offline", code, "[", domain, "]", err)
+	log.Println("proxypass: offline", code, domain, err)
 
 	return xun.ErrCancelled
 }
