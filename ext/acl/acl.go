@@ -30,24 +30,19 @@ func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 		opt(options)
 	}
 
-	v.Store(options)
-
 	if options.Config != "" {
+		loadOptions(options.Config, options)
 		go watch(options.Config, &v)
 	}
+
+	v.Store(options)
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
 		return func(c *xun.Context) error {
 			var host = c.Request.Host
 
-			addr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-			if err != nil {
-				return next(c)
-			}
-
 			m := Model{
 				Host: strings.ToLower(host),
-				IP:   addr,
 			}
 
 			o := v.Load().(*Options)
@@ -70,6 +65,13 @@ func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 					return reject(c, o, m)
 				}
 			}
+
+			addr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+			if err != nil {
+				return next(c)
+			}
+
+			m.IP = addr
 
 			ip := net.ParseIP(addr)
 			if ip == nil {
