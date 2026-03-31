@@ -1,8 +1,8 @@
-# xun AI Agent Specification
+# Xun AI Agent Specification
 
 **Status: AUTHORITATIVE**
 
-Before writing any xun code, read this entire document.
+Before writing any Xun code, read this entire document.
 All guidance must be derived from this file — do not rely on prior knowledge of gin/echo/chi.
 
 ---
