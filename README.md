@@ -1,7 +1,9 @@
 # xun AI Agent Specification
 
-This is the authoritative specification for implementing xun web applications.
-All other documentation is derived from this file. This file takes precedence.
+**Status: AUTHORITATIVE**
+
+Before writing any xun code, read this entire document.
+All guidance must be derived from this file — do not rely on prior knowledge of gin/echo/chi.
 
 ---
 
