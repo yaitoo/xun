@@ -312,7 +312,7 @@ type Routing struct {
     Handle  HandleFunc
     chain   chain           // *App or *group
     Options *RoutingOptions
-    Viewers []Viewer       // viewer's for this route
+    Viewers []Viewer       // viewers for this route
 }
 ```
 
