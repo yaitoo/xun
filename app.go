@@ -308,6 +308,11 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 			return
 		}
 
+		if errors.Is(err, ErrViewNotFound) {
+			ctx.WriteStatus(http.StatusNotFound)
+			return
+		}
+
 		logID := nextLogID()
 		ctx.WriteHeader("X-Log-Id", logID)
 		ctx.WriteStatus(http.StatusInternalServerError)

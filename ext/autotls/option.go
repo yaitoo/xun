@@ -1,6 +1,9 @@
 package autotls
 
-import "golang.org/x/crypto/acme/autocert"
+import (
+	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
+)
 
 // Option is a function type that takes a pointer to autocert.Manager as an argument.
 // It is used to configure the autocert.Manager with various options.
@@ -38,5 +41,14 @@ func WithCache(cache autocert.Cache) Option {
 func WithHosts(hosts ...string) Option {
 	return func(cm *autocert.Manager) {
 		cm.HostPolicy = autocert.HostWhitelist(hosts...)
+	}
+}
+
+func WithDirectoryURL(url string) Option {
+	return func(cm *autocert.Manager) {
+		if cm.Client == nil {
+			cm.Client = &acme.Client{}
+		}
+		cm.Client.DirectoryURL = url
 	}
 }
