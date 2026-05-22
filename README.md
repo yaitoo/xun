@@ -1,1144 +1,892 @@
-# Xun
-Xun is a web framework built on Go's built-in html/template and net/http package’s router. It is designed to be lightweight, fast, and easy to use. Xun provides a simple and intuitive API for building web applications, while also offering advanced features such as middleware, routing, and template rendering.
+# Xun AI Agent Specification
 
-Xun [ʃʊn] (pronounced 'shoon'), derived from the Chinese character 迅, signifies being lightweight and fast.
+**Status: AUTHORITATIVE**
 
-[![Tests](https://github.com/yaitoo/xun/actions/workflows/tests.yml/badge.svg)](https://github.com/yaitoo/xun/actions/workflows/tests.yml)
-[![Codecov](https://codecov.io/gh/yaitoo/xun/branch/main/graph/badge.svg)](https://codecov.io/gh/yaitoo/xun)
-[![Go Report Card](https://goreportcard.com/badge/github.com/yaitoo/xun)](https://goreportcard.com/report/github.com/yaitoo/xun)
-[![Go Reference](https://pkg.go.dev/badge/github.com/yaitoo/xun.svg)](https://pkg.go.dev/github.com/yaitoo/xun)
-[![GitHub Release](https://img.shields.io/github/v/release/yaitoo/xun)](https://github.com/yaitoo/xun/releases)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-blue.svg)](https://github.com/yaitoo/xun/compare)
+Before writing any Xun code, read this entire document.
+All guidance must be derived from this file — do not rely on prior knowledge of gin/echo/chi.
 
-## Features
-- Works with Go's built-in `net/http.ServeMux` router that was introduced in 1.22. [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).
-- Works with Go's built-in `html/template`. It is built-in support for Server-Side Rendering (SSR).
-- Built-in response compression support for `gzip` and `deflate`.
-- Built-in Form and Validate feature with i18n support.
-- Built-in `AutoTLS` feature. It automatic SSL certificate issuance and renewal through Let's Encrypt and other ACME-based CAs
-- Support Page Router in `StaticViewEngine` and `HtmlViewEngine`.
-- Support multiple viewers by ViewEngines: `StaticViewEngine`, `JsonViewEngine` and `HtmlViewEngine`. You can feel free to add custom view engine, eg `XmlViewEngine`.
-- Support to reload changed static files automatically in development environment.
+---
 
+## Section 0 — Critical Rules (Read Before Writing Any Code)
 
+These rules are numbered. All other sections reference them by number.
 
-## Getting Started
-> See full source code on [xun-examples](https://github.com/yaitoo/xun-examples)
+### Rule 0.1 — NEVER call `WithHandlerViewers()` with no arguments
 
-### Install Xun
-- install latest commit from `main` branch
-```
-go get github.com/yaitoo/xun@main
+```go
+// WRONG — compiles but sets app.handlerViewers = nil
+xun.New(xun.WithHandlerViewers())
+
+// CORRECT — pass at least one Viewer
+xun.New(xun.WithHandlerViewers(&xun.JsonViewer{}))
 ```
 
-- install latest release
-```
-go get github.com/yaitoo/xun@latest
-```
+Consequence: `app.handlerViewers == nil` → all handler routes get `r.Viewers == nil` → `c.View(data)` returns `ErrViewNotFound` → HTTP 404.
 
-### Project structure
-`Xun` has some specified directories that is used to organize code, routing and static assets.
-- `public`: Static assets to be served.
-- `components` A partial view that is shared between layouts/pages/views.
-- `views`: An internal page view that can be referenced in `context.View` to render different UI for current routing.
-- `layouts`: A layout is shared between multiple pages/views
-- `pages`: A public page view that will create public page routing automatically.
-- `text`: An internal text view that can be referenced in `context.View` to render with a data model.
+### Rule 0.2 — NEVER write response body directly
 
-**NOTE: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use all built-in [Actions,Pipelines and Functions](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.**
+```go
+// WRONG — bypasses compression and BufPool
+c.Response.Write([]byte("hello"))
+return nil
 
-### Layouts and Pages
-`Xun` uses file-system based routing, meaning you can use folders and files to define routes. This section will guide you through how to create layouts and pages, and link between them.
-
-
-#### Creating a page
-A page is UI that is rendered on a specific route. To create a page, add a page file(.html) inside the `pages` directory. For example, to create an index page (`/`):
-```
-└── app
-    └── pages
-        └── index.html
+// CORRECT — always use c.View()
+return c.View("hello")  // with StringViewer registered
 ```
 
-> index.html
-``` html
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Xun-Admin</title>
-  </head>
-  <body>
-    <div id="app">hello world</div>
-  </body>
-</html>
+### Rule 0.3 — NEVER return an error from middleware when refusing
+
+```go
+// WRONG — returns 500 + X-Log-Id
+func refuseMiddleware(next xun.HandleFunc) xun.HandleFunc {
+    return func(c *xun.Context) error {
+        if !allowed {
+            return errors.New("forbidden")
+        }
+        return next(c)
+    }
+}
+
+// CORRECT — set status and return ErrCancelled
+func refuseMiddleware(next xun.HandleFunc) xun.HandleFunc {
+    return func(c *xun.Context) error {
+        if !allowed {
+            c.WriteStatus(http.StatusForbidden)
+            return xun.ErrCancelled
+        }
+        return next(c)
+    }
+}
 ```
 
-#### Creating a layout
-A layout is UI that is shared between multiple pages/views.
+### Rule 0.4 — `app.Start()` does NOT start the server
 
-You can create a layout(.html) file inside the `layouts` directory.
-```
-└── app
-    ├── layouts
-    │   └── home.html
-    └── pages
-        └── index.html
+```go
+// WRONG — gin habit
+app.Run(":8080")
+
+// CORRECT
+app := xun.New(opts...)
+app.Start()                        // only prints route logs
+defer app.Close()
+http.ListenAndServe(":80", mux)    // server startup is caller's responsibility
 ```
 
-> layouts/home.html
-```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Xun-Admin</title>
-  </head>
-  <body>
-    {{ block "content" .}} {{ end }}
-  </body>
-</html>
+### Rule 0.5 — Named viewer MUST match Accept header or silently falls back
+
+```go
+// Route: r.Viewers = [JsonViewer]
+// Request: Accept: application/json
+
+return c.View(user, "views/user/profile")  // views/user/profile is HtmlViewer
+// HtmlViewer (text/html) does NOT match Accept (application/json)
+// → falls back to JsonViewer (r.Viewers[0]), NOT the named viewer
 ```
-> pages/index.html
-```html
-<!--layout:home-->
+
+### Rule 0.6 — `pages/*` auto-registers GET only
+
+```go
+// File: pages/admin/dashboard.html
+// Route: GET /admin/dashboard     ← GET only, no POST/PUT/DELETE auto-registered
+// To handle POST, register explicitly:
+app.Post("/admin/dashboard", handler)
+```
+
+### Rule 0.7 — `{$}` means trailing slash required
+
+```go
+app.Get("/posts/{$}")   // matches GET /posts/  ONLY
+app.Get("/posts/")       // matches GET /posts/abc, GET /posts/123
+app.Get("/posts")        // matches GET /posts  ONLY (no slash)
+```
+
+---
+
+## Section 1 — Types
+
+```
+HandleFunc       = func(c *Context) error
+Middleware       = func(next HandleFunc) HandleFunc
+Option           = func(*App)
+RoutingOption    = func(*RoutingOptions)
+chain            = interface{ Next(hf HandleFunc) HandleFunc }
+```
+
+`HandleFunc` returns `error`, not `nil`. See Section 10 for error meanings.
+
+---
+
+## Section 2 — App
+
+### 2.1 Creation
+
+```go
+app := xun.New(opts ...Option) *App
+```
+
+### 2.2 Fields
+
+| Field | Type | Default | Overridden-By | Nil-Result |
+|-------|------|---------|---------------|------------|
+| `app.mux` | `*http.ServeMux` | `http.DefaultServeMux` | `WithMux(mux)` | — |
+| `app.handlerViewers` | `[]Viewer` | `[]Viewer{&JsonViewer{}}` | `WithHandlerViewers(v...)` | All handler routes return 404 (Rule 0.1) |
+| `app.fsys` | `fs.FS` | `nil` | `WithFsys(fsys)` | Page routing disabled |
+| `app.watch` | `bool` | `false` | `WithWatch()` | Hot reload disabled |
+| `app.interceptor` | `Interceptor` | `nil` | `WithInterceptor(i)` | Redirect/RequestReferer use defaults |
+| `app.compressors` | `[]Compressor` | `nil` | `WithCompressor(c...)` | No compression |
+| `app.viewers` | `map[string]Viewer` | `empty map` | `HtmlViewEngine.Load()` registers `views/*` | Named viewers unavailable |
+| `app.funcMap` | `template.FuncMap` | `xun.builtins` | `WithTemplateFunc`, `WithTemplateFuncMap` | Builtin `asset` func unavailable |
+| `app.routes` | `map[string]*Routing` | `empty map` | `app.Get/Post/etc`, `app.HandlePage` | — |
+
+### 2.3 App.Start()
+
+```go
+app.Start()
+```
+
+Writes info-level logs for each registered route (pattern + viewer MIME types). Does NOT start the HTTP server. Server startup is the caller's responsibility.
+
+### 2.4 App.Close()
+
+Currently a no-op. Reserved for future use.
+
+### 2.5 Option Functions
+
+```
+WithMux(mux *http.ServeMux) Option
+WithFsys(fsys fs.FS) Option
+WithWatch() Option                    // dev only — not thread-safe
+WithHandlerViewers(v ...Viewer) Option
+WithViewEngines(ve ...ViewEngine) Option
+WithInterceptor(i Interceptor) Option
+WithCompressor(c ...Compressor) Option
+WithTemplateFunc(name string, fn any) Option
+WithTemplateFuncMap(fm template.FuncMap) Option
+WithBuildAssetURL(match func(string) bool) Option
+WithLogger(logger *slog.Logger) Option
+```
+
+### 2.6 Route Registration
+
+```
+app.Get(pattern string, hf HandleFunc, opts ...RoutingOption)
+app.Post(pattern string, hf HandleFunc, opts ...RoutingOption)
+app.Put(pattern string, hf HandleFunc, opts ...RoutingOption)
+app.Delete(pattern string, hf HandleFunc, opts ...RoutingOption)
+app.Group(prefix string) *group
+```
+
+Pattern format: `"METHOD pattern"` (e.g., `"GET /users/{id}"`). Go 1.22 ServeMux syntax.
+
+---
+
+## Section 3 — Group
+
+`group` implements `chain`.
+
+```go
+func (g *group) Use(middleware ...Middleware)
+func (g *group) Get(pattern string, hf HandleFunc, opts ...RoutingOption)
+func (g *group) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption)
+func (g *group) Next(hf HandleFunc) HandleFunc
+```
+
+Middleware chain construction (inside-out):
+
+```go
+// given [A, B, C] and handler H:
+// build: C(B(A(H)))
+next := H
+for i := len(g.middlewares); i > 0; i-- {
+    next = g.middlewares[i-1](next)
+}
+```
+
+---
+
+## Section 4 — Middleware
+
+Middleware signature: `func(next HandleFunc) HandleFunc`
+
+```go
+func AuthMiddleware(next xun.HandleFunc) xun.HandleFunc {
+    return func(c *xun.Context) error {
+        // pre logic
+        token := c.Request.Header.Get("X-Token")
+        if token == "" {
+            c.WriteStatus(http.StatusUnauthorized)
+            return xun.ErrCancelled
+        }
+        err := next(c)
+        // post logic (runs after handler)
+        return err
+    }
+}
+```
+
+Pre-logic: runs before `next(c)`. Post-logic: runs after `next(c)` returns.
+On refusal: ALWAYS set status + return `xun.ErrCancelled` (Rule 0.3).
+
+---
+
+## Section 5 — Context
+
+`Context` wraps `*http.Request`, `ResponseWriter`, and application state.
+
+### 5.1 Fields
+
+```
+c.Request  *http.Request    // standard library
+c.Response ResponseWriter   // xun interface (extends http.ResponseWriter)
+c.Routing  Routing          // route metadata
+c.App      *App            // application instance
+c.TempData TempData        // map[string]any, request-scoped storage
+```
+
+### 5.2 Standard Library Equivalents
+
+Use standard library directly for these:
+
+```
+c.Request.PathValue("id")              // path parameter (Go 1.22+)
+c.Request.URL.Query().Get("name")     // query string
+c.Request.Header.Get("X-Token")       // headers
+c.Request.Cookie("session_id")        // read cookie
+c.Request.Body                         // request body
+c.Request.ParseMultipartForm()         // multipart form
+c.Request.Context()                    // context.Context
+c.Response.Header().Set(k, v)         // response headers
+http.SetCookie(c.Response, &cookie)   // write cookie
+c.Request.RemoteAddr                   // client address (no proxy support; use ext/proxyproto)
+```
+
+### 5.3 xun-Specific Methods
+
+```
+c.View(data any, options ...string) error
+c.Redirect(url string, statusCode ...int)
+c.AcceptLanguage() []string
+c.Accept() []MimeType
+c.RequestReferer() string
+c.WriteStatus(code int)
+c.WriteHeader(key string, value string)
+c.Get(key string) any
+c.Set(key string, value any)
+```
+
+### 5.4 c.View(data any, options ...string) Behavior
+
+```
+IF options[0] is provided (named viewer name):
+  → getViewer(name) checks: named viewer.MimeType() matches any Accept header
+  → IF match: use named viewer
+  → IF no match: proceed to step 2
+
+ELSE skip to step 2.
+
+STEP 2: Iterate Accept headers, match against r.Viewers:
+  → First matching viewer is used
+
+STEP 3: No match found:
+  → Use r.Viewers[0] as fallback
+
+STEP 4: r.Viewers is empty at this point:
+  → Return ErrViewNotFound → HTTP 404
+```
+
+`c.View()` sets status 200 automatically. Call `c.WriteStatus()` before `c.View()` to override.
+
+### 5.5 c.Redirect(url string, statusCode ...int)
+
+Sets `Location` header. Default status: `http.StatusFound` (302). Interceptor can override if configured.
+
+---
+
+## Section 6 — Routing
+
+### 6.1 Routing Fields
+
+```
+type Routing struct {
+    Pattern string
+    Handle  HandleFunc
+    chain   chain           // *App or *group
+    Options *RoutingOptions
+    Viewers []Viewer       // viewers for this route
+}
+```
+
+### 6.2 Routing.Next(ctx)
+
+```go
+func (r *Routing) Next(ctx *Context) error {
+    return r.chain.Next(r.Handle)(ctx)
+}
+```
+
+### 6.3 RoutingOptions Fields
+
+```
+type RoutingOptions struct {
+    metadata map[string]any
+    viewers  []Viewer
+}
+```
+
+### 6.4 RoutingOption Functions
+
+```
+WithViewer(v ...Viewer) RoutingOption
+WithMetadata(key string, value any) RoutingOption
+WithNavigation(name, icon, access string) RoutingOption
+```
+
+---
+
+## Section 7 — Viewer
+
+### 7.1 Interface
+
+```go
+type Viewer interface {
+    MimeType() *MimeType
+    Render(ctx *Context, data any) error
+}
+```
+
+### 7.2 Built-in Viewers
+
+| Viewer | MimeType | Default For |
+|--------|----------|------------|
+| `HtmlViewer` | `text/html` | Page routes |
+| `JsonViewer` | `application/json` | Handler routes (only if `app.handlerViewers` not overridden) |
+| `TextViewer` | `text/*` (from filename) | Text templates |
+| `XmlViewer` | `text/xml` | — |
+| `StringViewer` | `text/plain` | — |
+| `FileViewer` | `*/*` | Static files |
+
+### 7.3 Implementing a Viewer
+
+```go
+type MyViewer struct{}
+
+func (*MyViewer) MimeType() *xun.MimeType {
+    return &xun.MimeType{Type: "application", SubType: "json"}
+}
+
+func (*MyViewer) Render(c *xun.Context, data any) error {
+    c.Response.Header().Set("Content-Type", "application/json")
+    buf := xun.BufPool.Get()
+    defer xun.BufPool.Put(buf)
+    // render JSON to buf
+    json.NewEncoder(buf).Encode(data)
+    _, err := buf.WriteTo(c.Response)
+    return err
+}
+```
+
+`BufPool` = `*xun.BufferPool` (pool of `*bytes.Buffer`). `Get()` returns a buffer; `Put(buf)` returns it. Always `defer Put(buf)` immediately after `Get()`.
+
+### 7.4 Named Viewers
+
+Named viewers are stored in `app.viewers` (map[string]Viewer). They are registered automatically by `HtmlViewEngine.Load()` for files under `views/`.
+
+Registration: `app.viewers["views/user/profile"] = &HtmlViewer{template: t}`
+
+Usage: `return c.View(user, "views/user/profile")` (Rule 0.5 applies).
+
+---
+
+## Section 8 — ViewEngine
+
+### 8.1 Interface
+
+```go
+type ViewEngine interface {
+    Load(fsys fs.FS, app *App)
+    FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error
+}
+```
+
+### 8.2 Built-in Engines
+
+| Engine | Loads | Hot Reload Triggers |
+|--------|-------|---------------------|
+| `StaticViewEngine` | `public/*` as routes | `public/*` Create/Write |
+| `HtmlViewEngine` | `components/`, `layouts/`, `pages/`, `views/` | `*.html` Create/Write in those dirs |
+| `TextViewEngine` | `text/*` | `text/*` Create/Write |
+
+Default engines loaded when `app.engines == nil` (i.e., `New()` called without `WithViewEngines`).
+
+### 8.3 HtmlViewEngine Dependency Graph
+
+When a layout is reloaded, HtmlViewEngine tracks dependents and reloads all pages that `{{ define }}` blocks from that layout.
+
+---
+
+## Section 9 — Project Structure
+
+```
+public/      → Static assets. public/index.html → GET /{$}
+components/  → Reusable HTML fragments. Include via {{ block "components/name" . }}
+layouts/     → Page layouts. Select with <!--layout:name--> at top of page file.
+pages/       → Auto-routed pages. pages/foo/index.html → GET /foo/{$}
+              pages only registers GET. Other methods require explicit handlers.
+views/       → Named views (not auto-routed). Use via c.View(data, "views/name")
+text/        → text/template files. c.View(data, "text/sitemap.xml")
+```
+
+Dynamic segments: `{var}` in filenames → e.g., `pages/user/{id}.html` → GET `/user/{id}`.
+Multiple hosts: `@host.com/` prefix → e.g., `pages/@abc.com/index.html` → GET `abc.com/{$}`.
+
+### 9.1 Layout Selection
+
+File: `pages/user/profile.html`
+```
+<!--layout:admin-->
 {{ define "content" }}
-    <div id="app">hello world</div>
+  <p>{{ .Data.Name }}</p>
 {{ end }}
 ```
 
-### Static assets
-You can store static files, like images, fonts, js and css, under a directory called `public` in the root directory. Files inside public can then be referenced by your code starting from the base URL (/).
-
-**NOTE: `public/index.html` will be exposed by `/` instead of `/index.html`.**
-
-#### Creating a component
-A component is a partial view that is shared between multiple layouts/pages/views.
-
+Layout file: `layouts/admin.html`
 ```
-└── app
-    ├── components
-    │   └── assets.html
-    ├── layouts
-    │   └── home.html
-    ├── pages
-    │   └── index.html
-    └── public
-        ├── app.js
-        └── skin.css
-```
-> components/assets.html
-```html
-<link rel="stylesheet" href="/skin.css">
-<script type="text/javascript" src="/app.js"></script>
-```
-> layouts/home.html
-```html
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Xun-Admin</title>
-    {{ block "components/assets" . }} {{ end }}
-  </head>
-  <body>
-    {{ block "content" .}} {{ end }}
-  </body>
+<body>
+{{ block "content" . }}{{ end }}
+</body>
 </html>
 ```
 
-### Text View
-A text view is UI that is referenced in `context.View` to render the view with a data model.
+### 9.2 Template Model
 
-**NOTE: Text files are parsed using the `text/template` package. This is different from the `html/template` package used in `pages/layouts/views/components`. While `text/template` is designed for generating textual output based on data, it does not automatically secure HTML output against certain attacks. Therefore, please ensure your output is safe to prevent code injection.**
+`ViewModel{TempData, Data}` is passed to templates. Access via `.Data` and `.TempData`.
 
-#### Creating a text view
-```
-└── app
-    ├── components
-    │   └── assets.html
-    ├── layouts
-    │   └── home.html
-    ├── pages
-    │   └── index.html
-    └── public
-    │   ├── app.js
-    │   └── skin.css
-    └── text
-        ├── sitemap.xml
-```
-
-#### Render the view with a data model
-```go
-	app.Get("/sitemap.xml", func(c *xun.Context) error {
-		return c.View(Sitemap{
-			LastMod: time.Now(),
-		}, "text/sitemap.xml") // use `text/sitemap.xml` as current Viewer to render
-	})
-```
-
-> curl --header "Accept: application/xml, text/xml,text/plain, */*" -v http://127.0.0.1/sitemap.xml
-
-```bash
-*   Trying 127.0.0.1:80...
-* Connected to 127.0.0.1 (127.0.0.1) port 80
-> GET /sitemap.xml HTTP/1.1
-> Host: 127.0.0.1
-> User-Agent: curl/8.7.1
-> Accept: application/xml, text/xml,text/plain, */*
->
-* Request completely sent off
-< HTTP/1.1 200 OK
-< Date: Wed, 15 Jan 2025 11:51:56 GMT
-< Content-Length: 277
-< Content-Type: text/xml; charset=utf-8
-<
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-  <loc>https://github.com/yaitoo/xun</loc>
-  <lastmod>2025-01-15T19:51:56+08:00</lastmod>
-  <changefreq>hourly</changefreq>
-  <priority>1.0</priority>
-  </url>
-* Connection #0 to host 127.0.0.1 left intact
-</urlset>%
-```
-
-
-
-## Building your application
-### Routing
-#### Route Handler
-Page Router only serve static content from html files. We have to define router handler in go to process request and bind data to the template file via `HtmlViewer`.
-
-> pages/index.html
 ```html
-<!--layout:home-->
-{{ define "content" }}
-    <div id="app">hello {{.Data.Name}}</div>
+<p>Name: {{ .Data.Name }}</p>
+{{ if .TempData.Session }}
+  <p>Session: {{ .TempData.Session }}</p>
 {{ end }}
 ```
 
-> main.go
-```go
-	app.Get("/{$}", func(c *xun.Context) error {
-		return c.View(map[string]string{
-			"Name": "go-xun",
-		})
-	})
-```
+---
 
+## Section 10 — Error Handling
 
-**NOTE: An `/index.html` always be registered as `/{$}` in routing table. See more detail on [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements).**
-> There is one last bit of syntax. As we showed above, patterns ending in a slash, like /posts/, match all paths beginning with that string. To match only the path with the trailing slash, you can write /posts/{$}. That will match /posts/ but not /posts or /posts/234.
+| Return Value | Framework Behavior |
+|-------------|-------------------|
+| `return nil` | Response complete |
+| `return xun.ErrCancelled` | Stop middleware chain; response already handled |
+| `return xun.ErrViewNotFound` | Emit 404 |
+| `return other error` | Emit 500 + X-Log-Id header |
 
-#### Dynamic Routes
-When you don't know the exact segment names ahead of time and want to create routes from dynamic data, you can use Dynamic Segments that are filled in at request time. `{var}` can be used in folder name and file name as same as router handler in `http.ServeMux`.
+`ErrCancelled` usage (Rule 0.3): after calling `c.WriteStatus()` to set the status.
 
-For examples, below patterns will be generated automatically, and registered in routing table.
-- `/user/{id}.html` generates pattern `/user/{id}`
-- `/{id}/user.html` generates pattern `/{id}/user`
+---
 
-```
-├── app
-│   ├── components
-│   │   └── assets.html
-│   ├── layouts
-│   │   └── home.html
-│   ├── pages
-│   │   ├── index.html
-│   │   └── user
-│   │       └── {id}.html
-│   └── public
-│       ├── app.js
-│       └── skin.css
-├── go.mod
-├── go.sum
-└── main.go
-```
+## Section 11 — Static Assets and Fingerprinting
 
-> pages/user/{id}.html
-```html
-<!--layout:home-->
-{{ define "content" }}
-    <div id="app">hello {{.Data.Name}}</div>
-{{ end }}
-```
+### 11.1 Static Files
 
-> main.go
-```go
-	app.Get("/user/{id}", func(c *xun.Context) error {
-		id := c.Request.PathValue("id")
-		user := getUserById(id)
-		return c.View(user)
-	})
-```
+`StaticViewEngine.Load()` registers all non-dir files under `public/` as routes.
 
-
-### Multiple Viewers
-In our application, a route can support multiple viewers. The response is rendered based on the `Accept` request header. If no viewer matches the `Accept` header, first registered viewer is used. For more examples, see the [Tests](app_test.go).
-
-```bash
-curl -v http://127.0.0.1
-> GET / HTTP/1.1
-> Host: 127.0.0.1
-> User-Agent: curl/8.7.1
-> Accept: */*
->
-* Request completely sent off
-< HTTP/1.1 200 OK
-< Date: Thu, 26 Dec 2024 07:46:13 GMT
-< Content-Length: 19
-< Content-Type: text/plain; charset=utf-8
-<
-{"Name":"go-xun"}
-```
-
-> curl --header "Accept: text/html; \*/\*" http://127.0.0.1
-```
-> GET / HTTP/1.1
-> Host: 127.0.0.1
-> User-Agent: curl/8.7.1
-> Accept: text/html; */*
->
-* Request completely sent off
-< HTTP/1.1 200 OK
-< Date: Thu, 26 Dec 2024 07:49:47 GMT
-< Content-Length: 343
-< Content-Type: text/html; charset=utf-8
-<
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Xun-Admin</title>
-    <link rel="stylesheet" href="/skin.css">
-<script type="text/javascript" src="/app.js"></script>
-  </head>
-  <body>
-
-    <div id="app">hello go-xun</div>
-
-  </body>
-</html>
-```
-### Middleware
-Middleware allows you to run code before a request is completed. Then, based on the incoming request, you can modify the response by rewriting, redirecting, modifying the request or response headers, or responding directly.
-
-Integrating Middleware into your application can lead to significant improvements in performance, security, and user experience. Some common scenarios where Middleware is particularly effective include:
-
-- Authentication and Authorization: Ensure user identity and check session cookies before granting access to specific pages or API routes.
-- Server-Side Redirects: Redirect users at the server level based on certain conditions (e.g., locale, user role).
-- Path Rewriting: Support A/B testing, feature rollout, or legacy paths by dynamically rewriting paths to API routes or pages based on request properties.
-- Bot Detection: Protect your resources by detecting and blocking bot traffic.
-- Logging and Analytics: Capture and analyze request data for insights before processing by the page or API.
-- Feature Flagging: Enable or disable features dynamically for seamless feature rollout or testing.
-
-> Authentication
-```go
-	admin := app.Group("/admin")
-
-	admin.Use(func(next xun.HandleFunc) xun.HandleFunc {
-		return func(c *xun.Context) error {
-			token := c.Request.Header.Get("X-Token")
-			if !checkToken(token) {
-				c.WriteStatus(http.StatusUnauthorized)
-				return xun.ErrCancelled
-			}
-			return next(c)
-		}
-	})
-
-```
-
-> Logging
-```go
-	app.Use(func(next xun.HandleFunc) xun.HandleFunc {
-		return func(c *xun.Context) error {
-			n := time.Now()
-			defer func() {
-				duration := time.Since(n)
-
-				log.Println(c.Routing.Pattern, duration)
-			}()
-			return next(c)
-		}
-	})
-```
-
-### Multiple VirtualHosts
-`net/http` package's router supports multiple host names that resolve to a single address by precedence rule.
-For examples
-```go
- mux.HandleFunc("GET /", func(w http.ResponseWriter, req *http.Request) {...})
- mux.HandleFunc("GET abc.com/", func(w http.ResponseWriter, req *http.Request) {...})
- mux.HandleFunc("GET 123.com/", func(w http.ResponseWriter, req *http.Request) {...})
-```
-
-In Page Router, we use `@` in top folder name to setup host rules in routing table. See more examples on [Tests](app_test.go)
-```
-├── app
-│   ├── components
-│   │   └── assets.html
-│   ├── layouts
-│   │   └── home.html
-│   ├── pages
-│   │   ├── @123.com
-│   │   │   └── index.html
-│   │   ├── index.html
-│   │   └── user
-│   │       └── {id}.html
-│   └── public
-│       ├── @abc.com
-│       │   └── index.html
-│       ├── app.js
-│       └── skin.css
-```
-
-### Form and Validate
-In an api application, we always need to collect data from request, and validate them. It is integrated with i18n feature as built-in feature now.
-
-> check full examples on [Tests](./ext/form/binder_test.go)
-
+### 11.2 Fingerprinting
 
 ```go
-type Login struct {
-		Email  string `form:"email" json:"email" validate:"required,email"`
-		Passwd string `json:"passwd" validate:"required"`
-	}
+app := xun.New(
+    xun.WithFsys(fsys),
+    xun.WithBuildAssetURL(func(path string) bool {
+        return strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css")
+    }),
+)
 ```
 
-#### BindQuery
-```go
-	app.Get("/login", func(c *Context) error {
-		it, err := form.BindQuery[Login](c.Request)
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
+Flow:
+1. Matcher returns true for `/assets/app.js`
+2. StaticViewEngine computes content ETag
+3. Registers `/assets/app-a1b2c3.js` as separate route
+4. `app.AssetURLs["/assets/app.js"] = "/assets/app-a1b2c3.js"`
+5. `{{ asset "/assets/app.js" }}` in templates returns `/assets/app-a1b2c3.js`
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
-			return c.View(it)
-		}
-		c.WriteStatus(http.StatusBadRequest)
-		return ErrCancelled
-	})
+Fingerprinted assets get `Cache-Control: public, max-age=31536000, immutable`.
+
+---
+
+## Section 12 — Compression
+
+### 12.1 Compressors
+
+```
+WithCompressor(&xun.GzipCompressor{})
+WithCompressor(&xun.DeflateCompressor{})
 ```
 
-#### BindForm
-```go
-app.Post("/login", func(c *Context) error {
-		it, err := form.BindForm[Login](c.Request)
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
+Selected by `Accept-Encoding` header. `*` in Accept-Encoding matches all.
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
-			return c.View(it)
-		}
-		c.WriteStatus(http.StatusBadRequest)
-		return ErrCancelled
-	})
+### 12.2 ResponseWriter Interface
+
+```go
+type ResponseWriter interface {
+    http.ResponseWriter
+    BodyBytesSent() int
+    StatusCode() int
+    Close()
+}
 ```
 
-#### BindJson
-```go
-app.Post("/login", func(c *Context) error {
-		it, err := form.BindJson[Login](c.Request)
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return ErrCancelled
-		}
+`Close()` is called automatically by framework via defer in handler wrapper. Do not call manually.
 
-		if it.Validate(c.AcceptLanguage()...) && it.Data.Email == "xun@yaitoo.cn" && it.Data.Passwd == "123" {
-			return c.View(it)
-		}
-		c.WriteStatus(http.StatusBadRequest)
-		return ErrCancelled
-	})
+---
+
+## Section 13 — Redirects and Interceptor
+
+### 13.1 Redirect
+
+```go
+c.Redirect(url)              // 302 by default
+c.Redirect(url, 301)         // custom status
 ```
 
-#### Validate Rules
-Many [baked-in validations](https://github.com/go-playground/validator) are ready to use. Please feel free to check [docs](https://github.com/go-playground/validator?tab=readme-ov-file#usage-and-documentation) and write your custom validation methods.
+### 13.2 Interceptor Interface
 
-#### i18n
-English is default locale for all validate message. It is easy to add other locale.
 ```go
-import(
-  "github.com/go-playground/locales/zh"
-  ut "github.com/go-playground/universal-translator"
-  trans "github.com/go-playground/validator/v10/translations/zh"
+type Interceptor interface {
+    RequestReferer(c *Context) string
+    Redirect(c *Context, url string, statusCode ...int) bool
+}
+```
 
+If `Redirect` returns true, the default redirect behavior is skipped.
+Use `WithInterceptor(htmx.New())` for htmx support.
+
+---
+
+## Section 14 — Form Binding and Validation (ext/form)
+
+### 14.1 Binding Functions
+
+```
+form.BindQuery[T any](req *http.Request) (*TEntity[T], error)
+form.BindForm[T any](req *http.Request) (*TEntity[T], error)
+form.BindJson[T any](req *http.Request) (*TEntity[T], error)
+```
+
+### 14.2 TEntity
+
+```go
+type TEntity[T any] struct {
+    Data   T                 `json:"data"`
+    Errors map[string]string `json:"errors"`
+}
+```
+
+`it.Validate(languages...)` populates `Errors` and returns false if validation fails.
+
+### 14.3 Validation Setup
+
+```go
+import (
+    "github.com/go-playground/locales/zh"
+    ut "github.com/go-playground/universal-translator"
+    trans "github.com/go-playground/validator/v10/translations/zh"
+    "github.com/yaitoo/xun"
+    "github.com/yaitoo/xun/ext/form"
 )
 
 xun.AddValidator(ut.New(zh.New()).GetFallback(), trans.RegisterDefaultTranslations)
 ```
 
-> check more translations on [here](https://github.com/go-playground/validator/tree/master/translations)
+Call before registering routes.
 
-### Extensions
-#### GZip/Deflate handler
-Set up the compression extension to interpret and respond to `Accept-Encoding` headers in client requests, supporting both GZip and Deflate compression methods.
+### 14.4 Complete Form Handler
 
 ```go
-app := xun.New(WithCompressor(&GzipCompressor{}, &DeflateCompressor{}))
-```
-
-#### AutoTLS
-Use `autotls.Configure` to set up servers for automatic obtaining and renewing of TLS certificates from Let's Encrypt.
-
-```go
-mux := http.NewServeMux()
-
-app := xun.New(xun.WithMux(mux))
-
-//...
-
-httpServer := &http.Server{
-	Addr: ":http",
-	//...
+type Login struct {
+    Email  string `form:"email" json:"email" validate:"required,email"`
+    Passwd string `json:"passwd" validate:"required"`
 }
 
-httpsServer := &http.Server{
-	Addr: ":https",
-	//...
-}
-
-autotls.
-	New(autotls.WithCache(autocert.DirCache("./certs")),
-		autotls.WithHosts("abc.com", "123.com")).
-	Configure(httpServer, httpsServer)
-
-go httpServer.ListenAndServe()
-go httpsServer.ListenAndServeTLS("", "")
-```
-
-#### Cookie
-Cookies are a way to store information at the client end. see [more examples](./ext/cookie/cookie_test.go)
-> Write cookie with base64(URL Encoding) to client
-```go
-cookie.Set(ctx,  http.Cookie{Name: "test", Value: "value"}) // Set-Cookie: test=dmFsdWU=
-```
-
-> Read and decoded cookie from client's request
-```go
-v, err := cookie.Get(ctx,"test")
-
-fmt.Println(v) // value
-```
-
-When signed, the cookies can't be forged, because their values are validated using HMAC.
-```go
-ts, err := cookie.SetSigned(ctx,http.Cookie{Name: "test", Value: "value"},[]byte("secret")) // ts is current timestamp
-
-v, ts, err := cookie.GetSigned(ctx, "test",[]byte("secret")) // v is value, ts is the timestamp that was signed
-```
-
-> Delete a cookie
-```go
-cookie.Delete(ctx, http.Cookie{Name: "test", Value: "dmFsdWU="}) // Set-Cookie: test=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0
-```
-
-#### HSTS
-HTTP Strict Transport Security (HSTS) is a simple and widely supported standard to protect visitors by ensuring that their browsers always connect to a website over HTTPS.
-
-
-> Redirect redirects plain HTTP requests to HTTPS. **DON'T use it if HTTPs is unsupported on your server.**
-```go
-app.Use(hsts.Redirect())
-```
-
-> Write HSTS header if it is a HTTPs request. **It is only applied in HTTPs request.**
-```go
-app.Use(hsts.WriteHeader())
-```
-
-#### Proxy Protocol
-The PROXY protocol allows our application to receive client connection information that is passed through proxy servers and load balancers. Both PROXY protocol versions 1 and 2 are supported.
-
-[How to use the Proxy Protocol to preserve a client's ip address?](https://www.haproxy.com/blog/use-the-proxy-protocol-to-preserve-a-clients-ip-address)
-
-**Security Note: Do not enable the PROXY protocol on your servers unless they are located behind a proxy server or load balancer. If the PROXY protocol is enabled without such intermediaries, any client could potentially send fake IP addresses or other misleading information, posing a security risk.**
-
-> ListenAndServe
-
-```go
-	mux := http.NewServeMux()
-
-	srv := &http.Server{
-		Addr:    ":80",
-		Handler: mux,
-	}
-
-	app := xun.New(WithMux(mux))
-	app.Start()
-	defer app.Close()
-
-	//   srv.ListenAndServe()
-	proxyproto.ListenAndServe(srv)
-```
-
-> ListenAndServeTLS
-
-```go
-	httpsServer := &http.Server{
-		Addr:    ":443",
-		Handler: mux,
-	}
-
-	autotls.New(autotls.WithCache(autocert.DirCache("./certs")),
-		autotls.WithHosts("yaitoo.cn", "www.yaitoo.cn")).
-		Configure(srv, httpsServer)
-
-  // httpsServer.ListenAndServeTLS( "", "")
-	proxyproto.ListenAndServeTLS(httpsServer, "", "")
-```
-
-#### Logging
-
-Logs each incoming request to the provided logger. The format of the log messages is customizable using the `Format` option. The default format is the combined log format (XLF/ELF).
-
-> Enable `reqlog` middleware
-
-```go
-func main(){
- 	//....
-  logger, _ := setupLogger()
-
-  app.Use(reqlog.New(reqlog.WithLogger(logger),
-		reqlog.WithUser(getUserID),
-		reqlog.WithVisitor(getVisitorID),
-		reqlog.WithFormat(reqlog.Combined))))
- 	//...
-}
-
-func setupLogger() (*log.Logger, error) {
-	logFile, err := os.OpenFile("./access.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, err
-	}
-	return log.New(logFile, "", 0), nil
-}
-
-func getVisitorID(c *xun.Context) string {
-	v, err := c.Request.Cookie("visitor_id") // use fingerprintjs to generate visitor id in client's cookie
-	if err != nil {
-		return ""
-	}
-
-	return v.Value
-}
-
-func getUserID(c *xun.Context) string {
-	v, _, err := cookie.GetSigned(c, "session_id", secretKey)
-	if err != nil {
-		return ""
-	}
-
-	return v
-}
-
-```
-
-> Install GoAccess to generate real-time analysis report
-
-[How to install GoAccess](https://goaccess.io/get-started)
-
-```bash
-goaccess ./access.log --geoip-database=./GeoLite2-ASN.mmdb --geoip-database=./GeoLite2-City.mmdb -o ./realtime.html --log-format=COMBINED --real-time-html
-```
-
-> Serve the online real-time analysis report
-```go
-	app.Get("/reports/realtime.html", func(c *xun.Context) error {
-		http.ServeFile(c.Response, c.Request, "./realtime.html")
-		return nil
-	})
-```
-
-#### CSRF Token
-A CSRF (Cross-Site Request Forgery) token is a unique security measure designed to protect web applications from unauthorized or malicious requests. see more [examples](./ext/csrf/csrf_test.go)
-
-> Enable `csrf` middleware
-```go
-func main(){
- 	//....
-  secretKey := []byte("your-secret-key")
-
-  app.Use(csrf.New(secretKey))
- 	//...
-}
-```
-
-> Enable `JsToken` to prevent bot requests on POST/PUT/DELETE
-
-- enable `csrf` with JsToken
-```go
-func main(){
- 	//....
-  secretKey := []byte("your-secret-key")
-  app.Use(csrf.New(secretKey,csrf.WithJsToken()))
-  // ...
-  app.Get("/assets/csrf.js",csrf.HandleFunc(secretKey))
-  //...
-}
-```
-
-- load `csrf.js` on html
-```html
-<script type="text/javascript" src="/assets/csrf.js" defer></script>
-```
-
-
-#### Access Control List ([ACL](./ext/acl/))
-The ACL filters and monitors HTTP traffic through granular rule sets, designed to protect web applications/APIs from malicious bots, exploit attempts, and unauthorized access.
-
-##### Core Filtering Dimensions
-- Host-Based Filtering (AllowHosts)
-
-    Restrict access to explicitly permitted domains/subdomains
-- IP Range Control (AllowIPNets/DenyIPNets)
-
-    Allow/block traffic from specific IP addresses or CIDR-notated subnets. IPv4/IPv6 are both supported.
-- Geolocation Filtering (AllowCountries/DenyCountries)
-
-    Permit/restrict access based on client geolocation
-
-##### Enforcement Actions
-- Block unauthorized requests with 403 Forbidden status
-- Host Redirection (Conditional):
-
-    When AllowHosts validation fails:
-    - Redirect to HostRedirectURL
-    - Use customizable HTTP status HostRedirectStatusCode (e.g., 307 Temporary Redirect)
-
-##### Code Examples
-see more [examples](./ext/acl/acl_test.go)
-
-> AllowHosts
-```go
-app.Use(acl.New(acl.AllowHosts("abc.com","123.com"), acl.WithHostRedirect("https://abc.com", 302)))
-
-```
-
-> Whitelist Mode by IPNets
-```go
-app.Use(acl.New(acl.AllowIPNets("172.0.0.1","2000::1/8")),acl.DenyIPNets("*"))
-```
-
-> Whitelist Mode by Countries
-```go
-func lookup(ip string)string {
-	db, _ := geoip2.Open("./GeoLite2-City.mmdb")
-	nip := net.ParseIP(ip)
-
-	c, _ := db.cityDB.City(nip)
-
-	return c.CountryCode
-}
-
-app.Use(acl.New(acl.WithLookupFunc(lookup),
-	acl.AllowCountries("CN"),acl.DenyCountries("*")))
-```
-
-> Blacklist Mode by IPNets
-```go
-app.Use(acl.DenyIPNets("172.0.0.0/24"))
-```
-
-> Blacklist Mode by Countries
-```go
-app.Use(acl.New(acl.WithLookupFunc(lookup),acl.DenyCountries("us","cn")))
-```
-
-##### Config Example
-The optimal solution is to load the rules from a configuration file rather than hard-coding them. The ACL system also monitors the configuration file for changes and automatically reloads the rules. see more [examples](./ext/acl/config_test.go)
-
-> config file
-```ini
-[allow_hosts]
-abc.com
-www.abc.com
-[allow_ipnets]
-89.207.132.170/24
-# ::1
-; 127.0.0.1
-[deny_ipnets]
-*
-[allow_countries]
-
-[deny_countries]
-us
-
-[host_redirect]
-url=http://yaitoo.cn
-status_code=302
-
-```
-
-> use middleware with config
-```go
-app.Use(acl.New(acl.WithConfig("./acl.ini")))
-```
-
-#### Server-Sent Events ([SSE](./ext/sse/))
-Server-Sent Events (SSE) is a server push technology enabling a client to receive automatic updates from a server via an HTTP connection.
-
-> use `sse` extension to handle SSE request
-```go
-ss := sse.New()
-
-app.Get("/topic/{id}", func(ctx *xun.Context)error {
-	id := c.Get("SessionID").(string)
-	s, err := ss.Join(c.Request.Context(), id, c.Response)
-	if err != nil {
-		c.WriteStatus(http.StatusBadRequest)
-		return xun.ErrCancelled
-	}
-
-	s.Wait()
-
-	ss.Leave(id)
-
-	return nil
+app.Post("/login", func(c *xun.Context) error {
+    it, err := form.BindForm[Login](c.Request)
+    if err != nil {
+        c.WriteStatus(http.StatusBadRequest)
+        return xun.ErrCancelled
+    }
+    if !it.Validate(c.AcceptLanguage()...) {
+        c.WriteStatus(http.StatusBadRequest)
+        return c.View(it)
+    }
+    // process login
+    return c.Redirect("/dashboard")
 })
-
 ```
 
-> push an event to the user
+---
+
+## Section 15 — Extensions
+
+### 15.1 Extensions Summary
+
+| Extension | Import | Registration | Key Functions |
+|-----------|--------|--------------|---------------|
+| `acl` | `ext/acl` | `app.Use(acl.New(...))` | AllowHosts, AllowIPNets, DenyCountries |
+| `autotls` | `ext/autotls` | `autotls.New(...).Configure(srv, srvTLS)` | New, WithCache, WithHosts, Configure |
+| `cache` | `ext/cache` | `cache.New()` | Get, Set, Delete |
+| `cookie` | `ext/cookie` | — (stateless) | Set, Get, SetSigned, GetSigned, Delete |
+| `csrf` | `ext/csrf` | `app.Use(csrf.New(secret))` | New, WithJsToken, HandleFunc |
+| `form` | `ext/form` | — | BindQuery, BindForm, BindJson |
+| `hsts` | `ext/hsts` | `app.Use(hsts.WriteHeader())` | Redirect, WriteHeader |
+| `htmx` | `ext/htmx` | `xun.WithInterceptor(htmx.New())` | New |
+| `proxyproto` | `ext/proxyproto` | `proxyproto.ListenAndServe(srv)` | ListenAndServe, ListenAndServeTLS |
+| `reqlog` | `ext/reqlog` | `app.Use(reqlog.New(...))` | New, WithFormat, WithLogger |
+| `sse` | `ext/sse` | `ss := sse.New()` | New, Join, Send, Broadcast, Leave, Shutdown |
+
+### 15.2 Cookie Extension
+
 ```go
-u := ss.Get("user_id")
-if u != nil {
-	u.Send(sse.TextEvent{
-		Name:"showMessage",
-		Data:"Hello",
-	})
+import "github.com/yaitoo/xun/ext/cookie"
+
+// Base64 encoded (not signed)
+cookie.Set(c, http.Cookie{Name: "theme", Value: "dark"})
+v, err := cookie.Get(c, "theme")
+
+// HMAC signed
+ts, err := cookie.SetSigned(c, http.Cookie{Name: "session", Value: "abc123"}, []byte("secret"))
+v, ts, err := cookie.GetSigned(c, "session", []byte("secret"))
+
+// Delete
+cookie.Delete(c, http.Cookie{Name: "theme"})
+```
+
+---
+
+## Section 16 — Performance
+
+- Do NOT enable `WithWatch()` in production (not thread-safe).
+- Use `xun.BufPool` in custom Viewer implementations to reduce allocations.
+- Compressors create per-request writers. Always rely on framework's deferred `Close()`.
+- `app.Start()` does not start the server (Rule 0.4).
+
+---
+
+## Section 17 — Go 1.22 Router Syntax
+
+xun uses Go's built-in `http.ServeMux` router from Go 1.22.
+
+```
+GET /users              matches /users
+GET /users/             matches /users, /users/, /users/123
+GET /users/{id}         matches /users/123, sets PathValue("id") = "123"
+GET /users/{id}/posts   matches /users/123/posts
+GET /posts/{$}          matches /posts/ ONLY (trailing slash required)
+```
+
+---
+
+## Section 18 — Gin/Echo/Chi Differences
+
+### 18.1 What xun Does NOT Have
+
+These do NOT exist on `*xun.Context`:
+
+```
+c.Query("name")              → c.Request.URL.Query().Get("name")
+c.PostForm("email")          → form.BindForm[T](c.Request)
+c.Cookie("name")            → c.Request.Cookie("name")
+c.SetCookie(name, v, ...)   → http.SetCookie(c.Response, &http.Cookie{...})
+c.JSON(200, data)           → c.View(data) (with JsonViewer)
+c.HTML(200, "tpl", data)   → c.View(data, "views/tpl") (with HtmlViewer)
+c.String(200, "ok")        → c.View("ok") (with StringViewer)
+c.Data(200, mime, buf)     → c.View(buf) (with FileViewer)
+c.Bind(&user)              → form.BindJson[T](c.Request), form.BindForm[T](c.Request)
+c.ShouldBind(&user)        → same as above
+c.FullPath()               → does not exist
+c.HandlerName()             → does not exist
+c.MustGet("key")           → c.Get("key") (returns nil if missing, no panic)
+c.Abort()                  → does not exist
+c.AbortWithStatusJSON(...) → does not exist
+c.ClientIP()               → c.Request.RemoteAddr (no built-in proxy support)
+```
+
+### 18.2 Middleware Signature Difference
+
+```go
+// Gin: c.Next() called INSIDE handler
+func ginMiddleware(c *gin.Context) {
+    // pre
+    c.Next()
+    // post
+}
+
+// xun: next() called EXPLICITLY, returns HandleFunc
+func xunMiddleware(next xun.HandleFunc) xun.HandleFunc {
+    return func(c *xun.Context) error {
+        // pre
+        err := next(c)
+        // post
+        return err
+    }
 }
 ```
 
-> broadcast an event to all users
+### 18.3 Error Handling Difference
+
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
-ss.Broadcast(ctx, sse.TextEvent{
-	Name:"shutdown",
-	Data:"Server is shutting down",
+// Gin: refusing returns nothing, response handled
+if !allowed {
+    c.AbortWithStatus(http.StatusUnauthorized)
+    return
+}
+
+// xun: refusing sets status and returns ErrCancelled
+if !allowed {
+    c.WriteStatus(http.StatusUnauthorized)
+    return xun.ErrCancelled
 }
 ```
 
-> shutdown server and close all user connections
+---
+
+## Section 19 — Complete Minimal Examples
+
+### 19.1 Minimal JSON API (No fs.FS)
+
 ```go
-ss.Shutdown()
-```
+package main
 
-> use [htmx-ext-sse](https://htmx.org/extensions/sse/) extension to send SSE request
-```html
+import (
+    "net/http"
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/ext/sse.min.js" integrity="sha512-uROW42fbC8XT6OsVXUC00tuak//shtU8zZE9BwxkT2kOxnZux0Ws8kypRr2UV4OhTEVmUSPIoUOrBN5DXeRNAQ=="
-crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    "github.com/yaitoo/xun"
+)
 
-<div class="w-full" hx-ext="sse" sse-connect="/topic/{id}" >
-...
-</div>
-```
+func main() {
+    app := xun.New(
+        xun.WithHandlerViewers(&xun.JsonViewer{}), // Rule 0.1
+    )
 
-### Works with [tailwindcss](https://tailwindcss.com/docs/installation)
-#### 1. Install Tailwind CSS
-Install tailwindcss via npm, and create your tailwind.config.js file.
-```bash
-npm install -D tailwindcss
-npx tailwindcss init
-```
-#### 2. Configure your template paths
-Add the paths to all of your template files in your tailwind.config.js file.
+    app.Get("/ping", func(c *xun.Context) error {
+        return c.View(map[string]string{"message": "pong"})
+    })
 
-> tailwind.config.js
-```json
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: ["./app/**/*.{html,js}"],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
+    app.Start()
+    defer app.Close()
+    http.ListenAndServe(":8080", http.DefaultServeMux)
 }
 ```
 
-#### 3. Add the Tailwind directives to your CSS
-Add the @tailwind directives for each of Tailwind’s layers to your main CSS file.
-> app/tailwind.css
-```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
-
-#### 4. Start the Tailwind CLI build process
-Run the CLI tool to scan your template files for classes and build your CSS.
-
-```bash
-npx tailwindcss -i ./app/tailwind.css -o ./app/public/theme.css --watch
-```
-
-#### 5. Start using Tailwind in your HTML
-Add your compiled CSS file to the `assets.html` and start using Tailwind’s utility classes to style your content.
-
-> components/assets.html
-```html
-<link rel="stylesheet" href="/skin.css">
-<link rel="stylesheet" href="/theme.css">
-<script type="text/javascript" src="/app.js"></script>
-```
-
-### Works with [htmx.js](https://htmx.org/docs/)
-#### 1. Add new pages
-> `pages/admin/index.html` and `pages/login.html`
-```
-├── app
-│   ├── components
-│   │   └── assets.html
-│   ├── layouts
-│   │   └── home.html
-│   ├── pages
-│   │   ├── @123.com
-│   │   │   └── index.html
-│   │   ├── admin
-│   │   │   └── index.html
-│   │   ├── index.html
-│   │   ├── login.html
-│   │   └── user
-│   │       └── {id}.html
-│   ├── public
-│   │   ├── @abc.com
-│   │   │   └── index.html
-│   │   ├── app.js
-│   │   ├── skin.css
-│   │   └── theme.css
-│   ├── tailwind.css
-```
-
-#### 2. Serve [htmx-ext.js](./ext/htmx/htmx.js) library
-The library to enable seamless integration between native JavaScript methods and htmx features, enhancing interactive capabilities without compromising core functionality.
+### 19.2 JSON + HTML Same Route
 
 ```go
-	app.Get("/htmx-ext.js", htmx.HandleFunc())
+app := xun.New(
+    xun.WithHandlerViewers(&xun.JsonViewer{}, &xun.HtmlViewer{}),
+)
+
+app.Get("/user/{id}", func(c *xun.Context) error {
+    id := c.Request.PathValue("id")
+    return c.View(getUser(id))
+})
+// Accept: application/json → JsonViewer
+// Accept: text/html → HtmlViewer
 ```
 
-#### 3. Install htmx.js and htmx-ext.js
-
-> components/assets.html
-```html
-<link rel="stylesheet" href="/skin.css">
-<link rel="stylesheet" href="/theme.css">
-<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-<script type="text/javascript" src="/htmx-ext.js"></script>
-<script type="text/javascript" src="/app.js" defer></script>
-```
-
-#### 4. Enabled `htmx` feature on pages
-> pages/index.html
-```html
-<!--layout:home-->
-{{ define "content" }}
-    <div id="app" class="text-3xl font-bold underline" hx-boost="true">
-
-			{{ if .TempData.Session }}
-				Hello {{ .TempData.Session }}, go <a href="/admin">Admin</>
-			{{ else }}
-        Hello guest, please <a href="/login">Login</a>
-			{{ end }}
-    </div>
-
-{{ end }}
-```
-
-> pages/login.html
-```html
-<!--layout:home-->
-{{ define "content" }}
-
-<div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
-  <div class="sm:mx-auto sm:w-full sm:max-w-sm">
-    <h2 class="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900">Sign in to your account</h2>
-  </div>
-
-  <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-    <form class="space-y-6" action="#" method="POST" hx-post="/login">
-      <div>
-        <label for="email" class="block text-sm/6 font-medium text-gray-900">Email address</label>
-        <div class="mt-2">
-          <input type="email" name="email" id="email" autocomplete="email" required class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6">
-        </div>
-      </div>
-
-      <div>
-        <div class="flex items-center justify-between">
-          <label for="password" class="block text-sm/6 font-medium text-gray-900">Password</label>
-        </div>
-        <div class="mt-2">
-          <input type="password" name="password" id="password" autocomplete="current-password" required class="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6">
-        </div>
-      </div>
-
-      <div>
-        <button type="submit" class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">Sign in</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-{{ end }}
-```
-
-> pages/admin/index.html
-```html
-<!--layout:home-->
-{{ define "content" }}
-    <div id="app" class="text-3xl font-bold underline">
-				Hello admin: {{ .Data.Name }}
-			</div>
-{{ end }}
-```
-
-#### 5. Setup Hx-Trigger listener
-> app.js
-```js
-$x.ready(function(evt) {
-	document.addEventListener("showMessage", function(evt){
-    alert(evt.detail);
-  })
-},'body');
-
-```
-
-#### 6. Apply `htmx` interceptor
-```go
-
-	app := xun.New(xun.WithInterceptor(htmx.New()))
-
-```
-
-#### 7. Create router handler to process request
-create an `admin` group router, and apply a middleware to check if it's logged. if not, redirect to /login.
-
+### 19.3 Production with embed.FS
 
 ```go
-	admin := app.Group("/admin")
-
-	admin.Use(func(next xun.HandleFunc) xun.HandleFunc {
-		return func(c *xun.Context) error {
-			s, err := c.Request.Cookie("session")
-			if err != nil || s == nil || s.Value == "" {
-				c.Redirect("/login?return=" + c.Request.URL.String())
-				return xun.ErrCancelled
-			}
-
-			// set session in Context.TempData,
-			// and get it by `.TempData.Session on text/html template files
-			c.Set("Session", s.Value)
-			return next(c)
-		}
-	})
-
-	admin.Get("/{$}", func(c *xun.Context) error {
-		return c.View(User{
-			Name: c.Get("session").(string),
-		})
-	})
-
-	app.Post("/login", func(c *xun.Context) error {
-
-		it, err := form.BindForm[Login](c.Request)
-
-		if err != nil {
-			c.WriteStatus(http.StatusBadRequest)
-			return xun.ErrCancelled
-		}
-
-		if !it.Validate(c.AcceptLanguage()...) {
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(it)
-		}
-
-		if it.Data.Email != "xun@yaitoo.cn" || it.Data.Password != "123" {
-			htmx.WriteHeader(c,htmx.HxTrigger, htmx.HxHeader[string]{
-				"showMessage": "Email or password is incorrect",
-			})
-			c.WriteStatus(http.StatusBadRequest)
-			return c.View(it)
-		}
-
-		cookie := http.Cookie{
-			Name:     "session",
-			Value:    it.Data.Email,
-			Path:     "/",
-			MaxAge:   3600,
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-		}
-
-		http.SetCookie(c.Response, &cookie)
-
-    u, _ := url.Parse(c.RequestReferer())
-
-		c.Redirect(u.Query().Get("return"))
-		return nil
-	})
-```
-
-## Deploy your application
-Leveraging Go's built-in `//go:embed` directive and the standard library's `fs.FS` interface, we can compile all static assets and configuration files into a single self-contained binary. This dependency-free approach enables seamless deployment to any server environment.
-
-```go
-
 //go:embed app
 var fsys embed.FS
 
 func main() {
-	var dev bool
-	flag.BoolVar(&dev, "dev", false, "it is development environment")
+    var dev bool
+    flag.BoolVar(&dev, "dev", false, "dev")
+    flag.Parse()
 
-	flag.Parse()
+    var opts []xun.Option
+    if dev {
+        opts = []xun.Option{
+            xun.WithFsys(os.DirFS("./app")),
+            xun.WithWatch(),
+            xun.WithHandlerViewers(&xun.HtmlViewer{}),
+        }
+    } else {
+        sub, _ := fs.Sub(fsys, "app")
+        opts = []xun.Option{
+            xun.WithFsys(sub),
+            xun.WithHandlerViewers(&xun.HtmlViewer{}),
+        }
+    }
 
-	var opts []xun.Option
-	if dev {
-		// use local filesystem in development, and watch files to reload automatically
-		opts = []xun.Option{xun.WithFsys(os.DirFS("./app")), xun.WithWatch()}
-	} else {
-		// use embed resources in production environment
-		views, _ := fs.Sub(fsys, "app")
-		opts = []xun.Option{xun.WithFsys(views)}
-	}
+    app := xun.New(opts...)
+    app.Get("/{$}", func(c *xun.Context) error {
+        return c.View(map[string]string{"hello": "xun"})
+    })
 
-	app := xun.New(opts...)
-	//...
-
-	app.Start()
-	defer app.Close()
-
-	if dev {
-		slog.Default().Info("xun-admin is running in development")
-	} else {
-		slog.Default().Info("xun-admin is running in production")
-	}
-
-	err := http.ListenAndServe(":80", http.DefaultServeMux)
-	if err != nil {
-		panic(err)
-	}
+    app.Start()
+    defer app.Close()
+    http.ListenAndServe(":80", http.DefaultServeMux)
 }
 ```
 
-## Contributing
-Contributions are welcome! If you're interested in contributing, please feel free to [contribute to Xun](CONTRIBUTING.md)
+### 19.4 Handler with Middleware Group
 
+```go
+auth := app.Group("/admin")
+auth.Use(func(next xun.HandleFunc) xun.HandleFunc {
+    return func(c *xun.Context) error {
+        cookie, err := c.Request.Cookie("session")
+        if err != nil || cookie.Value == "" {
+            c.Redirect("/login?return=" + c.Request.URL.String())
+            return xun.ErrCancelled
+        }
+        c.Set("Session", cookie.Value)
+        return next(c)
+    }
+})
 
-## License
-[Apache-2.0 license](LICENSE)
+auth.Get("/{$}", func(c *xun.Context) error {
+    return c.View(map[string]any{"user": c.Get("Session")})
+})
+```
+
+---
+
+## Section 20 — Quick Reference
+
+### Rule Index
+
+```
+Rule 0.1 — WithHandlerViewers() requires at least one argument
+Rule 0.2 — Never write c.Response directly — always use c.View()
+Rule 0.3 — On refusal: c.WriteStatus() + return ErrCancelled, never return error
+Rule 0.4 — app.Start() does not start server
+Rule 0.5 — Named viewer must match Accept header
+Rule 0.6 — pages/* registers GET only
+Rule 0.7 — {$} means trailing slash required
+```
+
+### Section Index
+
+```
+Section 0  — Critical Rules
+Section 1  — Types
+Section 2  — App (creation, fields, options)
+Section 3  — Group
+Section 4  — Middleware
+Section 5  — Context
+Section 6  — Routing
+Section 7  — Viewer
+Section 8  — ViewEngine
+Section 9  — Project Structure
+Section 10 — Error Handling
+Section 11 — Static Assets and Fingerprinting
+Section 12 — Compression
+Section 13 — Redirects and Interceptor
+Section 14 — Form Binding and Validation
+Section 15 — Extensions
+Section 16 — Performance
+Section 17 — Go 1.22 Router Syntax
+Section 18 — Gin/Echo/Chi Differences
+Section 19 — Complete Minimal Examples
+Section 20 — Quick Reference
+```
