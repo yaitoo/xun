@@ -25,7 +25,7 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) {
 	root, err := fsys.Open(".")
 	if err == nil {
 		t := reflect.TypeOf(root)
-		if t.Kind() == reflect.Ptr {
+		if t.Kind() == reflect.Ptr { //nolint: govet
 			ve.isEmbedFsys = t.Elem().PkgPath() == "embed"
 		}
 	}
@@ -80,7 +80,7 @@ const cacheControl = "public, max-age=31536000, immutable"
 
 func (ve *StaticViewEngine) handleAssetUrl(fsys fs.FS, app *App, fileName, pattern string) {
 	f, _ := fsys.Open(fileName) // nolint: errcheck
-	defer f.Close()
+	defer f.Close()            // nolint: errcheck
 
 	buf, _ := io.ReadAll(f) // nolint: errcheck
 	etag := ComputeETag(bytes.NewReader(buf))
