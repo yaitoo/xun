@@ -23,11 +23,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24.0
+          go-version: 1.26
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.5
+          version: v2.14
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
