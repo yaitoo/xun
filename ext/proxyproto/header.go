@@ -94,7 +94,8 @@ func readV1Header(r *bufio.Reader) *Header {
 		return nil
 	}
 
-	if fields[1] == v1_TCP4 {
+	switch fields[1] {
+	case v1_TCP4:
 		h := &Header{}
 		h.Version = 1
 
@@ -110,7 +111,7 @@ func readV1Header(r *bufio.Reader) *Header {
 			return nil
 		}
 		return h
-	} else if fields[1] == v1_TCP6 {
+	case v1_TCP6:
 		h := &Header{}
 		h.Version = 1
 
