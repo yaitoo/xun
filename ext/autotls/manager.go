@@ -56,7 +56,7 @@ func New(opts ...Option) *Manager {
 //   - httpsSrv: A pointer to the HTTPS server to be configured.
 func (m *Manager) Configure(httpSrv *http.Server, httpsSrv *http.Server) {
 	if httpSrv != nil && httpsSrv != nil {
-		httpSrv.Handler = m.Manager.HTTPHandler(httpSrv.Handler)
+		httpSrv.Handler = m.HTTPHandler(httpSrv.Handler)
 
 		if httpSrv.ReadHeaderTimeout == 0 {
 			httpSrv.ReadHeaderTimeout = 3 * time.Second // prevent Potential slowloris attack
@@ -73,7 +73,7 @@ func (m *Manager) Configure(httpSrv *http.Server, httpsSrv *http.Server) {
 			}
 		}
 
-		httpsSrv.TLSConfig.GetCertificate = m.Manager.GetCertificate
+		httpsSrv.TLSConfig.GetCertificate = m.GetCertificate
 	}
 
 }

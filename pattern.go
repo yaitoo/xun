@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-func splitPattern(s string) (string, string, string) {
+func splitPattern(s string) (string, string, string) { //nolint: unused
 	if len(s) == 0 {
 		return "", "", ""
 	}
