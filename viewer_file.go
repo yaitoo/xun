@@ -20,7 +20,7 @@ func NewFileViewer(fsys fs.FS, path string, isEmbed bool, etag, cache string) *F
 		if err != nil {
 			return v
 		}
-		defer f.Close()
+		defer f.Close() // nolint: errcheck
 
 		v.etag = ComputeETag(f)
 	}
@@ -83,7 +83,7 @@ func (v *FileViewer) serveContent(w http.ResponseWriter, r *http.Request) error 
 		return nil
 	}
 
-	defer f.Close()
+	defer f.Close() // nolint: errcheck
 
 	fi, err := f.Stat()
 	if err != nil {

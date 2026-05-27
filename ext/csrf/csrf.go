@@ -91,7 +91,7 @@ func HandleFunc(secretKey []byte, opts ...Option) xun.HandleFunc {
 
 func loadJavaScript(o *Options) []byte {
 	f, _ := fsys.Open("csrf.min.js") // nolint: errcheck
-	defer f.Close()
+	defer f.Close()                 // nolint: errcheck
 
 	buf, _ := io.ReadAll(f) // nolint: errcheck
 

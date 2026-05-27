@@ -116,7 +116,7 @@ func HandleFunc() xun.HandleFunc {
 
 func loadJavaScript() []byte {
 	f, _ := fsys.Open("htmx.min.js") // nolint: errcheck
-	defer f.Close()
+	defer f.Close()                 // nolint: errcheck
 
 	buf, _ := io.ReadAll(f) // nolint: errcheck
 
