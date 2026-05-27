@@ -22,7 +22,7 @@ func (rw *deflateResponseWriter) Write(p []byte) (int, error) {
 // Close closes the underlying writer, flushing any buffered data to the client.
 // It is important to call this method to ensure all data is properly sent.
 func (rw *deflateResponseWriter) Close() {
-	rw.w.Close()
+	rw.w.Close() // nolint: errcheck
 }
 
 // Flush writes any buffered data to the underlying writer and ensures that
@@ -30,6 +30,6 @@ func (rw *deflateResponseWriter) Close() {
 // prevent concurrent writes, flushes the compressed data, and then
 // flushes the standard response writer.
 func (rw *deflateResponseWriter) Flush() {
-	rw.w.Flush()
+	rw.w.Flush() // nolint: errcheck
 	rw.stdResponseWriter.Flush()
 }

@@ -21,7 +21,7 @@ func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
 
 // Close closes the gzipResponseWriter, ensuring that the underlying writer is also closed.
 func (rw *gzipResponseWriter) Close() {
-	rw.w.Close()
+	rw.w.Close() // nolint: errcheck
 }
 
 // Flush writes any buffered data to the underlying writer and ensures that
@@ -29,6 +29,6 @@ func (rw *gzipResponseWriter) Close() {
 // to prevent concurrent access, flushes the gzip writer, and then flushes
 // the standard response writer.
 func (rw *gzipResponseWriter) Flush() {
-	rw.w.Flush()
+	rw.w.Flush() // nolint: errcheck
 	rw.stdResponseWriter.Flush()
 }
