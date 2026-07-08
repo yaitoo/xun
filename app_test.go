@@ -877,3 +877,154 @@ func TestAssetURL(t *testing.T) {
 	buf, _ = io.ReadAll(resp.Body)
 	require.Equal(t, "/assets/app.js", string(buf))
 }
+
+func TestMux(t *testing.T) {
+	t.Run("returns the injected mux", func(t *testing.T) {
+		mux := http.NewServeMux()
+		app := New(WithMux(mux))
+
+		require.Same(t, mux, app.Mux())
+	})
+
+	t.Run("registers a native handler bypassing xun middlewares and viewers", func(t *testing.T) {
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+
+		app := New(WithMux(mux))
+
+		var mwCount int
+		app.Use(func(next HandleFunc) HandleFunc {
+			return func(c *Context) error {
+				mwCount++
+				return next(c)
+			}
+		})
+
+		// Register a stdlib handler directly on the underlying mux.
+		app.Mux().HandleFunc("/raw", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusTeapot)
+			_, _ = w.Write([]byte("raw"))
+		})
+
+		app.Get("/xun", func(c *Context) error {
+			return c.View("xun")
+		})
+
+		app.Start()
+		defer app.Close()
+
+		req, err := http.NewRequest("GET", srv.URL+"/raw", nil)
+		require.NoError(t, err)
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusTeapot, resp.StatusCode)
+		require.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
+		require.Equal(t, "raw", string(body))
+		require.Empty(t, resp.Header.Get("X-Log-Id"))
+		require.Equal(t, 0, mwCount, "native handler must not run xun middlewares")
+
+		// Sanity check: xun route still works and increments the middleware counter.
+		req, err = http.NewRequest("GET", srv.URL+"/xun", nil)
+		require.NoError(t, err)
+		resp, err = client.Do(req)
+		require.NoError(t, err)
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, 1, mwCount)
+	})
+
+	t.Run("fallback catches unknown paths while specific routes keep precedence", func(t *testing.T) {
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+
+		app := New(WithMux(mux))
+
+		// "/" is the lowest-precedence prefix in ServeMux, so it catches
+		// anything not matched by a more specific route.
+		app.Mux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Fallback", "yes")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("custom 404"))
+		})
+
+		app.Get("/known", func(c *Context) error {
+			return c.View("known")
+		})
+
+		app.Start()
+		defer app.Close()
+
+		// Unknown path → fallback handler runs.
+		req, err := http.NewRequest("GET", srv.URL+"/does-not-exist", nil)
+		require.NoError(t, err)
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusNotFound, resp.StatusCode)
+		require.Equal(t, "yes", resp.Header.Get("X-Fallback"), "fallback handler must run for unknown paths")
+		require.Equal(t, "custom 404", string(body), "fallback body must be returned")
+		require.Empty(t, resp.Header.Get("X-Log-Id"), "fallback must not emit X-Log-Id")
+
+		// Specific xun route must still take precedence over the "/" fallback.
+		req, err = http.NewRequest("GET", srv.URL+"/known", nil)
+		require.NoError(t, err)
+		resp, err = client.Do(req)
+		require.NoError(t, err)
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Empty(t, resp.Header.Get("X-Fallback"), "specific route must not match fallback")
+	})
+
+	t.Run("defaults to DefaultServeMux when WithMux is omitted (footgun — registering pollutes global state)", func(t *testing.T) {
+		app := New()
+		require.Same(t, http.DefaultServeMux, app.Mux(),
+			"calling New() without WithMux falls back to http.DefaultServeMux; "+
+				"callers should pass WithMux(http.NewServeMux()) to avoid registering on global state")
+	})
+
+	t.Run("supports http.Handler via Handle", func(t *testing.T) {
+		mux := http.NewServeMux()
+		srv := httptest.NewServer(mux)
+		defer srv.Close()
+
+		app := New(WithMux(mux))
+
+		var hits int
+		// http.HandlerFunc adapts a function literal to http.Handler — this is
+		// the shape promhttp.Handler(), pprof.*, and similar third-party
+		// constructors return.
+		var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits++
+			_, _ = w.Write([]byte("served by http.Handler"))
+		})
+
+		app.Mux().Handle("/metrics", handler)
+
+		app.Start()
+		defer app.Close()
+
+		req, err := http.NewRequest("GET", srv.URL+"/metrics", nil)
+		require.NoError(t, err)
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Equal(t, "served by http.Handler", string(body))
+		require.Equal(t, 1, hits)
+	})
+}

@@ -100,6 +100,28 @@ app.Get("/posts/")       // matches GET /posts/abc, GET /posts/123
 app.Get("/posts")        // matches GET /posts  ONLY (no slash)
 ```
 
+### Rule 0.8 — `App.Mux()` handlers bypass xun entirely
+
+```go
+// app.Mux() exposes the underlying *http.ServeMux. Handlers registered
+// via app.Mux() do NOT run any middleware (app.Use OR group.Use), do NOT
+// go through c.View() / viewers, and do NOT emit X-Log-Id on failure.
+// They are responsible for their own status, headers, body, and logging.
+
+app.Mux().Handle("/metrics", promhttp.Handler())
+app.Mux().HandleFunc("/", customNotFound)   // catches unknown paths
+```
+
+Two footguns to know:
+
+- If you don't pass `WithMux`, `New()` uses `http.DefaultServeMux`.
+  Registering on it pollutes global state. Always pass
+  `WithMux(http.NewServeMux())` for new apps.
+- Patterns auto-registered by xun (e.g. `GET /{$}` from
+  `pages/index.html`) cannot be re-registered via `Mux()` — ServeMux
+  panics on duplicate patterns. Use `/` as a lower-precedence
+  catch-all instead.
+
 ---
 
 ## Section 1 — Types
@@ -177,6 +199,17 @@ app.Group(prefix string) *group
 ```
 
 Pattern format: `"METHOD pattern"` (e.g., `"GET /users/{id}"`). Go 1.22 ServeMux syntax.
+
+### 2.7 Native Routing Access
+
+```
+app.Mux() *http.ServeMux
+```
+
+`app.Mux()` is a *getter*, not a registration method: it returns the
+underlying `*http.ServeMux` so the caller can register `http.Handler` /
+`http.HandlerFunc` directly. See Rule 0.8 and Section 6.5 for semantics
+and footguns.
 
 ---
 
@@ -340,6 +373,54 @@ WithViewer(v ...Viewer) RoutingOption
 WithMetadata(key string, value any) RoutingOption
 WithNavigation(name, icon, access string) RoutingOption
 ```
+
+### 6.5 Native Routing via `App.Mux()`
+
+`app.Mux()` returns the underlying `*http.ServeMux` so callers can register
+`http.Handler` / `http.HandlerFunc` directly. This is the escape hatch for
+behaviour that xun's high-level API does not express — third-party
+`http.Handler` integrations (metrics, pprof), custom 404 fallbacks, or any
+endpoint that should not be wrapped by xun middlewares.
+
+**Semantics:**
+
+- Bypasses ALL middleware (both `app.Use` and `group.Use`).
+- Bypasses the viewer / content-negotiation path.
+- The handler is fully responsible for its own status, headers, body, and
+  logging; xun does not produce `X-Log-Id` or any error-to-status mapping.
+- Standard Go 1.22 ServeMux pattern syntax applies.
+- Routes registered via `Mux()` are NOT included in `app.Start()`'s startup
+  log (which iterates `app.routes`, not the underlying mux).
+
+**Footguns:**
+
+- If `WithMux` is not passed to `New()`, the underlying mux is
+  `http.DefaultServeMux`. Registering on it pollutes global state. Always
+  pass `WithMux(http.NewServeMux())` for new apps.
+- Patterns auto-registered by xun (notably `GET /{$}` from
+  `pages/index.html`, plus any `GET /path` for `pages/*.html`) cannot be
+  re-registered via `Mux()` — ServeMux panics on duplicate patterns. Use
+  `/` as a lower-precedence catch-all instead.
+
+**Common patterns:**
+
+```go
+// Catch-all 404 (lowest priority; specific routes still win).
+app.Mux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+    http.Error(w, "not found", http.StatusNotFound)
+})
+
+// Third-party handler.
+app.Mux().Handle("/metrics", promhttp.Handler())
+```
+
+Precedence: longer / more specific patterns win over `/`, so registering
+`app.Mux().HandleFunc("/", ...)` does not override any existing
+`app.Get/Post/HandlePage` route.
+
+> Note: `"GET /{$}"` matches only `/` (and only when no other route
+> matches), so it is NOT a general catch-all. For arbitrary unknown paths,
+> register `/` as shown above.
 
 ---
 
