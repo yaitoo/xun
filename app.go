@@ -150,6 +150,45 @@ func (app *App) Close() {
 	defer app.mu.Unlock()
 }
 
+// Mux returns the underlying *http.ServeMux. It is an escape hatch for
+// registering native http.Handlers directly, bypassing xun's routing
+// layer (middlewares, the viewer / content-negotiation path, and the
+// framework's error-to-status mapping).
+//
+// Use Mux when the caller needs behaviour that xun's high-level API
+// does not express, such as third-party http.Handler integrations or
+// catch-all fallback routes:
+//
+//	app.Mux().Handle("/metrics", promhttp.Handler())
+//	app.Mux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+//	    http.NotFound(w, r)
+//	})
+//
+// Patterns follow standard http.ServeMux rules. Handlers registered
+// via Mux bypass ALL middleware (both app.Use and group.Use) and are
+// fully responsible for their own status, headers, body, and logging;
+// they do not produce X-Log-Id on failure. Routes registered via Mux
+// are NOT listed by app.Start() — that method only iterates app.routes.
+//
+// Caveats:
+//
+//   - If WithMux is not provided, New() falls back to http.DefaultServeMux.
+//     Registering on DefaultServeMux pollutes global state and affects
+//     every other app in the same process. Pass WithMux(http.NewServeMux())
+//     to keep registrations local.
+//
+//   - Patterns auto-registered by xun (notably "GET /{$}" from
+//     pages/index.html) cannot be re-registered via Mux — ServeMux panics
+//     on duplicate patterns. Use "/" as a lower-precedence catch-all
+//     instead.
+//
+//   - Concurrent registration of the SAME pattern from multiple
+//     goroutines panics. Serialize registration, or register before
+//     serving starts.
+func (app *App) Mux() *http.ServeMux {
+	return app.mux
+}
+
 // Use registers one or more Middleware functions to be executed
 // before any route handler. Middleware functions are useful for
 // creating reusable pieces of code that can be composed together
