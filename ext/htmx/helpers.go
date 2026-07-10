@@ -57,3 +57,39 @@ func Prompt(c *xun.Context) string {
 func CurrentURL(c *xun.Context) string {
 	return c.Request.Header.Get(HxCurrentUrl)
 }
+
+// WriteTrigger sends an HTMX trigger response header so the client
+// fires a custom event after the response is handled. It forwards to
+// WriteHeader so a plain string is emitted as the bare event name and
+// any other value (typically an HxHeader[T] map) is JSON-encoded and
+// sent as the event detail.
+//
+// Use it with HxTrigger for the default trigger step, or with
+// HxTriggerAfterSettle / HxTriggerAfterSwap to fire on the later steps.
+//
+//	htmx.WriteTrigger(c, htmx.HxTrigger, "item-added")
+//	htmx.WriteTrigger(c, htmx.HxTrigger, htmx.HxHeader[string]{"item-added": "abc"})
+func WriteTrigger(c *xun.Context, key string, value any) {
+	WriteHeader(c, key, value)
+}
+
+// WriteRedirect instructs htmx to perform a client-side redirect to
+// url without a full page reload. It writes the HX-Redirect response
+// header and sets the status code to 200 so the body is not rendered.
+func WriteRedirect(c *xun.Context, url string) {
+	WriteHeader(c, HxRedirect, url)
+	c.WriteStatus(200)
+}
+
+// WriteRefresh instructs htmx to do a full refresh of the page.
+func WriteRefresh(c *xun.Context) {
+	WriteHeader(c, HxRefresh, "true")
+}
+
+// WriteLocation instructs htmx to perform a client-side redirect that
+// does not do a full page reload, while also replacing the current
+// history entry. It writes the HX-Location header with a JSON-encoded
+// location object, matching the htmx spec.
+func WriteLocation(c *xun.Context, location HxHeader[string]) {
+	WriteHeader(c, HxLocation, location)
+}

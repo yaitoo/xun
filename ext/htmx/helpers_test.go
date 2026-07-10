@@ -1,6 +1,7 @@
 package htmx
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
@@ -53,5 +54,67 @@ func TestIsHxRequest(t *testing.T) {
 
 		require.False(t, IsHxRequest(c))
 		require.False(t, IsBoosted(c))
+	})
+}
+
+func TestWriteHelpers(t *testing.T) {
+	t.Run("trigger string", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{
+			Response: xun.NewResponseWriter(w),
+		}
+
+		WriteTrigger(c, HxTrigger, "item-added")
+		require.Equal(t, "item-added", w.Header().Get(HxTrigger))
+	})
+
+	t.Run("trigger detail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{
+			Response: xun.NewResponseWriter(w),
+		}
+
+		WriteTrigger(c, HxTriggerAfterSettle, HxHeader[string]{"item-added": "abc"})
+		value := w.Header().Get(HxTriggerAfterSettle)
+
+		var got HxHeader[string]
+		require.NoError(t, json.Unmarshal([]byte(value), &got))
+		require.Equal(t, "abc", got["item-added"])
+	})
+
+	t.Run("redirect", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{
+			Response: xun.NewResponseWriter(w),
+		}
+
+		WriteRedirect(c, "/dashboard")
+		require.Equal(t, "/dashboard", w.Header().Get(HxRedirect))
+		require.Equal(t, 200, w.Code)
+	})
+
+	t.Run("refresh", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{
+			Response: xun.NewResponseWriter(w),
+		}
+
+		WriteRefresh(c)
+		require.Equal(t, "true", w.Header().Get(HxRefresh))
+	})
+
+	t.Run("location", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{
+			Response: xun.NewResponseWriter(w),
+		}
+
+		WriteLocation(c, HxHeader[string]{"path": "/home", "source": "xun"})
+		value := w.Header().Get(HxLocation)
+
+		var got HxHeader[string]
+		require.NoError(t, json.Unmarshal([]byte(value), &got))
+		require.Equal(t, "/home", got["path"])
+		require.Equal(t, "xun", got["source"])
 	})
 }
