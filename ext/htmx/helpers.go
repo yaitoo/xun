@@ -100,3 +100,42 @@ func WriteLocation(c *xun.Context, location HxHeader[string]) {
 func WriteRetarget(c *xun.Context, selector string) {
 	WriteHeader(c, HxRetarget, selector)
 }
+
+// WritePushUrl pushes the current URL of the browser into the history
+// stack. To push a different URL, use WritePushUrlTo.
+func WritePushUrl(c *xun.Context) {
+	WriteHeader(c, HxPushUrl, "true")
+}
+
+// WritePushUrlTo pushes the given URL into the history stack.
+func WritePushUrlTo(c *xun.Context, url string) {
+	WriteHeader(c, HxPushUrl, url)
+}
+
+// WriteReplaceUrl replaces the current URL in the location bar without
+// adding a new entry to the history stack. To replace with a specific
+// URL, use WriteReplaceUrlTo.
+func WriteReplaceUrl(c *xun.Context) {
+	WriteHeader(c, HxReplaceUrl, "true")
+}
+
+// WriteReplaceUrlTo replaces the current URL in the location bar with
+// the given URL.
+func WriteReplaceUrlTo(c *xun.Context, url string) {
+	WriteHeader(c, HxReplaceUrl, url)
+}
+
+// WriteReswap overrides the hx-swap strategy for the response.
+// See https://htmx.org/reference/#response_headers for accepted values
+// such as "innerHTML", "outerHTML", "beforebegin", "afterend", "none",
+// or a swap timing extension like "innerHTML swap:200ms".
+func WriteReswap(c *xun.Context, strategy string) {
+	WriteHeader(c, HxReswap, strategy)
+}
+
+// WriteReselect sets the CSS selector that picks which part of the
+// response is swapped in. It overrides any existing hx-select on the
+// triggering element.
+func WriteReselect(c *xun.Context, selector string) {
+	WriteHeader(c, HxReselect, selector)
+}

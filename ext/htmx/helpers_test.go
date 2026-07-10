@@ -128,3 +128,53 @@ func TestWriteRetarget(t *testing.T) {
 	WriteRetarget(c, "#errors")
 	require.Equal(t, "#errors", w.Header().Get(HxRetarget))
 }
+
+func TestWriteSwapOverrides(t *testing.T) {
+	t.Run("push url current", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{Response: xun.NewResponseWriter(w)}
+
+		WritePushUrl(c)
+		require.Equal(t, "true", w.Header().Get(HxPushUrl))
+	})
+
+	t.Run("push url to", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{Response: xun.NewResponseWriter(w)}
+
+		WritePushUrlTo(c, "/items/42")
+		require.Equal(t, "/items/42", w.Header().Get(HxPushUrl))
+	})
+
+	t.Run("replace url current", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{Response: xun.NewResponseWriter(w)}
+
+		WriteReplaceUrl(c)
+		require.Equal(t, "true", w.Header().Get(HxReplaceUrl))
+	})
+
+	t.Run("replace url to", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{Response: xun.NewResponseWriter(w)}
+
+		WriteReplaceUrlTo(c, "/items/42")
+		require.Equal(t, "/items/42", w.Header().Get(HxReplaceUrl))
+	})
+
+	t.Run("reswap", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{Response: xun.NewResponseWriter(w)}
+
+		WriteReswap(c, "outerHTML swap:200ms")
+		require.Equal(t, "outerHTML swap:200ms", w.Header().Get(HxReswap))
+	})
+
+	t.Run("reselect", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c := &xun.Context{Response: xun.NewResponseWriter(w)}
+
+		WriteReselect(c, "#content")
+		require.Equal(t, "#content", w.Header().Get(HxReselect))
+	})
+}
