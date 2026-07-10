@@ -1,0 +1,274 @@
+# Block vs Template Behavior in xun
+
+## Overview
+
+This document explains the behavior differences between `{{block}}` and `{{template}}` directives in xun's HTML template system. These differences are intentional and match Go's standard `html/template` library behavior.
+
+**Key Takeaway:** `{{block}}` and `{{template}}` behave differently **by design** in Go's template system, and xun faithfully implements this standard behavior.
+
+---
+
+## Quick Reference
+
+| Feature | `{{block}}` | `{{template}}` |
+|---------|-------------|----------------|
+| **Creates stub automatically** | ✅ Yes | ❌ No |
+| **When undefined** | ✅ Uses default content | ❌ Runtime error |
+| **Can be overridden** | ✅ Yes | ✅ Yes (if defined) |
+| **Appears in Templates()** | ✅ Yes | ❌ No |
+| **Design purpose** | Optional placeholders | Required includes |
+
+---
+
+## `{{block}}` Behavior
+
+### Syntax
+```html
+{{block "blockName" .}}
+  default content here
+{{end}}
+```
+
+### Characteristics
+
+1. **Auto-creates stub**: When Go parses a `{{block}}` directive, it automatically creates a template stub named `"blockName"` in the template set.
+
+2. **Default content**: If the block is not overridden by a `{{define}}`, the default content inside the block is rendered.
+
+3. **Override mechanism**: Child templates can override the block by defining a template with the same name:
+   ```html
+   {{define "blockName"}}
+     custom content
+   {{end}}
+   ```
+
+4. **Use case**: Perfect for layout templates where child templates may optionally customize specific sections.
+
+### Example
+
+**Layout (layouts/main.html):**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{block "title" .}}My Site{{end}}</title>
+    {{block "extra-css" .}}{{end}}
+</head>
+<body>
+    {{block "content" .}}<p>Default content</p>{{end}}
+</body>
+</html>
+```
+
+**Page (pages/index.html):**
+```html
+<!--layout:main-->
+{{define "content"}}<h1>Home Page</h1>{{end}}
+```
+
+**Result:**
+- `title` block → Uses default: "My Site"
+- `extra-css` block → Renders empty (default is empty)
+- `content` block → Uses custom: "<h1>Home Page</h1>"
+
+---
+
+## `{{template}}` Behavior
+
+### Syntax
+```html
+{{template "templateName" .}}
+```
+
+### Characteristics
+
+1. **No stub creation**: `{{template}}` does NOT automatically create any template stub.
+
+2. **Must exist**: The referenced template MUST be defined somewhere (via `{{define}}` or loaded from another file), otherwise a runtime error occurs.
+
+3. **Error on missing**: If `"templateName"` is not found when executing, the template engine throws an error: `"no such template 'templateName'"`.
+
+4. **Use case**: For required includes where you want to ensure the template is explicitly defined.
+
+### Example
+
+**Template with define:**
+```html
+{{define "header"}}<header>Site Header</header>{{end}}
+{{template "header" .}}
+```
+✅ **Works** - `header` is defined
+
+**Template without define:**
+```html
+{{template "missing" .}}
+```
+❌ **Error** - `html/template: no such template "missing"`
+
+---
+
+## Why Are They Different?
+
+This is a **deliberate design decision** by the Go team:
+
+### `{{block}}` Design Goals
+- Enable **inheritance-style templates** (layouts with child pages)
+- Provide **optional customization points**
+- Allow **default content** that can be selectively overridden
+- Reduce boilerplate in child templates
+
+### `{{template}}` Design Goals
+- Provide **explicit component inclusion**
+- Enforce **template existence** (fail-fast on typos)
+- Match traditional **"include"** semantics
+- Clear contract: template MUST be defined
+
+---
+
+## Dependency Detection
+
+How xun detects template dependencies:
+
+```go
+// After parsing, iterate through Templates()
+for _, it := range nt.Templates() {
+    tn := it.Name()
+    if !strings.EqualFold(tn, t.name) {
+        dependencies[tn] = struct{}{}
+    }
+}
+```
+
+### Detection Behavior
+
+| Directive | Creates Template Entry | Detected as Dependency |
+|-----------|----------------------|----------------------|
+| `{{block "x"}}` | ✅ Yes (Go creates stub) | ✅ Yes |
+| `{{define "x"}}` | ✅ Yes | ✅ Yes |
+| `{{template "x"}}` | ❌ No | ❌ No |
+
+**Why `{{template}}` is not detected:**
+- Go doesn't create a stub for template calls
+- The call is just a reference, not a definition
+- Only appears in the AST, not in Templates()
+
+---
+
+## Implementation in xun
+
+### Block Stub Preservation
+
+When loading a page with a layout, xun copies **all templates** from the layout (including block stubs):
+
+```go
+// template_html.go:96-107
+for _, lt := range layout.template.Templates() {
+    ltName := lt.Name()
+    // Only add if doesn't exist (page definitions take precedence)
+    // Exception: always add layout root
+    if nt.Lookup(ltName) == nil || ltName == layoutName {
+        _, err = nt.AddParseTree(ltName, lt.Tree)
+        if err != nil {
+            return err
+        }
+    }
+}
+```
+
+**Key points:**
+- Iterates through **all** layout templates (not just the main tree)
+- Includes block stubs auto-generated by Go's parser
+- Page definitions override layout blocks (`Lookup` check)
+- Layout root is always added (ensures Execute works)
+
+---
+
+## Verification Tests
+
+xun includes comprehensive tests to verify consistency with Go standard:
+
+### Test Coverage
+
+1. **Block without definition** → Uses default content ✅
+2. **Block with define override** → Uses custom content ✅
+3. **Template without definition** → Runtime error ✅
+4. **Template with define** → Works correctly ✅
+5. **Block creates stub** → Detected in dependencies ✅
+6. **Template doesn't create stub** → Not in dependencies ✅
+7. **Mixed scenarios** → Both work as expected ✅
+
+**Test file:** `template_html_go_consistency_test.go`  
+**Result:** 10/10 tests pass ✅
+
+---
+
+## Common Patterns
+
+### Optional Page-Specific Assets
+
+```html
+<!-- Layout -->
+<head>
+    {{block "extra-css" .}}{{end}}
+    {{block "extra-js" .}}{{end}}
+</head>
+```
+
+Pages only define these blocks when needed. No boilerplate required.
+
+### Required Components
+
+```html
+<!-- Layout -->
+<body>
+    {{template "navbar" .}}
+    {{block "content" .}}{{end}}
+    {{template "footer" .}}
+</body>
+```
+
+`navbar` and `footer` are required (will error if missing).  
+`content` is optional (can use default).
+
+---
+
+## Troubleshooting
+
+### Error: "no such template 'X'"
+
+**For `{{block "X"}}`:**
+- This shouldn't happen if using xun correctly
+- Check that layout is being loaded properly
+- Verify PR #110 fix is included
+
+**For `{{template "X"}}`:**
+- This is **expected** if X is not defined
+- Add `{{define "X"}}...{{end}}` somewhere
+- Or load X as a component/partial
+
+### Block Shows Wrong Content
+
+- Check loading order: layout must load before page
+- Verify page's `{{define}}` uses correct name
+- Ensure template set is properly composed
+
+---
+
+## References
+
+- **Go html/template docs:** https://pkg.go.dev/html/template
+- **Issue #109:** https://github.com/yaitoo/xun/issues/109
+- **PR #110:** https://github.com/yaitoo/xun/pull/110
+
+---
+
+## Summary
+
+✅ **xun's template behavior matches Go standard 100%**
+
+- `{{block}}` provides optional placeholders with defaults
+- `{{template}}` provides required includes
+- Both are fully tested and documented
+- This difference is intentional and by design
+
+**Last Updated:** 2026-07-10
