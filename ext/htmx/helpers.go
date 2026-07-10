@@ -93,3 +93,10 @@ func WriteRefresh(c *xun.Context) {
 func WriteLocation(c *xun.Context, location HxHeader[string]) {
 	WriteHeader(c, HxLocation, location)
 }
+
+// WriteRetarget sets the CSS selector that updates the swap target of
+// the response to a different element on the page. It writes the
+// HX-Retarget response header.
+func WriteRetarget(c *xun.Context, selector string) {
+	WriteHeader(c, HxRetarget, selector)
+}

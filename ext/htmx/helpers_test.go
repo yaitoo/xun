@@ -118,3 +118,13 @@ func TestWriteHelpers(t *testing.T) {
 		require.Equal(t, "xun", got["source"])
 	})
 }
+
+func TestWriteRetarget(t *testing.T) {
+	w := httptest.NewRecorder()
+	c := &xun.Context{
+		Response: xun.NewResponseWriter(w),
+	}
+
+	WriteRetarget(c, "#errors")
+	require.Equal(t, "#errors", w.Header().Get(HxRetarget))
+}
