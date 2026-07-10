@@ -89,9 +89,21 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate, fm t
 
 			layout, ok := templates[layoutName]
 			if ok {
-				_, err = nt.AddParseTree(layoutName, layout.template.Tree)
-				if err != nil {
-					return err
+				// Copy all templates from layout (including block stubs) to preserve Go's standard behavior
+				// This ensures that {{block "name" .}}default{{end}} works correctly:
+				// - If page defines "name", it overrides the block
+				// - If page doesn't define "name", the default content is used
+				for _, lt := range layout.template.Templates() {
+					ltName := lt.Name()
+					// Only add templates that don't exist in the current template set
+					// This ensures page-defined templates take precedence
+					// Exception: always add the layout root template (layoutName) to ensure Execute() works
+					if nt.Lookup(ltName) == nil || ltName == layoutName {
+						_, err = nt.AddParseTree(ltName, lt.Tree)
+						if err != nil {
+							return err
+						}
+					}
 				}
 
 				layout.dependents[t.name] = t
