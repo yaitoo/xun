@@ -18,6 +18,12 @@ func TestIsHxRequest(t *testing.T) {
 		require.False(t, IsHxRequest(c))
 		require.False(t, IsBoosted(c))
 		require.False(t, IsHistoryRestore(c))
+
+		require.Equal(t, "", Target(c))
+		require.Equal(t, "", Trigger(c))
+		require.Equal(t, "", TriggerName(c))
+		require.Equal(t, "", Prompt(c))
+		require.Equal(t, "", CurrentURL(c))
 	})
 
 	t.Run("present", func(t *testing.T) {
@@ -51,9 +57,11 @@ func TestIsHxRequest(t *testing.T) {
 
 		c.Request.Header.Set(HxRequest, "false")
 		c.Request.Header.Set(HxBoosted, "1")
+		c.Request.Header.Set(HxHistoryRestoreRequest, "1")
 
 		require.False(t, IsHxRequest(c))
 		require.False(t, IsBoosted(c))
+		require.False(t, IsHistoryRestore(c))
 	})
 }
 
