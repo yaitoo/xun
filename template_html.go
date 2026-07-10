@@ -97,7 +97,8 @@ func (t *HtmlTemplate) Load(fsys fs.FS, templates map[string]*HtmlTemplate, fm t
 					ltName := lt.Name()
 					// Only add templates that don't exist in the current template set
 					// This ensures page-defined templates take precedence
-					if nt.Lookup(ltName) == nil {
+					// Exception: always add the layout root template (layoutName) to ensure Execute() works
+					if nt.Lookup(ltName) == nil || ltName == layoutName {
 						_, err = nt.AddParseTree(ltName, lt.Tree)
 						if err != nil {
 							return err
