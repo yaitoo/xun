@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"html/template"
 	"io/fs"
-	"path"
 	"strings"
 	"time"
 
@@ -56,13 +55,16 @@ func newContentRenderer() *contentRenderer {
 //   - Title is the text of the first *ast.Heading with Level == 1.
 //     Code blocks, fenced code blocks, and raw HTML are skipped via
 //     WalkSkipChildren so "# inside them cannot become a title.
-//   - Description: after Title is found, the first *ast.Blockquote is preferred;
-//     otherwise the first *ast.Paragraph whose parent is the document root.
-//     Nested paragraphs (inside lists or blockquotes) are ignored.
+//   - Description is captured from the first paragraph that is either
+//     directly under the document root or inside a blockquote (which
+//     counts as a blockquote lede). Paragraphs nested inside lists or
+//     other containers are ignored. Once a heading of any level appears
+//     after the title, description capture stops.
 //   - Both return empty strings if not found.
 func (r *contentRenderer) Extract(content []byte) (title, description string) {
 	doc := r.parser.Parse(text.NewReader(content))
 	titleFound := false
+	descriptionClosed := false
 
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		// Skip code blocks entirely (don't descend).
@@ -76,20 +78,25 @@ func (r *contentRenderer) Extract(content []byte) (title, description string) {
 		// Capture Title on exit (children's text has been accumulated).
 		if !entering {
 			if h, ok := n.(*ast.Heading); ok && h.Level == 1 && !titleFound {
-				title = strings.TrimSpace(string(h.Text(content)))
+				title = strings.TrimSpace(string(h.Lines().Value(content)))
 				titleFound = true
 			}
 			return ast.WalkContinue, nil
 		}
 
+		// After title: any further heading closes description capture.
+		if titleFound {
+			if h, ok := n.(*ast.Heading); ok && h.Level >= 2 {
+				descriptionClosed = true
+			}
+		}
+
 		// Capture Description after Title is known.
-		if titleFound && description == "" {
-			switch v := n.(type) {
-			case *ast.Blockquote:
-				description = strings.TrimSpace(string(v.Text(content)))
-			case *ast.Paragraph:
-				if v.Parent() == doc { // only top-level paragraphs
-					description = strings.TrimSpace(string(v.Text(content)))
+		if titleFound && !descriptionClosed && description == "" {
+			if p, ok := n.(*ast.Paragraph); ok {
+				switch p.Parent().(type) {
+				case *ast.Document, *ast.Blockquote:
+					description = strings.TrimSpace(string(p.Lines().Value(content)))
 				}
 			}
 		}
@@ -111,6 +118,9 @@ func (r *contentRenderer) Render(content []byte) (template.HTML, error) {
 
 // extractContentView combines filesystem info and Markdown semantics into a
 // ContentView. The Body field is left zero; the caller fills it after rendering.
+//
+// Title and Description are derived from the Markdown AST. If the document
+// has no # H1, Title is left empty (callers should guard with {{if .Title}}).
 func extractContentView(mdPath string, content []byte, fi fs.FileInfo, contentDir string, r *contentRenderer) ContentView {
 	// Slug: mdPath minus content directory prefix and ".md" extension.
 	slug := strings.TrimSuffix(mdPath, ".md")
@@ -126,11 +136,6 @@ func extractContentView(mdPath string, content []byte, fi fs.FileInfo, contentDi
 
 	// Title / Description: AST walk.
 	title, description := r.Extract(content)
-
-	// Use base name as a fallback Title (rare path; usually Title is set).
-	if title == "" {
-		title = path.Base(slug)
-	}
 
 	return ContentView{
 		Path:        mdPath,

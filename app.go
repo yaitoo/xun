@@ -68,6 +68,11 @@ func New(opts ...Option) *App {
 		funcMap:        builtins,
 		AssetURLs:      make(map[string]string),
 		contentViews:   make(map[string]*ContentView),
+		engines: []ViewEngine{
+			&StaticViewEngine{},
+			&HtmlViewEngine{contentDir: "content"},
+			&TextViewEngine{},
+		},
 	}
 
 	for _, o := range opts {
@@ -79,14 +84,6 @@ func New(opts ...Option) *App {
 
 	if app.mux == nil {
 		app.mux = http.DefaultServeMux
-	}
-
-	if app.engines == nil {
-		app.engines = []ViewEngine{
-			&StaticViewEngine{},
-			&HtmlViewEngine{},
-			&TextViewEngine{},
-		}
 	}
 
 	if app.fsys != nil {
