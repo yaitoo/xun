@@ -131,7 +131,7 @@ The same rule applies to `pages/<group>/index.html` inside `app.Group(...)`.
 #### When to omit the viewer name in `c.View`
 | Call | When to use |
 |---|---|
-| `c.View(data)` | On a PageRoute (`pages/<X>.html` auto-registered the viewer). xun negotiates `HtmlViewer` vs `JsonViewer` from `Accept`. |
+| `c.View(data)` | On a PageRoute (`pages/<X>.html` auto-registered the viewer), it uses the route's registered `HtmlViewer`. To negotiate JSON, explicitly register separate viewers on a non-page route. |
 | `c.View(data, "index")` | On a manually-registered route (`app.Get` / `g.Get`) that needs to pick a specific page viewer. |
 | `c.View(data, "views/users/list")` | For shared partials under `app/views/` that have no owning route. |
 
