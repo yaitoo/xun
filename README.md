@@ -46,7 +46,7 @@ go get github.com/yaitoo/xun@latest
 - `layouts`: A layout is shared between multiple pages/views
 - `pages`: A public page view that will create public page routing automatically.
 - `text`: An internal text view that can be referenced in `context.View` to render with a data model.
-- `content`: A Markdown-driven page tree. Every `.md` file auto-registers as `GET /<slug>`; paired `.html` files act as the rendering template and use the same `layouts/` directory as everything else.
+- `content`: A Markdown-driven page tree. Every `.md` file auto-registers as `GET /<slug>`; paired `.tpl` files act as the bubble-up template (never registered as a route) and use the same `layouts/` directory as everything else. `.html` files in `content/` are independent page routes.
 
 **NOTE: All html files(component,layout, view and page) will be parsed by [html/template](https://pkg.go.dev/html/template). You can feel free to use all built-in [Actions,Pipelines and Functions](https://pkg.go.dev/text/template), and your custom functions that is registered in `HtmlViewEngine`.**
 
@@ -213,7 +213,14 @@ A text view is UI that is referenced in `context.View` to render the view with a
 
 
 ### Content
-The Content engine turns Markdown files into pages without introducing a new `Viewer` or a second template engine. Drop a `.md` file into `content/` and it auto-registers as `GET /<slug>`; drop an `.html` next to it (or any ancestor `index.html`) to control how the rendered Markdown is wrapped.
+The Content engine turns Markdown files into pages without introducing a new `Viewer` or a second template engine. Drop a `.md` file into `content/` and it auto-registers as `GET /<slug>`; drop a `.tpl` next to it (or any ancestor `index.tpl`) to control how the rendered Markdown is wrapped.
+
+`.html` and `.tpl` inside `content/` have distinct roles:
+
+- `.tpl` — bubble-up template only. Loaded into the template graph; never registered as a route.
+- `.html` — page route only. Registered as a route; never consulted during bubble-up.
+
+This is what lets a directory such as `content/blog/` hold both `index.tpl` (wrapping template) and `index.md` (real Markdown page) without conflict.
 
 #### Directory layout
 ```
@@ -222,18 +229,19 @@ The Content engine turns Markdown files into pages without introducing a new `Vi
     │   └── site.html
     └── content
         ├── hello.md           ← GET /hello
-        ├── hello.html         ← optional, dedicated template for /hello
+        ├── hello.tpl          ← optional, dedicated template for /hello
         └── 2026
-            ├── index.html     ← bubble-up target
+            ├── index.tpl      ← bubble-up target (not a route)
+            ├── index.md       ← optional, directory-level page: GET /2026/
             └── deeper.md      ← GET /2026/deeper
 ```
 
-For each `.md` file, the engine looks for an HTML template in this order:
+For each `.md` file, the engine looks for a bubble-up template in this order:
 
-1. `content/<slug>.html`
-2. `content/<dir>/index.html`
-3. any ancestor `index.html`
-4. the root `index.html`
+1. `content/<slug>.tpl`
+2. `content/<dir>/index.tpl`
+3. any ancestor `index.tpl`
+4. the root `index.tpl`
 
 The first match is the template; it uses the same `<!--layout:NAME-->` mechanism as every other page, so layouts are shared across content and non-content pages.
 
@@ -252,9 +260,9 @@ task lists, fenced code, autolinks.
 ```
 
 #### Rendering the page in a template
-A request to `/hello` lands on `content/hello.html` (or whichever template the bubble-up rule picked). Inside the template, the parsed Markdown is exposed as `.Content`:
+A request to `/hello` lands on `content/hello.tpl` (or whichever template the bubble-up rule picked). Inside the template, the parsed Markdown is exposed as `.Content`:
 
-> content/hello.html
+> content/hello.tpl
 ```html
 <!--layout:site-->
 {{ define "content" }}
@@ -299,7 +307,7 @@ defer app.Close()
 http.ListenAndServe(":80", http.DefaultServeMux)
 ```
 
-With `content/hello.md` and `content/hello.html` in place, `curl http://localhost/hello` returns the rendered page.
+With `content/hello.md` and `content/hello.tpl` in place, `curl http://localhost/hello` returns the rendered page.
 
 
 
