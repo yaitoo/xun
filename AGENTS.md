@@ -146,7 +146,7 @@ The template's `.` is bound to `ViewModel{TempData, Data}`. Two distinct maps; m
 
 | | `.Data` | `.TempData` |
 |---|---|---|
-| **Holds** | The current page's main business object (`User`, `[]User`, anything passed as `c.View`'s first arg) | Cross-request auxiliary values (current `Session`, page `title`, error messages, anything set via `c.Set(k, v)`) |
+| **Holds** | The current page's main business object (`User`, `[]User`, anything passed as `c.View`'s first arg) | Request-scoped auxiliary values (page `title`, error messages, anything set via `c.Set(k, v)`); use a separate session or flash-storage mechanism for state that must survive across requests |
 | **Set in Go** | `c.View(data, name)` first arg | `c.Set(k, v)` / `c.Get(k)` (both operate on `TempData`) |
 | **Accessed in templates** | `{{.Data.X}}` (or `{{.X}}` after `{{range .Data}}`) | `{{.TempData.X}}` |
 | **Lifetime** | Single `c.View(...)` call | Whole request — middleware → handler → view all share the same map |
