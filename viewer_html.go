@@ -34,7 +34,14 @@ func (v *HtmlViewer) Render(ctx *Context, data any) error { // skipcq: RVV-B0012
 		buf := BufPool.Get()
 		defer BufPool.Put(buf)
 
-		err = v.template.Execute(buf, ViewModel{TempData: ctx.TempData, Data: data})
+		vm := ViewModel{TempData: ctx.TempData, Data: data}
+		if ctx.App != nil {
+			if cv := ctx.App.lookupContent(ctx.Routing.Pattern); cv != nil {
+				vm.Content = cv
+			}
+		}
+
+		err = v.template.Execute(buf, vm)
 		if err != nil {
 			return err
 		}
