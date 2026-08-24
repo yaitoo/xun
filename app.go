@@ -70,7 +70,7 @@ func New(opts ...Option) *App {
 		contentViews:   make(map[string]*ContentView),
 		engines: []ViewEngine{
 			&StaticViewEngine{},
-			&HtmlViewEngine{contentDir: "content"},
+			&HtmlViewEngine{contentDirs: []string{"content"}},
 			&TextViewEngine{},
 		},
 	}

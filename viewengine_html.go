@@ -25,10 +25,11 @@ type HtmlViewEngine struct {
 
 	templates map[string]*HtmlTemplate
 
-	// Content engine: loads .md files from contentDir, renders them to HTML,
-	// and registers routes via bubble-up template lookup.
+	// Content engine: loads .md files from one or more content directories,
+	// renders them to HTML, and registers routes via bubble-up template lookup.
+	// Each directory becomes a URL prefix (e.g. blog/post.md → /blog/post).
 	md            *contentRenderer
-	contentDir    string                                       // default "content"; empty disables
+	contentDirs   []string                                      // default ["content"]; empty disables
 	metaExtractor func(string, []byte, fs.FileInfo) ContentView // nil → use extractContentView
 	renderFn      func([]byte, string) (template.HTML, error)   // nil → use md.Render
 }
@@ -44,9 +45,6 @@ func (ve *HtmlViewEngine) Load(fsys fs.FS, app *App) {
 	ve.fsys = fsys
 	ve.app = app
 
-	// contentDir is set in the struct literal (default "content") or
-	// overridden by WithContentDir. Passing "" via WithContentDir disables
-	// the content engine, which is why Load does not apply a default.
 	if ve.md == nil {
 		ve.md = newContentRenderer()
 	}
@@ -55,7 +53,7 @@ func (ve *HtmlViewEngine) Load(fsys fs.FS, app *App) {
 	ve.loadLayouts()
 	ve.loadPages()
 	ve.loadViews()
-	ve.loadContentDir()
+	ve.loadContent()
 }
 
 // FileChanged is called when a file has been changed.
@@ -89,24 +87,26 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 			return ve.loadPage(event.Name)
 		case strings.HasPrefix(event.Name, "views/"):
 			return ve.loadView(event.Name)
-		case ve.contentDir != "" && strings.HasPrefix(event.Name, ve.contentDir+"/"):
-			return ve.loadContentPage(event.Name)
+		}
+		if dir, ok := ve.matchedContentDir(event.Name); ok {
+			return ve.loadContentPage(event.Name, dir)
 		}
 		return nil
 
 	case ".md":
-		if ve.contentDir == "" || !strings.HasPrefix(event.Name, ve.contentDir+"/") {
+		dir, ok := ve.matchedContentDir(event.Name)
+		if !ok {
 			return nil
 		}
 		if event.Has(fsnotify.Remove) {
-			slug := strings.TrimSuffix(strings.TrimPrefix(event.Name, ve.contentDir+"/"), ".md")
+			slug := strings.TrimSuffix(strings.TrimPrefix(event.Name, dir+"/"), ".md")
 			app.mu.Lock()
 			delete(app.contentViews, "GET /"+slug)
 			app.mu.Unlock()
 			return nil
 		}
 		if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
-			return ve.loadContentFile(event.Name)
+			return ve.loadContentFile(event.Name, dir)
 		}
 		return nil
 	}
@@ -213,41 +213,63 @@ func (ve *HtmlViewEngine) loadView(path string) error {
 	return nil
 }
 
-// loadContentDir walks the content directory and dispatches by file extension:
+// loadContent walks every configured content directory and dispatches by
+// file extension:
 //   - .md   → loadContentFile (parse, render, register route via bubble-up)
 //   - .html → loadContentPage (register as a regular page route)
 //
-// Subdirectories are walked recursively. Files outside the configured
-// contentDir are ignored.
-func (ve *HtmlViewEngine) loadContentDir() {
-	if ve.contentDir == "" {
-		return
-	}
-	// nolint:errcheck
-	fs.WalkDir(ve.fsys, ve.contentDir, func(p string, d fs.DirEntry, _ error) error {
-		if d == nil || d.IsDir() {
+// Subdirectories are walked recursively. Each content directory becomes
+// a URL prefix; e.g. blog/post.md → /blog/post and docs/api/intro.md →
+// /docs/api/intro.
+func (ve *HtmlViewEngine) loadContent() {
+	for _, dir := range ve.contentDirs {
+		if dir == "" {
+			continue
+		}
+		// nolint:errcheck
+		fs.WalkDir(ve.fsys, dir, func(p string, d fs.DirEntry, _ error) error {
+			if d == nil || d.IsDir() {
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(p))
+			switch ext {
+			case ".md":
+				if err := ve.loadContentFile(p, dir); err != nil {
+					ve.app.logger.Error("xun: load content", slog.String("path", p), slog.Any("err", err))
+				}
+			case ".html":
+				if err := ve.loadContentPage(p, dir); err != nil {
+					ve.app.logger.Error("xun: load content page", slog.String("path", p), slog.Any("err", err))
+				}
+			}
 			return nil
+		})
+	}
+}
+
+// matchedContentDir returns the longest configured content directory that
+// is a prefix of p. When the file lives in multiple directories, the
+// longest match wins so blog/2026/foo.md resolves to blog/ rather than blog/.
+func (ve *HtmlViewEngine) matchedContentDir(p string) (string, bool) {
+	var best string
+	for _, d := range ve.contentDirs {
+		if d == "" {
+			continue
 		}
-		ext := strings.ToLower(filepath.Ext(p))
-		switch ext {
-		case ".md":
-			if err := ve.loadContentFile(p); err != nil {
-				ve.app.logger.Error("xun: load content", slog.String("path", p), slog.Any("err", err))
-			}
-		case ".html":
-			if err := ve.loadContentPage(p); err != nil {
-				ve.app.logger.Error("xun: load content page", slog.String("path", p), slog.Any("err", err))
+		if p == d || strings.HasPrefix(p, d+"/") {
+			if len(d) > len(best) {
+				best = d
 			}
 		}
-		return nil
-	})
+	}
+	return best, best != ""
 }
 
 // loadContentFile reads a .md file, derives its ContentView (title from # H1,
 // description from blockquote/paragraph), renders the body to HTML, stores
 // the result in app.contentViews, locates an HTML template via bubble-up,
 // and registers a route keyed by the .md slug (not the template path).
-func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
+func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 	buf, err := fs.ReadFile(ve.fsys, mdPath)
 	if err != nil {
 		return err
@@ -258,7 +280,7 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
 	if ve.metaExtractor != nil {
 		cv = ve.metaExtractor(mdPath, buf, fi)
 	} else {
-		cv = extractContentView(mdPath, buf, fi, ve.contentDir, ve.md)
+		cv = extractContentView(mdPath, buf, fi, dir, ve.md)
 	}
 
 	rendered, err := ve.renderMarkdown(buf, mdPath)
@@ -268,12 +290,14 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
 	}
 	cv.Body = rendered
 
-	pattern := "GET /" + cv.Slug
+	// Slug is path-relative-to-fsys-root, with the directory acting as
+	// URL prefix. blog/post.md → /blog/post; docs/api/intro.md → /docs/api/intro.
+	pattern := "GET " + path.Join("/", strings.TrimSuffix(mdPath, ".md"))
 	ve.app.mu.Lock()
 	ve.app.contentViews[pattern] = &cv
 	ve.app.mu.Unlock()
 
-	tmplPath := ve.bubbleUp(cv.Slug)
+	tmplPath := ve.bubbleUp(mdPath)
 	if tmplPath == "" {
 		ve.app.logger.Warn("xun: content has no html template",
 			slog.String("path", mdPath), slog.String("slug", cv.Slug))
@@ -285,7 +309,7 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
 	t, ok := ve.templates[tmplKey]
 	if !ok {
 		var err error
-		t, err = ve.loadTemplateOnly(tmplPath)
+		t, err = ve.loadTemplateOnly(tmplPath, dir)
 		if err != nil {
 			return err
 		}
@@ -303,8 +327,8 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
 // loadTemplateOnly parses an HTML file into ve.templates without registering
 // any route. Use this for shared bubble-up targets that multiple .md files
 // route through.
-func (ve *HtmlViewEngine) loadTemplateOnly(htmlPath string) (*HtmlTemplate, error) {
-	name := strings.TrimPrefix(htmlPath, ve.contentDir+"/")
+func (ve *HtmlViewEngine) loadTemplateOnly(htmlPath, dir string) (*HtmlTemplate, error) {
+	name := strings.TrimPrefix(htmlPath, dir+"/")
 	t := NewHtmlTemplate(name, htmlPath)
 	if err := t.Load(ve.fsys, ve.templates, ve.app.funcMap); err != nil {
 		return nil, err
@@ -313,21 +337,21 @@ func (ve *HtmlViewEngine) loadTemplateOnly(htmlPath string) (*HtmlTemplate, erro
 	return t, nil
 }
 
-// loadContentPage registers an HTML template living in the content directory
+// loadContentPage registers an HTML template living in a content directory
 // as a page route in its own right, the same way loadPage does for pages/.
-// This is used for .html files in content/ that are pages on their own
-// (not bubble-up targets for .md files).
-func (ve *HtmlViewEngine) loadContentPage(htmlPath string) error {
-	if !strings.HasPrefix(htmlPath, ve.contentDir+"/") && htmlPath != ve.contentDir {
+// This is used for .html files in content directories that are pages on
+// their own (not bubble-up targets for .md files).
+func (ve *HtmlViewEngine) loadContentPage(htmlPath, dir string) error {
+	if htmlPath != dir && !strings.HasPrefix(htmlPath, dir+"/") {
 		return nil
 	}
 
-	rel := strings.TrimPrefix(htmlPath, ve.contentDir+"/")
+	rel := strings.TrimPrefix(htmlPath, dir+"/")
 	if rel == htmlPath {
 		rel = ""
 	}
 
-	t, err := ve.loadTemplateOnly(htmlPath)
+	t, err := ve.loadTemplateOnly(htmlPath, dir)
 	if err != nil {
 		return err
 	}
@@ -344,33 +368,38 @@ func (ve *HtmlViewEngine) loadContentPage(htmlPath string) error {
 	return nil
 }
 
-// bubbleUp finds the best matching HTML template path for a slug.
+// bubbleUp finds the best matching HTML template path for a .md file.
 //
-// Order:
-//  1. <contentDir>/<slug>.html
-//  2. <contentDir>/<dir>/index.html  (walking up the directory chain)
-//  3. content/index.html
-//  4. index.html (root)
+// Order (scoped to its own content directory):
+//  1. <mdPath-without-.md>.html
+//  2. <dir>/<sub>/index.html  (walking up the directory chain)
+//  3. <dir>/index.html
+//  4. root index.html
 //
 // Returns "" when no template is found.
-func (ve *HtmlViewEngine) bubbleUp(slug string) string {
-	full := path.Join(ve.contentDir, slug)
+func (ve *HtmlViewEngine) bubbleUp(mdPath string) string {
+	full := strings.TrimSuffix(mdPath, ".md")
 
 	if existsFS(ve.fsys, full+".html") {
 		return full + ".html"
 	}
 
-	dir := path.Dir(full)
-	for dir != "." && dir != "/" && dir != "" && dir != ve.contentDir {
-		candidate := path.Join(dir, "index.html")
+	dir, _ := ve.matchedContentDir(mdPath)
+	if dir == "" {
+		return ""
+	}
+
+	cur := path.Dir(full)
+	for cur != "." && cur != "/" && cur != "" && cur != dir {
+		candidate := path.Join(cur, "index.html")
 		if existsFS(ve.fsys, candidate) {
 			return candidate
 		}
-		dir = path.Dir(dir)
+		cur = path.Dir(cur)
 	}
 
-	if existsFS(ve.fsys, path.Join(ve.contentDir, "index.html")) {
-		return path.Join(ve.contentDir, "index.html")
+	if existsFS(ve.fsys, path.Join(dir, "index.html")) {
+		return path.Join(dir, "index.html")
 	}
 	if existsFS(ve.fsys, "index.html") {
 		return "index.html"
@@ -379,12 +408,7 @@ func (ve *HtmlViewEngine) bubbleUp(slug string) string {
 }
 
 // templateKey returns the lookup key used to store *HtmlTemplate in ve.templates.
-// For files in the content directory we use the full path so it does not collide
-// with files in pages/, views/, layouts/, or components/.
 func (ve *HtmlViewEngine) templateKey(p string) string {
-	if strings.HasPrefix(p, ve.contentDir+"/") {
-		return p[:len(p)-len(".html")]
-	}
 	return p[:len(p)-len(".html")]
 }
 

@@ -110,16 +110,43 @@ func WithBuildAssetURL(match func(string) bool) Option {
 	}
 }
 
-// WithContentDir overrides the directory in which .md files are discovered.
-// Default is "content". Pass "" to disable Markdown content loading entirely.
+// WithContent registers one or more directories in which .md files are
+// discovered. Each directory also acts as a route prefix, meaning files
+// living in different directories do not collide on the same URL.
 //
-// The default HtmlViewEngine will scan this directory at Load time and on
-// file-change events for .md and .html files.
-func WithContentDir(dir string) Option {
+// Defaults to a single "content" directory. Calling WithContent("") disables
+// Markdown content loading entirely (overrides the default). Calling
+// WithContent("blog", "docs", "kb") enables three independent content
+// trees:
+//
+//	blog/post.md       → GET /blog/post
+//	docs/api/intro.md  → GET /docs/api/intro
+//	kb/123.md          → GET /kb/123
+//
+// Multiple WithContent calls accumulate; the same directory may be passed
+// more than once without effect.
+func WithContent(dirs ...string) Option {
 	return func(app *App) {
 		for _, ve := range app.engines {
 			if hve, ok := ve.(*HtmlViewEngine); ok {
-				hve.contentDir = dir
+				for _, d := range dirs {
+					if d == "" {
+						// Empty string explicitly disables; clear the
+						// directory list regardless of default.
+						hve.contentDirs = nil
+						continue
+					}
+					found := false
+					for _, existing := range hve.contentDirs {
+						if existing == d {
+							found = true
+							break
+						}
+					}
+					if !found {
+						hve.contentDirs = append(hve.contentDirs, d)
+					}
+				}
 			}
 		}
 	}

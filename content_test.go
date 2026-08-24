@@ -274,7 +274,7 @@ More content.`),
 	app := New(WithMux(mux), WithFsys(fsys))
 	app.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/hello", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/content/hello", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -286,7 +286,7 @@ More content.`),
 	require.Contains(t, body, "World from markdown") // rendered body
 	require.Contains(t, body, "<html>")             // layout wrapper
 
-	req, _ = http.NewRequest("GET", srv.URL+"/2026/deeper", nil)
+	req, _ = http.NewRequest("GET", srv.URL+"/content/2026/deeper", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err = client.Do(req)
 	require.NoError(t, err)
@@ -316,7 +316,7 @@ func TestContentEngineBubbleUpToRoot(t *testing.T) {
 	app := New(WithMux(mux), WithFsys(fsys))
 	app.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/orphan", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/content/orphan", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -340,7 +340,7 @@ func TestContentEngineNoTemplate(t *testing.T) {
 	app := New(WithMux(mux), WithFsys(fsys))
 	app.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/orphan", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/content/orphan", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -383,37 +383,37 @@ func TestBubbleUpSpecific(t *testing.T) {
 	fsys := fstest.MapFS{
 		"content/2026/deeper.html": {Data: []byte(`<p>specific</p>`)},
 	}
-	ve := &HtmlViewEngine{fsys: fsys, contentDir: "content"}
-	require.Equal(t, "content/2026/deeper.html", ve.bubbleUp("2026/deeper"))
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
+	require.Equal(t, "content/2026/deeper.html", ve.bubbleUp("content/2026/deeper.md"))
 }
 
 func TestBubbleUpToIndex(t *testing.T) {
 	fsys := fstest.MapFS{
 		"content/2026/index.html": {Data: []byte(`<p>index</p>`)},
 	}
-	ve := &HtmlViewEngine{fsys: fsys, contentDir: "content"}
-	require.Equal(t, "content/2026/index.html", ve.bubbleUp("2026/deeper"))
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
+	require.Equal(t, "content/2026/index.html", ve.bubbleUp("content/2026/deeper.md"))
 }
 
 func TestBubbleUpToContentIndex(t *testing.T) {
 	fsys := fstest.MapFS{
 		"content/index.html": {Data: []byte(`<p>index</p>`)},
 	}
-	ve := &HtmlViewEngine{fsys: fsys, contentDir: "content"}
-	require.Equal(t, "content/index.html", ve.bubbleUp("anything"))
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
+	require.Equal(t, "content/index.html", ve.bubbleUp("content/anything.md"))
 }
 
 func TestBubbleUpToRootIndex(t *testing.T) {
 	fsys := fstest.MapFS{
 		"index.html": {Data: []byte(`<p>root</p>`)},
 	}
-	ve := &HtmlViewEngine{fsys: fsys, contentDir: "content"}
-	require.Equal(t, "index.html", ve.bubbleUp("anything"))
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
+	require.Equal(t, "index.html", ve.bubbleUp("content/anything.md"))
 }
 
 func TestBubbleUpNotFound(t *testing.T) {
 	fsys := fstest.MapFS{}
-	ve := &HtmlViewEngine{fsys: fsys, contentDir: "content"}
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
 	require.Equal(t, "", ve.bubbleUp("anything"))
 }
 
@@ -421,7 +421,7 @@ func TestBubbleUpNotFound(t *testing.T) {
 // Options
 // =============================================================================
 
-func TestWithContentDir(t *testing.T) {
+func TestWithContentSingle(t *testing.T) {
 	fsys := fstest.MapFS{
 		"docs/post.md": {Data: []byte("# Hello")},
 		"index.html":   {Data: []byte(`<html>{{.Content.Title}}</html>`)},
@@ -430,10 +430,11 @@ func TestWithContentDir(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithMux(mux), WithFsys(fsys), WithContentDir("docs"))
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("docs"))
 	app.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/post", nil)
+	// Directory name becomes the URL prefix.
+	req, _ := http.NewRequest("GET", srv.URL+"/docs/post", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -443,7 +444,60 @@ func TestWithContentDir(t *testing.T) {
 	require.Contains(t, string(buf), "Hello")
 }
 
-func TestWithContentDirEmptyDisables(t *testing.T) {
+func TestWithContentMultiple(t *testing.T) {
+	fsys := fstest.MapFS{
+		"blog/post.md":      {Data: []byte("# Blog Post")},
+		"docs/api/intro.md": {Data: []byte("# Intro")},
+		"kb/123.md":         {Data: []byte("# KB Article")},
+		"index.html":        {Data: []byte(`<html>{{.Content.Title}}</html>`)},
+		"blog/index.html":   {Data: []byte(`<html>blog: {{.Content.Title}}</html>`)},
+	}
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("blog", "docs", "kb"))
+	app.Close()
+
+	cases := []struct{ url, want string }{
+		{"/blog/post", "Blog Post"},
+		{"/docs/api/intro", "Intro"},
+		{"/kb/123", "KB Article"},
+	}
+	for _, tc := range cases {
+		req, _ := http.NewRequest("GET", srv.URL+tc.url, nil)
+		req.Header.Set("Accept", "text/html")
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		buf, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		require.Contains(t, string(buf), tc.want, "url=%s", tc.url)
+	}
+
+	// No collision: blog/post and docs/api/intro both have unique patterns.
+	require.NotEmpty(t, app.contentViews["GET /blog/post"])
+	require.NotEmpty(t, app.contentViews["GET /docs/api/intro"])
+	require.Empty(t, app.contentViews["GET /docs/post"]) // doesn't exist
+}
+
+func TestWithContentAccumulates(t *testing.T) {
+	fsys := fstest.MapFS{
+		"blog/a.md": {Data: []byte("# A")},
+		"docs/b.md": {Data: []byte("# B")},
+		"index.html": {Data: []byte(`<html>{{.Content.Title}}</html>`)},
+	}
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("blog"), WithContent("docs"))
+	app.Close()
+
+	require.NotEmpty(t, app.contentViews["GET /blog/a"])
+	require.NotEmpty(t, app.contentViews["GET /docs/b"])
+}
+
+func TestWithContentEmptyDisables(t *testing.T) {
 	fsys := fstest.MapFS{
 		"content/post.md": {Data: []byte("# Hello")},
 		"index.html":      {Data: []byte(`<html>{{.Content.Title}}</html>`)},
@@ -452,10 +506,10 @@ func TestWithContentDirEmptyDisables(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	app := New(WithMux(mux), WithFsys(fsys), WithContentDir(""))
+	app := New(WithMux(mux), WithFsys(fsys), WithContent(""))
 	app.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/post", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -482,7 +536,7 @@ func TestWithContentRenderer(t *testing.T) {
 	)
 	app.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/post", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -515,7 +569,7 @@ func TestWithContentMeta(t *testing.T) {
 	)
 	app.Close()
 
-	req, _ := http.NewRequest("GET", srv.URL+"/post", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -535,7 +589,7 @@ func TestFileChangedContentRemove(t *testing.T) {
 		"content/post.md": {Data: []byte("# Hello")},
 		"index.html":      {Data: []byte(`<html>{{.Content.Title}}</html>`)},
 	}
-	ve := &HtmlViewEngine{fsys: fsys, contentDir: "content"}
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
 	ve.templates = map[string]*HtmlTemplate{}
 
 	app := &App{
@@ -563,18 +617,18 @@ func TestFileChangedContentWrite(t *testing.T) {
 		funcMap:      template.FuncMap{},
 		logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
-	ve := &HtmlViewEngine{fsys: fsys, contentDir: "content", app: app}
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}, app: app}
 	ve.templates = map[string]*HtmlTemplate{}
 	ve.md = newContentRenderer()
 
 	err := ve.FileChanged(fsys, app, fsnotifyWriteEvent("content/post.md"))
 	require.NoError(t, err)
 	require.NotEmpty(t, app.contentViews)
-	require.Equal(t, "Updated Title", app.contentViews["GET /post"].Title)
+	require.Equal(t, "Updated Title", app.contentViews["GET /content/post"].Title)
 }
 
 func TestFileChangedContentOutsideDirIgnored(t *testing.T) {
-	ve := &HtmlViewEngine{contentDir: "content"}
+	ve := &HtmlViewEngine{contentDirs: []string{"content"}}
 	ve.templates = map[string]*HtmlTemplate{}
 	app := &App{contentViews: map[string]*ContentView{}}
 
