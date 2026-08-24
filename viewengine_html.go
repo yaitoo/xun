@@ -109,6 +109,33 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 			return ve.loadContentFile(event.Name, dir)
 		}
 		return nil
+
+	case ".tpl":
+		dir, ok := ve.matchedContentDir(event.Name)
+		if !ok {
+			return nil
+		}
+		tmplKey := ve.templateKey(event.Name)
+		if event.Has(fsnotify.Remove) {
+			// No route to de-register (templates never register routes).
+			// Drop the cached template so a later loadContentFile with
+			// the same path rebuilds it from disk.
+			delete(ve.templates, tmplKey)
+			return nil
+		}
+		// Write/Create: prefer Reload so the existing HtmlTemplate
+		// instance stays in place — HtmlViewer entries in app.routes
+		// hold a pointer to that instance, and replacing it would leave
+		// them rendering the stale template. Reload also cascades to
+		// dependents via the dependency graph.
+		if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+			if t, ok := ve.templates[tmplKey]; ok {
+				return t.Reload(fsys, ve.templates, app.funcMap)
+			}
+			_, err := ve.loadContentTemplate(event.Name, dir)
+			return err
+		}
+		return nil
 	}
 
 	return nil
@@ -215,12 +242,17 @@ func (ve *HtmlViewEngine) loadView(path string) error {
 
 // loadContent walks every configured content directory and dispatches by
 // file extension:
-//   - .md   → loadContentFile (parse, render, register route via bubble-up)
-//   - .html → loadContentPage (register as a regular page route)
+//   - .md   → loadContentFile       (parse, render, register route via bubble-up)
+//   - .html → loadContentPage       (register as a regular page route)
+//   - .tpl  → loadContentTemplate   (load as a bubble-up template; no route)
 //
 // Subdirectories are walked recursively. Each content directory becomes
 // a URL prefix; e.g. blog/post.md → /blog/post and docs/api/intro.md →
 // /docs/api/intro.
+//
+// The split between .html and .tpl is what makes directory-level pages
+// possible: a directory may carry an index.tpl (template) and an
+// index.md (real page at /<dir>/) without the template occupying the route.
 func (ve *HtmlViewEngine) loadContent() {
 	for _, dir := range ve.contentDirs {
 		if dir == "" {
@@ -240,6 +272,10 @@ func (ve *HtmlViewEngine) loadContent() {
 			case ".html":
 				if err := ve.loadContentPage(p, dir); err != nil {
 					ve.app.logger.Error("xun: load content page", slog.String("path", p), slog.Any("err", err))
+				}
+			case ".tpl":
+				if _, err := ve.loadContentTemplate(p, dir); err != nil {
+					ve.app.logger.Error("xun: load content template", slog.String("path", p), slog.Any("err", err))
 				}
 			}
 			return nil
@@ -299,17 +335,19 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 
 	tmplPath := ve.bubbleUp(mdPath)
 	if tmplPath == "" {
-		ve.app.logger.Warn("xun: content has no html template",
+		ve.app.logger.Warn("xun: content has no bubble-up template",
 			slog.String("path", mdPath), slog.String("slug", cv.Slug))
 		return nil
 	}
 
-	// Load the bubble-up template if it hasn't been loaded yet.
+	// Load the bubble-up template if it hasn't been loaded yet. The key
+	// preserves the extension so a sibling .tpl and .html at the same
+	// path don't overwrite each other.
 	tmplKey := ve.templateKey(tmplPath)
 	t, ok := ve.templates[tmplKey]
 	if !ok {
 		var err error
-		t, err = ve.loadTemplateOnly(tmplPath, dir)
+		t, err = ve.loadContentTemplate(tmplPath, dir)
 		if err != nil {
 			return err
 		}
@@ -324,16 +362,22 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 	return nil
 }
 
-// loadTemplateOnly parses an HTML file into ve.templates without registering
-// any route. Use this for shared bubble-up targets that multiple .md files
-// route through.
-func (ve *HtmlViewEngine) loadTemplateOnly(htmlPath, dir string) (*HtmlTemplate, error) {
-	name := strings.TrimPrefix(htmlPath, dir+"/")
-	t := NewHtmlTemplate(name, htmlPath)
+// loadContentTemplate parses a template file (.tpl or .html) inside a
+// content directory into ve.templates WITHOUT registering any route.
+// It is used for:
+//   - .tpl files: pure bubble-up targets that wrap sibling .md files.
+//   - .html files: loaded here so loadContentPage can attach a route to
+//     the same template; the route registration is performed separately.
+//
+// The template key is derived from the file path with its extension
+// stripped so multiple .md files can share one bubble-up .tpl template.
+func (ve *HtmlViewEngine) loadContentTemplate(tplPath, dir string) (*HtmlTemplate, error) {
+	name := strings.TrimPrefix(tplPath, dir+"/")
+	t := NewHtmlTemplate(name, tplPath)
 	if err := t.Load(ve.fsys, ve.templates, ve.app.funcMap); err != nil {
 		return nil, err
 	}
-	ve.templates[ve.templateKey(htmlPath)] = t
+	ve.templates[ve.templateKey(tplPath)] = t
 	return t, nil
 }
 
@@ -341,6 +385,9 @@ func (ve *HtmlViewEngine) loadTemplateOnly(htmlPath, dir string) (*HtmlTemplate,
 // as a page route in its own right, the same way loadPage does for pages/.
 // This is used for .html files in content directories that are pages on
 // their own (not bubble-up targets for .md files).
+//
+// In the current convention .html files in content/ are pages only — they
+// are NEVER consulted by bubbleUp. That role belongs to .tpl files.
 func (ve *HtmlViewEngine) loadContentPage(htmlPath, dir string) error {
 	if htmlPath != dir && !strings.HasPrefix(htmlPath, dir+"/") {
 		return nil
@@ -351,7 +398,7 @@ func (ve *HtmlViewEngine) loadContentPage(htmlPath, dir string) error {
 		rel = ""
 	}
 
-	t, err := ve.loadTemplateOnly(htmlPath, dir)
+	t, err := ve.loadContentTemplate(htmlPath, dir)
 	if err != nil {
 		return err
 	}
@@ -368,20 +415,25 @@ func (ve *HtmlViewEngine) loadContentPage(htmlPath, dir string) error {
 	return nil
 }
 
-// bubbleUp finds the best matching HTML template path for a .md file.
+// bubbleUp finds the best matching bubble-up template for a .md file.
+//
+// Only .tpl files are candidates. .html files in content/ are page routes,
+// not templates, so they are intentionally skipped from the lookup
+// (so a directory such as content/blog/ can hold both an index.tpl template
+// and an index.md page without the template occupying the route).
 //
 // Order (scoped to its own content directory):
-//  1. <mdPath-without-.md>.html
-//  2. <dir>/<sub>/index.html  (walking up the directory chain)
-//  3. <dir>/index.html
-//  4. root index.html
+//  1. <mdPath-without-.md>.tpl
+//  2. <dir>/<sub>/index.tpl  (walking up the directory chain)
+//  3. <dir>/index.tpl
+//  4. root index.tpl
 //
 // Returns "" when no template is found.
 func (ve *HtmlViewEngine) bubbleUp(mdPath string) string {
 	full := strings.TrimSuffix(mdPath, ".md")
 
-	if existsFS(ve.fsys, full+".html") {
-		return full + ".html"
+	if existsFS(ve.fsys, full+".tpl") {
+		return full + ".tpl"
 	}
 
 	dir, _ := ve.matchedContentDir(mdPath)
@@ -391,25 +443,35 @@ func (ve *HtmlViewEngine) bubbleUp(mdPath string) string {
 
 	cur := path.Dir(full)
 	for cur != "." && cur != "/" && cur != "" && cur != dir {
-		candidate := path.Join(cur, "index.html")
+		candidate := path.Join(cur, "index.tpl")
 		if existsFS(ve.fsys, candidate) {
 			return candidate
 		}
 		cur = path.Dir(cur)
 	}
 
-	if existsFS(ve.fsys, path.Join(dir, "index.html")) {
-		return path.Join(dir, "index.html")
+	if existsFS(ve.fsys, path.Join(dir, "index.tpl")) {
+		return path.Join(dir, "index.tpl")
 	}
-	if existsFS(ve.fsys, "index.html") {
-		return "index.html"
+	if existsFS(ve.fsys, "index.tpl") {
+		return "index.tpl"
 	}
 	return ""
 }
 
-// templateKey returns the lookup key used to store *HtmlTemplate in ve.templates.
+// templateKey returns the lookup key used to store *HtmlTemplate in
+// ve.templates for files inside a content directory.
+//
+// Unlike loadTemplate (which strips .html from components/, layouts/,
+// pages/, views/ keys), templateKey preserves the file extension so that
+// a content/blog/index.tpl and a content/blog/index.html can coexist
+// without overwriting each other. They are two separate templates with
+// distinct roles — one is a bubble-up target, the other is a page.
+//
+// The legacy loadTemplate path keeps its stripped-name convention
+// because components/layouts/pages/views never carry .tpl siblings.
 func (ve *HtmlViewEngine) templateKey(p string) string {
-	return p[:len(p)-len(".html")]
+	return p
 }
 
 // renderMarkdown dispatches to the user-provided renderFn when available,

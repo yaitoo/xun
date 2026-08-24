@@ -143,7 +143,7 @@ func TestBuildBreadcrumbEmptyTitleIsKept(t *testing.T) {
 
 func TestBreadcrumbEndToEndMarkdown(t *testing.T) {
 	fsys := fstest.MapFS{
-		"index.html": {Data: []byte(`<nav>{{range .Breadcrumb}}{{if .Last}}[{{.Name}}|{{.Title}}]{{else}}<a href="{{.Path}}">{{.Name}}</a>{{end}}{{end}}</nav>`)},
+		"index.tpl": {Data: []byte(`<nav>{{range .Breadcrumb}}{{if .Last}}[{{.Name}}|{{.Title}}]{{else}}<a href="{{.Path}}">{{.Name}}</a>{{end}}{{end}}</nav>`)},
 		"blog/2026/x.md": {Data: []byte("# 深入 Xun\n\n正文.")},
 	}
 

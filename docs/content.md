@@ -23,9 +23,9 @@ The content engine does not introduce a new `Viewer`, a new routing registration
 
 The content engine does **not** parse YAML/TOML frontmatter. Title is derived from the first `# H1` heading. Description is derived from the first blockquote (preferred) or top-level paragraph. Everything else comes from the filesystem.
 
-### Principle 0.3 — No content-specific layout file
+### Principle 0.3 — Templates and pages use distinct extensions
 
-There is no `content/_layout.html`, no `content/_index.html`, no `content/_tags.html`. Every HTML template in the content directory is a standard `HtmlViewEngine` page that uses `<!--layout:NAME-->` to reference the same `layouts/` directory used by every other page on the site.
+Inside `content/`, `.tpl` files are **bubble-up templates only** — they are loaded into the template graph but never registered as routes. `.html` files are **pages only** — they register a route and are not consulted during bubble-up lookup. This separation is what lets a directory such as `content/blog/` carry both a wrapping template (`index.tpl`) and a real Markdown page (`index.md`) without the template occupying the route.
 
 ### Principle 0.4 — Markdown files are read at runtime
 
@@ -54,24 +54,28 @@ pages/                       ← Non-content pages (unchanged)
 
 content/                     ← Content directory (default; configurable via WithContentDir)
 ├── hello.md                 ← Auto-registered: GET /hello
-├── hello.html               ← Optional specific template for /hello
+├── hello.tpl                ← Bubble-up template for /hello (optional, sibling .md)
+├── hello.html               ← Standalone page for /hello (optional, sibling .md)
 ├── 2026/
-│   ├── index.html           ← Bubble-up target for sibling .md files
+│   ├── index.tpl            ← Bubble-up template for sibling .md files (no route)
+│   ├── index.md             ← Directory-level page: GET /2026/  (own H1, breadcrumb anchor)
 │   ├── deeper.md            ← Auto-registered: GET /2026/deeper
-│   └── deeper.html          ← Optional specific template
+│   └── deeper.tpl           ← Optional specific template for /2026/deeper
 └── about.md                 ← Auto-registered: GET /about
 ```
 
 Three rules govern this layout:
 
-**Rule 1.1 — Bubble-up template lookup**
+**Rule 1.1 — Bubble-up template lookup (`.tpl` only)**
 
-For any route `R` derived from a `.md` file, the engine looks for an HTML template in this order:
+For any route `R` derived from a `.md` file, the engine looks for a bubble-up template in this order:
 
-1. `R` itself with `.html` extension (e.g. `content/2026/deeper.html`)
-2. The directory of `R` (e.g. `content/2026/index.html`)
-3. Each ancestor directory's `index.html` (e.g. `content/index.html`)
-4. The root `index.html`
+1. `R` itself with `.tpl` extension (e.g. `content/2026/deeper.tpl`)
+2. The directory of `R` (e.g. `content/2026/index.tpl`)
+3. Each ancestor directory's `index.tpl` (e.g. `content/index.tpl`)
+4. The root `index.tpl`
+
+`.html` files in `content/` are not consulted during bubble-up. The directory-level page at `/2026/` exists **independently** of the bubble-up template at `content/2026/index.tpl`.
 
 **Rule 1.2 — Auto route registration for `.md`**
 
@@ -301,31 +305,36 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
 ### 4.5 `bubbleUp` — template lookup
 
 ```go
-// bubbleUp finds the best HTML template for a slug.
+// bubbleUp finds the best bubble-up template for a slug.
 //
 // For slug "2026/deeper", in order:
-//   1. content/2026/deeper.html
-//   2. content/2026/index.html
-//   3. content/index.html
-//   4. index.html
+//   1. content/2026/deeper.tpl
+//   2. content/2026/index.tpl
+//   3. content/index.tpl
+//   4. index.tpl
+//
+// .html files in the content tree are NOT candidates — they are page
+// routes, not templates. Templates live exclusively under .tpl so a
+// directory such as content/blog/ can hold both index.tpl (template)
+// and index.md (real page at /blog/) without conflict.
 func (ve *HtmlViewEngine) bubbleUp(slug string) string {
     full := path.Join(ve.contentDir, slug)
 
-    if existsFS(ve.fsys, full+".html") {
-        return full + ".html"
+    if existsFS(ve.fsys, full+".tpl") {
+        return full+".tpl"
     }
 
     dir := path.Dir(full)
     for dir != "." && dir != "/" && dir != "" {
-        candidate := path.Join(dir, "index.html")
+        candidate := path.Join(dir, "index.tpl")
         if existsFS(ve.fsys, candidate) {
             return candidate
         }
         dir = path.Dir(dir)
     }
 
-    if existsFS(ve.fsys, "index.html") {
-        return "index.html"
+    if existsFS(ve.fsys, "index.tpl") {
+        return "index.tpl"
     }
     return ""
 }
@@ -483,9 +492,9 @@ GET /2026/deeper
 
 ## Section 9 — Template Authoring
 
-### 9.1 Content page template
+### 9.1 Bubble-up template
 
-`content/hello.html`:
+`content/hello.tpl` (sibling to `content/hello.md`):
 
 ```html
 <!--layout:site-->
@@ -507,6 +516,8 @@ GET /2026/deeper
 </article>
 {{end}}
 ```
+
+The `.tpl` extension tells the engine: load this as a template that wraps sibling `.md` content, **do not** register it as a route. `content/hello.html` would behave differently — it would be a standalone page at `GET /hello` and would never be picked up by `bubbleUp`.
 
 Note the `<div class="content-body">` wrapper. See Section 9.5 for why and how to style it.
 
@@ -772,10 +783,12 @@ This is an escape hatch — most users never need it.
 
 | Scenario | Behavior |
 |----------|----------|
-| `content/foo.md` with no `.html` fallback anywhere | Warning log. Route is not registered. Visiting `/foo` returns 404. |
-| `content/foo.md` + `content/foo.html` | Route `/foo` uses `foo.html` as template. |
-| `content/foo.md` + `content/index.html` | Route `/foo` uses `index.html` via bubble-up. |
-| `content/foo.md` + root `index.html` | Route `/foo` uses root `index.html` via bubble-up. |
+| `content/foo.md` with no `.tpl` fallback anywhere | Warning log. Route is not registered. Visiting `/foo` returns 404. |
+| `content/foo.md` + `content/foo.tpl` | Route `/foo` uses `foo.tpl` as template. |
+| `content/foo.md` + `content/index.tpl` | Route `/foo` uses `index.tpl` via bubble-up. |
+| `content/foo.md` + root `index.tpl` | Route `/foo` uses root `index.tpl` via bubble-up. |
+| `content/blog/index.tpl` + `content/blog/index.md` | Bubble-up template and a real directory-level page coexist. `GET /blog` renders `index.md` wrapped by `index.tpl`. |
+| `content/blog/index.tpl` only (no `index.md`) | No route at `/blog`; only sibling `.md` files under `blog/` are reachable. |
 | Markdown has no `# H1` | `ContentView.Title == ""`. Template must guard. |
 | Markdown has no blockquote or paragraph | `ContentView.Description == ""`. Template must guard. |
 | Markdown render fails (parser error) | Error log. `app.contentViews` not written. Route not registered. |
