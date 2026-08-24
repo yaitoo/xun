@@ -49,6 +49,10 @@ type App struct {
 	funcMap        template.FuncMap
 	buildAssetURLs []func(string) bool
 	AssetURLs      map[string]string
+
+	// contentViews maps route patterns (e.g. "GET /2026/deeper") to the
+	// ContentView produced from a .md file at load time.
+	contentViews map[string]*ContentView
 }
 
 // New allocates an App instance and loads all view engines.
@@ -63,6 +67,7 @@ func New(opts ...Option) *App {
 		handlerViewers: []Viewer{&JsonViewer{}},
 		funcMap:        builtins,
 		AssetURLs:      make(map[string]string),
+		contentViews:   make(map[string]*ContentView),
 	}
 
 	for _, o := range opts {
@@ -111,6 +116,14 @@ func (app *App) getAssetUrl(pattern string) string {
 	}
 
 	return pattern
+}
+
+// lookupContent returns the ContentView for a given route pattern, or nil.
+// Safe to call concurrently with content engine load/reload operations.
+func (app *App) lookupContent(pattern string) *ContentView {
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	return app.contentViews[pattern]
 }
 
 // Group creates a new router group with the specified prefix.

@@ -22,4 +22,5 @@ type Viewer interface {
 type ViewModel struct {
 	TempData map[string]any
 	Data     any
+	Content  *ContentView // optional, populated when the route was registered from a .md file
 }

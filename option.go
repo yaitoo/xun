@@ -109,3 +109,55 @@ func WithBuildAssetURL(match func(string) bool) Option {
 		app.buildAssetURLs = append(app.buildAssetURLs, match)
 	}
 }
+
+// WithContentDir overrides the directory in which .md files are discovered.
+// Default is "content". Pass "" to disable Markdown content loading entirely.
+//
+// The default HtmlViewEngine will scan this directory at Load time and on
+// file-change events for .md and .html files.
+func WithContentDir(dir string) Option {
+	return func(app *App) {
+		for _, ve := range app.engines {
+			if hve, ok := ve.(*HtmlViewEngine); ok {
+				hve.contentDir = dir
+			}
+		}
+	}
+}
+
+// WithContentRenderer replaces the default Markdown rendering with a custom
+// function. Use this to plug in a fully-configured goldmark instance,
+// add syntax highlighting, AST-level class injection, or any other transform.
+//
+// The function receives the raw file bytes and the file path; it must return
+// the rendered template.HTML.
+func WithContentRenderer(
+	render func(content []byte, path string) (template.HTML, error),
+) Option {
+	return func(app *App) {
+		for _, ve := range app.engines {
+			if hve, ok := ve.(*HtmlViewEngine); ok {
+				hve.renderFn = render
+			}
+		}
+	}
+}
+
+// WithContentMeta replaces the default metadata extraction with a custom
+// function. The default derives Title from the first # H1 and Description
+// from the first blockquote/paragraph, but you may want to read fields from
+// a sidecar file, an embedded database, or external metadata.
+//
+// The function receives the file path, raw bytes, and fs.FileInfo; it must
+// return a fully populated ContentView (Body is filled later by the renderer).
+func WithContentMeta(
+	fn func(path string, content []byte, fi fs.FileInfo) ContentView,
+) Option {
+	return func(app *App) {
+		for _, ve := range app.engines {
+			if hve, ok := ve.(*HtmlViewEngine); ok {
+				hve.metaExtractor = fn
+			}
+		}
+	}
+}
