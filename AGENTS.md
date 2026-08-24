@@ -244,10 +244,12 @@ func main(){
   var opts []xun.Option
   if dev { opts = []xun.Option{xun.WithFsys(os.DirFS("./app")), xun.WithWatch()} } 
   else { v, _ := fs.Sub(fsys, "app"); opts = []xun.Option{xun.WithFsys(v)} }
-  app := xun.New(opts..., xun.WithCompressor(&xun.GzipCompressor{}))
+  mux := http.NewServeMux()
+  opts = append(opts, xun.WithMux(mux), xun.WithCompressor(&xun.GzipCompressor{}))
+  app := xun.New(opts...)
   app.Get("/{$}", func(c *xun.Context) error { return c.View(map[string]string{"hello":"xun"}) })
   app.Start(); defer app.Close()
-  http.ListenAndServe(":80", http.DefaultServeMux)
+  http.ListenAndServe(":80", mux)
 }
 ```
 
