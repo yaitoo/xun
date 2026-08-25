@@ -87,7 +87,14 @@ func buildBreadcrumb(ctx *Context) []BreadcrumbItem {
 
 		title := ""
 		if ctx.App != nil {
+			// Try the URL-derived pattern first; if that misses, fall back
+			// to the canonical /<dir>/{$} form so directory-level pages
+			// registered under loadContentFile/loadContentPage (which use
+			// /{$} per the SEO contract) still resolve when the URL prefix
+			// is the no-slash form (e.g. /blog).
 			if cv := ctx.App.lookupContent(pattern); cv != nil && cv.Title != "" {
+				title = cv.Title
+			} else if cv := ctx.App.lookupContent(pattern + "/{$}"); cv != nil && cv.Title != "" {
 				title = cv.Title
 			}
 		}

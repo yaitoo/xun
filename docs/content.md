@@ -83,6 +83,10 @@ For any route `R` derived from a `.md` file, the engine looks for a bubble-up te
 
 Every `.md` file in the content directory auto-registers a route whose pattern is `GET /<slug>`. The `<slug>` is the file path relative to the content directory, minus the `.md` extension.
 
+**Directory-level pages** (`index.md`) are a special case: the trailing `/index` segment of the slug is stripped and a `/` is appended so the route resolves to the canonical `/<dir>/{$}` pattern. `content/blog/index.md` therefore registers `GET /blog/{$}` (matching only `/blog/`), and `http.ServeMux` 307-redirects `/blog` → `/blog/`. This is the same canonical-URL contract `pages/<dir>/index.html` produces via `loadPage`, and avoids SEO duplicate content at `/<dir>` vs `/<dir>/`.
+
+`ContentView.Slug` keeps the literal `/index` segment (e.g. `Slug == "blog/index"` for `blog/index.md`) because the slug identifies the source file, not the route URL. The route URL is `GET /blog/{$}` — derivable from `Slug` only by stripping `/index` and appending `/`. Templates should treat `Slug` as the file-identity namespace; routing lookups use the contentView map key (see §3.4).
+
 **Rule 1.3 — Content lives in `ViewModel.Content`**
 
 When a request matches a route that was registered from a `.md` file, the engine populates `ViewModel.Content` with a `*ContentView`. Templates reference it as `{{.Content.Title}}`, `{{.Content.Body}}`, etc. Templates that do not match a content route see `vm.Content == nil`.
@@ -296,11 +300,21 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
         cv.Params = params
     }
 
-    // 4. Store in app.contentViews, keyed by route pattern
-    pattern := "GET /" + cv.Slug
+    // 4. Store in app.contentViews, keyed by route pattern.
+    //
+    // For directory-level pages (index.md), cv.Slug ends in "/index" —
+    // strip it and append "/" so splitFile expands the pattern to the
+    // canonical /<dir>/{$} form (matching only /<dir>/ with /<dir>
+    // getting a 307 redirect from http.ServeMux). For all other files
+    // the slug IS the route URL, so the pattern is "GET /" + cv.Slug.
+    patternBase := strings.TrimSuffix(cv.Slug + ".md", ".md")
+    if strings.HasSuffix(patternBase, "/index") {
+        patternBase = patternBase[:len(patternBase)-len("/index")] + "/"
+    }
+    _, _, pattern := splitFile(patternBase)
     ve.app.mu.Lock()
     ve.app.contentViews[pattern] = &cv
-    ve.app.mu.Unlock()
+    ve.app.Unlock()
 
     // 5. Bubble-up to find an HTML template
     tmplPath := ve.bubbleUp(cv.Slug)
