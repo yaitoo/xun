@@ -99,6 +99,29 @@ func TestBuildBreadcrumbMarkdownAncestorCarriesOwnH1(t *testing.T) {
 	require.Equal(t, "深入 Xun", got[3].Title)
 }
 
+// After the loadContentFile / loadContentPage fix, directory-level pages
+// (index.md, index.html) register under the canonical /<dir>/{$} pattern.
+// The URL-derived breadcrumb prefix is the no-slash form (/blog), so the
+// lookup must fall back to /blog/{$}. This test pins that behavior.
+func TestBuildBreadcrumbMarkdownAncestorCanonicalPattern(t *testing.T) {
+	app := &App{
+		contentViews: map[string]*ContentView{
+			"GET /blog/{$}":     {Slug: "blog", Title: "博客首页"},
+			"GET /blog/post":    {Slug: "blog/post", Title: "第一篇"},
+		},
+	}
+	ctx := &Context{
+		App:     app,
+		Request: httptest.NewRequest(http.MethodGet, "/blog/post", nil),
+	}
+
+	got := buildBreadcrumb(ctx)
+	require.Len(t, got, 3)
+	require.Equal(t, "博客首页", got[1].Title,
+		"the /blog ancestor must resolve via the canonical /blog/{$} pattern even though the URL prefix is /blog")
+	require.Equal(t, "第一篇", got[2].Title)
+}
+
 func TestBuildBreadcrumbChineseSegmentIsRaw(t *testing.T) {
 	ctx := &Context{
 		Request: httptest.NewRequest(http.MethodGet, "/blog/深入探索", nil),
@@ -215,6 +238,43 @@ func TestBreadcrumbRootHasNoChain(t *testing.T) {
 	resp.Body.Close()
 
 	require.Equal(t, "NONE", string(buf))
+}
+
+// With the loadContentFile fix for directory-level pages, blog/index.md
+// registers at "GET /blog" (not /blog/index). A child post must therefore
+// pick up the directory-level H1 on the /blog ancestor of the breadcrumb chain,
+// not on a hypothetical /blog/index slot that no longer exists.
+func TestBreadcrumbEndToEndMarkdownIndexAncestor(t *testing.T) {
+	fsys := fstest.MapFS{
+		"layouts/index.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>
+<nav>{{range .Breadcrumb}}{{if .Last}}[{{.Name}}|{{.Title}}]{{else}}<a href="{{.Path}}"{{with .Title}} title="{{.}}"{{end}}>{{.Name}}</a>{{end}}{{end}}</nav>`)},
+		"blog/index.tpl": {Data: []byte(`<!--layout:index-->
+{{define "content"}}{{.Content.Body}}{{end}}`)},
+		"blog/index.md": {Data: []byte("# 博客首页\n\n这里是博客根页内容。")},
+		"blog/2026/x.md": {Data: []byte("# 深入 Xun\n\n正文.")},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("blog"))
+	app.Start()
+	defer app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/blog/2026/x", nil)
+	req.Header.Set("Accept", "text/html")
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	body := string(buf)
+	require.Contains(t, body, `<a href="/">Home</a>`)
+	require.Contains(t, body, `<a href="/blog" title="博客首页">blog</a>`,
+		"/blog ancestor must carry the directory-level page's H1 from blog/index.md")
+	require.Contains(t, body, `<a href="/blog/2026">2026</a>`)
+	require.Contains(t, body, `[x|深入 Xun]`, "trailing item should render as plain with H1 title")
 }
 
 // =============================================================================
@@ -393,12 +453,15 @@ func TestBuildBreadcrumbDynamicMarkdownCurrentPage(t *testing.T) {
 
 func TestBuildBreadcrumbDynamicMarkdownAncestorUntouched(t *testing.T) {
 	// Ancestor items must still walk URL.Path; only the current page uses
-	// Routing.Pattern. The framework registers content/blog/index.md as
-	// "GET /blog/index" (the literal /index segment is preserved), so a
-	// request to /blog/index/foo walks the prefix /blog/index and finds it.
+	// Routing.Pattern. After the loadContentFile fix for directory-level
+	// pages, blog/index.md registers at "GET /blog" (not "GET /blog/index")
+	// per docs/content.md §1. So a request to /blog/index/foo walks the
+	// prefix /blog first and finds the directory-level page's title; the
+	// intermediate /blog/index segment has no entry because nothing is
+	// registered there.
 	app := &App{
 		contentViews: map[string]*ContentView{
-			"GET /blog/index":  {Title: "Blog Index"},
+			"GET /blog":        {Title: "Blog Index"},
 			"GET /blog/{slug}": {Title: "Post Title"},
 		},
 	}
@@ -410,7 +473,10 @@ func TestBuildBreadcrumbDynamicMarkdownAncestorUntouched(t *testing.T) {
 
 	got := buildBreadcrumb(ctx)
 	require.Len(t, got, 4)
-	require.Equal(t, "Blog Index", got[2].Title, "ancestor /blog/index resolves via URL-derived pattern")
+	require.Equal(t, "Blog Index", got[1].Title,
+		"ancestor /blog (the directory-level page) resolves via URL-derived pattern")
+	require.Empty(t, got[2].Title,
+		"intermediate /blog/index has no contentView (nothing is registered at that path)")
 	require.Equal(t, "Post Title", got[3].Title, "current page /blog/index/foo resolves via Routing.Pattern")
 }
 

@@ -419,8 +419,9 @@ func TestContentTemplateAndPageCoexist(t *testing.T) {
 	app := New(WithMux(mux), WithFsys(fsys))
 	app.Close()
 
-	// Directory-level page: GET /content/blog/index renders index.md wrapped by index.tpl.
-	req, _ := http.NewRequest("GET", srv.URL+"/content/blog/index", nil)
+	// Directory-level page: GET /content/blog renders index.md wrapped by index.tpl.
+	// Per docs/content.md §1, index.md resolves to /<dir>/ (not /<dir>/index).
+	req, _ := http.NewRequest("GET", srv.URL+"/content/blog", nil)
 	req.Header.Set("Accept", "text/html")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -443,10 +444,11 @@ func TestContentTemplateAndPageCoexist(t *testing.T) {
 	require.Contains(t, body, "第一篇")
 
 	// Both routes should have their own ContentView so the breadcrumb
-	// chain can carry H1s for the ancestor directory.
-	require.Contains(t, app.contentViews, "GET /content/blog/index")
+	// chain can carry H1s for the ancestor directory. The directory-level
+	// page lives at the directory root (canonical /<dir>/{$}).
+	require.Contains(t, app.contentViews, "GET /content/blog/{$}")
 	require.Contains(t, app.contentViews, "GET /content/blog/post")
-	require.Equal(t, "博客首页", app.contentViews["GET /content/blog/index"].Title)
+	require.Equal(t, "博客首页", app.contentViews["GET /content/blog/{$}"].Title)
 }
 
 // .html in content/ is a page route only — it must NOT be picked up by
@@ -550,6 +552,254 @@ func TestContentTplAndHtmlCoexistInSameDir(t *testing.T) {
 	require.Contains(t, body, "Body text")
 	require.NotContains(t, body, "standalone html page",
 		"post must NOT be rendered through the index.html page template")
+}
+
+// =============================================================================
+// loadContentPage route registration (issue #120)
+// =============================================================================
+
+// Regression for issue #120: with xun.WithContent("blog") and an
+// app/blog/index.html present, the page must register at GET /blog/{$}
+// (the canonical directory root), not at GET /index as a TrimSuffix-of-rel
+// bug produced. The broken logic stripped the dir prefix before slicing
+// /index.html off, so rel became "index.html" and the suffix strip was
+// a no-op.
+//
+// The convention for loadContentPage mirrors loadPage: index.html maps
+// to /<dir>/{$} so both the trailing-slash canonical URL (/blog/) is
+// served directly and the no-slash form (/blog) gets a single 307
+// redirect to it. Registering both /blog AND /blog/{$} would create two
+// duplicate pages in SEO crawlers — ServeMux's built-in redirect is the
+// canonical pattern.
+func TestContentPageIndexHtmlRegistersAtDirRoot(t *testing.T) {
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"blog/index.html": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<p>directory landing page</p>{{end}}`)},
+		"blog/welcome.html": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<p>welcome page</p>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("blog"))
+	app.Close()
+
+	// /blog/ — the canonical URL — must serve directly.
+	req, _ := http.NewRequest("GET", srv.URL+"/blog/", nil)
+	req.Header.Set("Accept", "text/html")
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, string(buf), "directory landing page")
+
+	// /blog (no slash) must 307-redirect to /blog/, NOT serve duplicate
+	// content. This is the SEO contract — only /blog/ is canonical.
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req2, _ := http.NewRequest("GET", srv.URL+"/blog", nil)
+	resp2, err := noRedirect.Do(req2)
+	require.NoError(t, err)
+	resp2.Body.Close()
+	require.Equal(t, http.StatusTemporaryRedirect, resp2.StatusCode,
+		"/blog must redirect (307) to the canonical /blog/ — no duplicate route")
+	require.Equal(t, "/blog/", resp2.Header.Get("Location"))
+
+	// Sibling welcome.html — dir prefix stripped by the loadContentPage
+	// convention, so the route is GET /welcome (not GET /blog/welcome).
+	req, _ = http.NewRequest("GET", srv.URL+"/welcome", nil)
+	req.Header.Set("Accept", "text/html")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	buf, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, string(buf), "welcome page")
+
+	// Route table: only the canonical /blog/{$} is registered (no /blog
+	// route, no /index route). SplitFile expands the trailing slash into
+	// {$} so http.ServeMux handles the non-slash redirect for us.
+	require.NotContains(t, app.routes, "GET /index",
+		"the old broken GET /index pattern must not be registered")
+	require.NotContains(t, app.routes, "GET /blog",
+		"GET /blog would create a duplicate-content route; let ServeMux 307-redirect to /blog/")
+	require.Contains(t, app.routes, "GET /blog/{$}",
+		"index.html must register as the directory root with {$}")
+	require.Contains(t, app.routes, "GET /welcome")
+}
+
+// Same regression at the default content dir ("content"): the in-content
+// prefix is stripped before registering, so content/blog/index.html maps
+// to GET /blog/{$} (the canonical directory root inside the content
+// tree). /blog gets a 307 redirect to /blog/ — same SEO contract as the
+// WithContent("blog") case above.
+func TestContentPageIndexHtmlNestedDefaultDir(t *testing.T) {
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/blog/index.html": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<p>blog landing</p>{{end}}`)},
+		"content/blog/welcome.html": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<p>welcome</p>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	// /blog/ — canonical — serves directly.
+	req, _ := http.NewRequest("GET", srv.URL+"/blog/", nil)
+	req.Header.Set("Accept", "text/html")
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, string(buf), "blog landing")
+
+	// /blog (no slash) must 307-redirect to /blog/.
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req2, _ := http.NewRequest("GET", srv.URL+"/blog", nil)
+	resp2, err := noRedirect.Do(req2)
+	require.NoError(t, err)
+	resp2.Body.Close()
+	require.Equal(t, http.StatusTemporaryRedirect, resp2.StatusCode)
+	require.Equal(t, "/blog/", resp2.Header.Get("Location"))
+
+	// /content/blog/index — the old broken pattern must NOT exist
+	req3, _ := http.NewRequest("GET", srv.URL+"/content/blog/index", nil)
+	resp, err = client.Do(req3)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusNotFound, resp.StatusCode,
+		"the broken pattern GET /content/blog/index must not be registered")
+
+	require.Contains(t, app.routes, "GET /blog/{$}",
+		"index.html must register as the directory root inside content/, with {$}")
+	require.NotContains(t, app.routes, "GET /blog",
+		"GET /blog would duplicate GET /blog/{$}; let ServeMux 307-redirect instead")
+	require.Contains(t, app.routes, "GET /blog/welcome")
+	require.NotContains(t, app.routes, "GET /content/blog/index")
+	require.NotContains(t, app.routes, "GET /index")
+}
+
+// Hot-reload must re-register content/index.html at the directory root,
+// not at /index.
+func TestContentPageIndexHtmlCreateHotReload(t *testing.T) {
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+	}
+	app := &App{
+		mux:          http.NewServeMux(),
+		routes:       map[string]*Routing{},
+		viewers:      map[string]Viewer{},
+		contentViews: map[string]*ContentView{},
+		funcMap:      template.FuncMap{},
+		logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}, app: app}
+	ve.templates = map[string]*HtmlTemplate{}
+	ve.md = newContentRenderer()
+	ve.Load(fsys, app)
+
+	// File appears after startup — Create event.
+	fsys["content/blog/index.html"] = &fstest.MapFile{
+		Data: []byte(`<!--layout:site-->
+{{define "content"}}<p>hot</p>{{end}}`),
+	}
+	require.NoError(t, ve.FileChanged(fsys, app, fsnotifyEvent("content/blog/index.html", fsnotify.Create)))
+
+	require.Contains(t, app.routes, "GET /blog/{$}",
+		"hot reload must register index.html at the directory root")
+	require.NotContains(t, app.routes, "GET /index",
+		"hot reload must NOT reintroduce the broken /index pattern")
+	require.NotContains(t, app.routes, "GET /content/blog/index",
+		"hot reload must NOT register at the in-content path with /index suffix")
+}
+
+// index.md (directory-level page) must register at /<dir>/{$} when a
+// bubble-up template exists, per docs/content.md §1 ("Directory-level
+// page: GET /<dir>/"). The trailing slash expands to {$} via splitFile,
+// matching only /<dir>/ and letting ServeMux 307-redirect /<dir> → /<dir>/
+// — same canonical-URL contract as pages/<dir>/index.html.
+func TestContentFileIndexMdRegistersAtDirRoot(t *testing.T) {
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"blog/index.tpl": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<article>{{.Content.Title}} | {{.Content.Body}}</article>{{end}}`)},
+		"blog/index.md": {Data: []byte("# Blog Root\n\nIntro for the blog.")},
+		"blog/post.md": {Data: []byte("# Post\n\nPost body.")},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("blog"))
+	app.Close()
+
+	// /blog/ — canonical — serves index.md via the bubble-up template.
+	req, _ := http.NewRequest("GET", srv.URL+"/blog/", nil)
+	req.Header.Set("Accept", "text/html")
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body := string(buf)
+	require.Contains(t, body, "<article>")
+	require.Contains(t, body, "Blog Root")
+	require.Contains(t, body, "Intro for the blog.")
+
+	// /blog (no slash) must 307-redirect to /blog/.
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	req2, _ := http.NewRequest("GET", srv.URL+"/blog", nil)
+	resp2, err := noRedirect.Do(req2)
+	require.NoError(t, err)
+	resp2.Body.Close()
+	require.Equal(t, http.StatusTemporaryRedirect, resp2.StatusCode)
+	require.Equal(t, "/blog/", resp2.Header.Get("Location"))
+
+	// /blog/index must NOT be a route — the trailing /index was stripped.
+	req3, _ := http.NewRequest("GET", srv.URL+"/blog/index", nil)
+	resp, err = client.Do(req3)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusNotFound, resp.StatusCode,
+		"index.md must not be reachable at /<dir>/index")
+
+	// Sibling .md files use the same bubble-up template at their own paths.
+	req, _ = http.NewRequest("GET", srv.URL+"/blog/post", nil)
+	req.Header.Set("Accept", "text/html")
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	buf, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	body = string(buf)
+	require.Contains(t, body, "<article>")
+	require.Contains(t, body, "Post")
+
+	require.Contains(t, app.routes, "GET /blog/{$}",
+		"directory-level page must register at the canonical /<dir>/{$}")
+	require.NotContains(t, app.routes, "GET /blog",
+		"GET /blog would duplicate /<dir>/{$}; let ServeMux 307-redirect instead")
+	require.Contains(t, app.routes, "GET /blog/post")
+	require.NotContains(t, app.routes, "GET /blog/index",
+		"the trailing /index must be stripped for index.md")
+	require.Contains(t, app.contentViews, "GET /blog/{$}",
+		"ContentView for the directory-level page lives at the canonical /<dir>/{$}")
+	require.NotContains(t, app.contentViews, "GET /blog/index")
 }
 
 // =============================================================================
@@ -737,11 +987,32 @@ func TestFileChangedContentRemove(t *testing.T) {
 
 	app := &App{
 		contentViews: map[string]*ContentView{
-			"GET /post": {Slug: "post", Title: "Hello"},
+			"GET /content/post": {Slug: "post", Title: "Hello"},
 		},
 	}
 
 	err := ve.FileChanged(fsys, app, fsnotifyRemoveEvent("content/post.md"))
+	require.NoError(t, err)
+	require.Empty(t, app.contentViews)
+}
+
+// Removing an index.md (directory-level page) must clear the route at
+// the canonical /<dir>/{$}, not at /<dir>/index.
+func TestFileChangedContentRemoveIndex(t *testing.T) {
+	fsys := fstest.MapFS{
+		"content/blog/index.tpl": {Data: []byte(`<p>x</p>`)},
+		"content/blog/index.md":  {Data: []byte("# Hello")},
+	}
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
+	ve.templates = map[string]*HtmlTemplate{}
+
+	app := &App{
+		contentViews: map[string]*ContentView{
+			"GET /content/blog/{$}": {Slug: "blog", Title: "Hello"},
+		},
+	}
+
+	err := ve.FileChanged(fsys, app, fsnotifyRemoveEvent("content/blog/index.md"))
 	require.NoError(t, err)
 	require.Empty(t, app.contentViews)
 }

@@ -101,9 +101,9 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 			return nil
 		}
 		if event.Has(fsnotify.Remove) {
-			slug := strings.TrimSuffix(strings.TrimPrefix(event.Name, dir+"/"), ".md")
+			_, _, pattern := splitFile(contentPatternBase(event.Name))
 			app.mu.Lock()
-			delete(app.contentViews, "GET /"+slug)
+			delete(app.contentViews, pattern)
 			app.mu.Unlock()
 			return nil
 		}
@@ -350,7 +350,14 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 
 	// Slug is path-relative-to-fsys-root, with the directory acting as
 	// URL prefix. blog/post.md → /blog/post; docs/api/intro.md → /docs/api/intro.
-	pattern := "GET " + path.Join("/", strings.TrimSuffix(mdPath, ".md"))
+	//
+	// For directory-level pages (index.md), strip the trailing "/index"
+	// AND append a "/" so splitFile expands the route to /<dir>/{$} —
+	// matching only the canonical /<dir>/ (with trailing slash) and
+	// letting http.ServeMux 307-redirect /<dir> → /<dir>/. This is the
+	// same canonical-URL contract loadPage produces for pages/<dir>/index.html,
+	// and avoids SEO duplicate-content at /<dir> vs /<dir>/.
+	_, _, pattern := splitFile(contentPatternBase(mdPath))
 	ve.app.mu.Lock()
 	ve.app.contentViews[pattern] = &cv
 	ve.app.mu.Unlock()
@@ -451,29 +458,45 @@ func (ve *HtmlViewEngine) loadContentTemplate(tplPath, dir string) (*HtmlTemplat
 //
 // In the current convention .html files in content/ are pages only — they
 // are NEVER consulted by bubbleUp. That role belongs to .tpl files.
+//
+// Route resolution follows loadPage's slice-trim pattern. Stripping
+// "index.html" (10 chars) keeps the leading "/" so the URL stays
+// "blog/" rather than collapsing to "blog"; splitFile then expands
+// the trailing slash to "/<dir>/{$}" so both /<dir> and /<dir>/ match.
+// Stripping "/index.html" (11 chars) first would lose the slash —
+// and worse, slicing off the content-dir prefix before the trim would
+// leave a bare "index.html" with no leading slash, so the suffix match
+// silently no-ops and the route is registered at the broken GET /index.
 func (ve *HtmlViewEngine) loadContentPage(htmlPath, dir string) error {
 	if htmlPath != dir && !strings.HasPrefix(htmlPath, dir+"/") {
 		return nil
 	}
 
-	rel := strings.TrimPrefix(htmlPath, dir+"/")
-	if rel == htmlPath {
-		rel = ""
-	}
+	name := htmlPath
 
 	t, err := ve.loadContentTemplate(htmlPath, dir)
 	if err != nil {
 		return err
 	}
 
-	if strings.HasSuffix(htmlPath, "/index.html") {
-		rel = strings.TrimSuffix(rel, "/index.html")
+	if strings.HasSuffix(name, "/index.html") {
+		name = name[:len(name)-len("index.html")]
 	}
 
-	_, _, pattern := splitFile(rel)
+	// Strip the content-dir prefix to get the in-content path, but
+	// keep "dir/" intact when the file IS dir/index.html (the dir
+	// root IS the URL path in that case). For nested files inside
+	// dir/, stripping leaves the in-content path.
+	if strings.HasPrefix(name, dir+"/") {
+		if rest := name[len(dir)+1:]; rest != "" {
+			name = rest
+		}
+	}
+
+	_, _, pattern := splitFile(name)
 	pattern = strings.TrimSuffix(pattern, ".html")
 
-	ve.app.HandlePage(pattern, rel, &HtmlViewer{template: t})
+	ve.app.HandlePage(pattern, name, &HtmlViewer{template: t})
 
 	return nil
 }
@@ -550,4 +573,24 @@ func (ve *HtmlViewEngine) renderMarkdown(content []byte, path string) (template.
 func existsFS(fsys fs.FS, p string) bool {
 	_, err := fs.Stat(fsys, p)
 	return err == nil
+}
+
+// contentPatternBase returns the path string passed to splitFile to derive
+// the HTTP route pattern for a .md file inside a content directory. For
+// directory-level pages (index.md), the trailing "/index" is stripped and
+// "/" is appended so splitFile expands the route to /<dir>/{$} — matching
+// only the canonical /<dir>/ (with trailing slash) and letting
+// http.ServeMux 307-redirect /<dir> → /<dir>/.
+//
+// Both loadContentFile (on Create/Write) and FileChanged's .md Remove
+// branch must call this so the stored and deleted contentViews keys are
+// identical. Letting the two sites drift re-introduces the silent no-op
+// delete that the issue #120 fix closed: the route would never be removed
+// on file removal, leaking the ContentView until restart.
+func contentPatternBase(mdPath string) string {
+	base := strings.TrimSuffix(mdPath, ".md")
+	if strings.HasSuffix(base, "/index") {
+		base = base[:len(base)-len("/index")] + "/"
+	}
+	return base
 }
