@@ -1,12 +1,15 @@
 package xun
 
 import (
+	"errors"
 	"html/template"
 	"io/fs"
 	"log/slog"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/yaitoo/xun/fsnotify"
 )
@@ -28,10 +31,9 @@ type HtmlViewEngine struct {
 	// Content engine: loads .md files from one or more content directories,
 	// renders them to HTML, and registers routes via bubble-up template lookup.
 	// Each directory becomes a URL prefix (e.g. blog/post.md → /blog/post).
-	md            *contentRenderer
-	contentDirs   []string                                      // default ["content"]; empty disables
-	metaExtractor func(string, []byte, fs.FileInfo) ContentView // nil → use extractContentView
-	renderFn      func([]byte, string) (template.HTML, error)   // nil → use md.Render
+	md          *contentRenderer
+	contentDirs []string                                    // default ["content"]; empty disables
+	renderFn    func([]byte, string) (template.HTML, error) // nil → use md.Render
 }
 
 // Load loads all templates from the given file system.
@@ -107,6 +109,25 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 		}
 		if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
 			return ve.loadContentFile(event.Name, dir)
+		}
+		return nil
+
+	case ".yaml":
+		// Sidecar for a sibling .md: rebuild that .md's ContentView so
+		// Params reflects the new file. The .md itself is the source of
+		// truth for the route; the .yaml only enriches its ContentView.
+		dir, ok := ve.matchedContentDir(event.Name)
+		if !ok {
+			return nil
+		}
+		mdPath := strings.TrimSuffix(event.Name, ".yaml") + ".md"
+		if !existsFS(ve.fsys, mdPath) {
+			return nil
+		}
+		if event.Has(fsnotify.Remove) ||
+			event.Has(fsnotify.Write) ||
+			event.Has(fsnotify.Create) {
+			return ve.loadContentFile(mdPath, dir)
 		}
 		return nil
 
@@ -312,12 +333,7 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 	}
 	fi, _ := fs.Stat(ve.fsys, mdPath)
 
-	var cv ContentView
-	if ve.metaExtractor != nil {
-		cv = ve.metaExtractor(mdPath, buf, fi)
-	} else {
-		cv = extractContentView(mdPath, buf, fi, dir, ve.md)
-	}
+	cv := extractContentView(mdPath, buf, fi, dir, ve.md)
 
 	rendered, err := ve.renderMarkdown(buf, mdPath)
 	if err != nil {
@@ -325,6 +341,12 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 		return err
 	}
 	cv.Body = rendered
+
+	// Sidecar params: sibling .yaml, if present, parses into Params.
+	// Missing file → Params left as-is (nil).
+	if params := ve.loadContentParams(mdPath); params != nil {
+		cv.Params = params
+	}
 
 	// Slug is path-relative-to-fsys-root, with the directory acting as
 	// URL prefix. blog/post.md → /blog/post; docs/api/intro.md → /docs/api/intro.
@@ -360,6 +382,47 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 		ve.app.HandlePage(pattern, cv.Slug, &HtmlViewer{template: t})
 	}
 	return nil
+}
+
+// loadContentParams reads a sibling .yaml next to the given .md path and
+// returns its decoded key/value map. The result is meant to populate
+// ContentView.Params; template authors read these keys directly.
+//
+// Behavior:
+//   - No sibling .yaml → returns nil silently (Params left unset).
+//   - Empty YAML document → returns nil silently (treated as no params).
+//   - Sibling exists with non-mapping root or parse error → logs Error
+//     and returns nil; the .md route still loads with Params == nil.
+//
+// Only the .yaml extension is honored. The .yml suffix is intentionally
+// not accepted to keep the convention explicit.
+func (ve *HtmlViewEngine) loadContentParams(mdPath string) map[string]any {
+	yamlPath := strings.TrimSuffix(mdPath, ".md") + ".yaml"
+
+	data, err := fs.ReadFile(ve.fsys, yamlPath)
+	if err != nil {
+		// Most common case: no sidecar. Other errors (permission, I/O)
+		// are worth surfacing so authors can debug a missing sidecar
+		// that they expected to exist.
+		if !errors.Is(err, fs.ErrNotExist) {
+			ve.app.logger.Warn("xun: read content params",
+				slog.String("path", yamlPath), slog.Any("err", err))
+		}
+		return nil
+	}
+
+	var params map[string]any
+	if err := yaml.Unmarshal(data, &params); err != nil {
+		ve.app.logger.Error("xun: parse content params",
+			slog.String("path", yamlPath), slog.Any("err", err))
+		return nil
+	}
+	if params == nil {
+		// Empty YAML document — treat as no params.
+		// (Non-mapping roots are caught earlier by the Unmarshal error path.)
+		return nil
+	}
+	return params
 }
 
 // loadContentTemplate parses a template file (.tpl or .html) inside a

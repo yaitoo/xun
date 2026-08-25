@@ -723,40 +723,6 @@ func TestWithContentRenderer(t *testing.T) {
 	require.Contains(t, string(buf), "CUSTOM-RENDERED")
 }
 
-func TestWithContentMeta(t *testing.T) {
-	fsys := fstest.MapFS{
-		"content/post.md": {Data: []byte("# Whatever")},
-		"index.tpl":       {Data: []byte(`<html><h1>{{.Content.Title}}</h1></html>`)},
-	}
-	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	app := New(
-		WithMux(mux),
-		WithFsys(fsys),
-		WithContentMeta(func(path string, content []byte, fi fs.FileInfo) ContentView {
-			return ContentView{
-				Path:        path,
-				Slug:        "post",
-				Title:       "CUSTOM-TITLE",
-				Description: "from meta hook",
-			}
-		}),
-	)
-	app.Close()
-
-	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
-	req.Header.Set("Accept", "text/html")
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	buf, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-
-	require.Contains(t, string(buf), "CUSTOM-TITLE")
-	require.NotContains(t, string(buf), "Whatever")
-}
-
 // =============================================================================
 // Hot reload via FileChanged
 // =============================================================================
@@ -929,8 +895,283 @@ func TestFileChangedTplCreateLoads(t *testing.T) {
 }
 
 // =============================================================================
+// Sidecar YAML params
+// =============================================================================
+
+func TestSidecarParamsLoadedIntoContentView(t *testing.T) {
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# Hello")},
+		"content/post.yaml": {Data: []byte(`image: /static/og/post.png
+author: Xiage
+tags:
+  - xun
+  - templates`)},
+		"index.tpl": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<article><h1>{{.Content.Title}}</h1><meta content="{{.Content.Params.image}}"><meta content="{{.Content.Params.author}}"></article>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	body := string(buf)
+	require.Contains(t, body, `<meta content="/static/og/post.png">`)
+	require.Contains(t, body, `<meta content="Xiage">`)
+	// AST-derived Title unaffected.
+	require.Contains(t, body, "<h1>Hello</h1>")
+
+	cv := app.contentViews["GET /content/post"]
+	require.NotNil(t, cv)
+	require.Equal(t, "/static/og/post.png", cv.Params["image"])
+	require.Equal(t, "Xiage", cv.Params["author"])
+}
+
+func TestSidecarParamsMissingYieldsNil(t *testing.T) {
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# Hello")},
+		"index.tpl":         {Data: []byte(`<!--layout:site-->{{define "content"}}<main>{{if .Content.Params}}HAS_PARAMS{{end}}</main>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	require.NotContains(t, string(buf), "HAS_PARAMS")
+	require.Nil(t, app.contentViews["GET /content/post"].Params)
+}
+
+func TestSidecarParamsParseErrorLeavesNil(t *testing.T) {
+	// Malformed YAML: the route must still register, with Params == nil.
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# Hello")},
+		"content/post.yaml": {Data: []byte("image: [unclosed")},
+		"index.tpl":         {Data: []byte(`<!--layout:site-->{{define "content"}}<main>{{.Content.Title}}</main>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	require.Contains(t, string(buf), "<main>Hello</main>")
+	require.Nil(t, app.contentViews["GET /content/post"].Params,
+		"parse error must not block content loading; Params stays nil")
+}
+
+func TestSidecarParamsNonMappingRootTreatedAsNil(t *testing.T) {
+	// A YAML scalar root is not a mapping; templates can't index it
+	// anyway, so we treat it as no params rather than propagating a
+	// confusing type into ContentView.Params.
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# Hello")},
+		"content/post.yaml": {Data: []byte("just a string, not a map")},
+		"index.tpl":         {Data: []byte(`<!--layout:site-->{{define "content"}}<p>{{.Content.Title}}</p>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Nil(t, app.contentViews["GET /content/post"].Params)
+}
+
+func TestSidecarParamsNestedMapAccessible(t *testing.T) {
+	// Templates should be able to reach into nested map fields.
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# Hello")},
+		"content/post.yaml": {Data: []byte(`og:
+  image: /static/og/post.png
+  card: summary_large_image`)},
+		"index.tpl": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<meta content="{{.Content.Params.og.image}}"><meta content="{{.Content.Params.og.card}}">{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	body := string(buf)
+	require.Contains(t, body, `<meta content="/static/og/post.png">`)
+	require.Contains(t, body, `<meta content="summary_large_image">`)
+}
+
+func TestSidecarParamsDoesNotOverrideASTTitle(t *testing.T) {
+	// Sidecar YAML may carry a "title" key; per Rule 1.4 it lives in
+	// .Content.Params.title and does NOT override .Content.Title (which
+	// remains AST-derived).
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# AST Title")},
+		"content/post.yaml": {Data: []byte(`title: YAML Title`)},
+		"index.tpl": {Data: []byte(`<!--layout:site-->
+{{define "content"}}<h1>{{.Content.Title}}</h1><p>{{.Content.Params.title}}</p>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	body := string(buf)
+	require.Contains(t, body, "<h1>AST Title</h1>")
+	require.Contains(t, body, "<p>YAML Title</p>")
+}
+
+func TestFileChangedYamlWriteReloadsParams(t *testing.T) {
+	// Mutating the sidecar must rebuild the sibling .md's ContentView
+	// so the new Params value is observable on the next request.
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# Hello")},
+		"content/post.yaml": {Data: []byte("author: v1")},
+		"index.tpl":         {Data: []byte(`<!--layout:site-->{{define "content"}}<p>{{.Content.Params.author}}</p>{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Contains(t, string(buf), "<p>v1</p>")
+
+	// Mutate the sidecar and fire Write.
+	fsys["content/post.yaml"] = &fstest.MapFile{Data: []byte("author: v2")}
+
+	ve, err := app.findHtmlViewEngine()
+	require.NoError(t, err)
+	require.NoError(t, ve.FileChanged(fsys, app, fsnotifyWriteEvent("content/post.yaml")))
+
+	req, _ = http.NewRequest("GET", srv.URL+"/content/post", nil)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	buf, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Contains(t, string(buf), "<p>v2</p>",
+		"yaml Write must rebuild the .md ContentView with new Params")
+	require.Equal(t, "v2", app.contentViews["GET /content/post"].Params["author"])
+}
+
+func TestFileChangedYamlRemoveClearsParams(t *testing.T) {
+	// Removing the sidecar must drop Params on the next request.
+	fsys := fstest.MapFS{
+		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"content/post.md":   {Data: []byte("# Hello")},
+		"content/post.yaml": {Data: []byte("author: soon-gone")},
+		"index.tpl":         {Data: []byte(`<!--layout:site-->{{define "content"}}{{if .Content.Params}}<p>{{.Content.Params.author}}</p>{{end}}{{end}}`)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Close()
+
+	require.NotNil(t, app.contentViews["GET /content/post"].Params)
+
+	// fs.ReadFile on a MapFS key returns ErrNotExist when the key is
+	// gone, so the remove event must actually drop the entry — mirroring
+	// what the OS-level remove does in production.
+	delete(fsys, "content/post.yaml")
+
+	ve, err := app.findHtmlViewEngine()
+	require.NoError(t, err)
+	require.NoError(t, ve.FileChanged(fsys, app, fsnotifyRemoveEvent("content/post.yaml")))
+
+	require.Nil(t, app.contentViews["GET /content/post"].Params,
+		"removing the sidecar must rebuild the .md with Params == nil")
+}
+
+func TestFileChangedYamlOrphanIgnored(t *testing.T) {
+	// A .yaml with no sibling .md must be ignored, not panic.
+	fsys := fstest.MapFS{
+		"content/stray.yaml": {Data: []byte("anything: goes")},
+	}
+	ve := &HtmlViewEngine{fsys: fsys, contentDirs: []string{"content"}}
+	ve.templates = map[string]*HtmlTemplate{}
+	app := &App{contentViews: map[string]*ContentView{}}
+
+	require.NoError(t, ve.FileChanged(fsys, app, fsnotifyWriteEvent("content/stray.yaml")))
+	require.Empty(t, app.contentViews)
+}
+
+// =============================================================================
 // helpers
 // =============================================================================
+
+// findHtmlViewEngine locates the *HtmlViewEngine registered on app.engines.
+// Returns an error if none is found so tests can fail loudly instead of
+// silently running against the wrong engine.
+func (app *App) findHtmlViewEngine() (*HtmlViewEngine, error) {
+	for _, e := range app.engines {
+		if hve, ok := e.(*HtmlViewEngine); ok {
+			return hve, nil
+		}
+	}
+	return nil, fs.ErrNotExist
+}
 
 // fakeFileInfo is a minimal fs.FileInfo used in tests.
 type fakeFileInfo struct {

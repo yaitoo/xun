@@ -169,22 +169,3 @@ func WithContentRenderer(
 		}
 	}
 }
-
-// WithContentMeta replaces the default metadata extraction with a custom
-// function. The default derives Title from the first # H1 and Description
-// from the first blockquote/paragraph, but you may want to read fields from
-// a sidecar file, an embedded database, or external metadata.
-//
-// The function receives the file path, raw bytes, and fs.FileInfo; it must
-// return a fully populated ContentView (Body is filled later by the renderer).
-func WithContentMeta(
-	fn func(path string, content []byte, fi fs.FileInfo) ContentView,
-) Option {
-	return func(app *App) {
-		for _, ve := range app.engines {
-			if hve, ok := ve.(*HtmlViewEngine); ok {
-				hve.metaExtractor = fn
-			}
-		}
-	}
-}
