@@ -22,7 +22,11 @@ var getLastMod = func(file string) time.Time {
 	return fi.ModTime()
 }
 
-func watch(file string, v *atomic.Value) {
+// watch reloads options from file whenever its modtime advances. The stop
+// channel is passed in (rather than read from a package-level variable)
+// so tests can use a bubble-local channel that is observable to
+// testing/synctest's fake clock.
+func watch(file string, v *atomic.Value, stopCh <-chan struct{}) {
 	lastMod := getLastMod(file)
 
 	ticker := time.NewTicker(ReloadInterval)
@@ -31,7 +35,7 @@ func watch(file string, v *atomic.Value) {
 	for {
 		select {
 		case <-ticker.C:
-		case <-stop:
+		case <-stopCh:
 			return
 		}
 
