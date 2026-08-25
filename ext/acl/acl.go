@@ -33,7 +33,7 @@ func New(opts ...Option) xun.Middleware { // skipcq: GO-R1005
 	v.Store(options)
 
 	if options.Config != "" {
-		go watch(options.Config, &v)
+		go watch(options.Config, &v, stop)
 	}
 
 	return func(next xun.HandleFunc) xun.HandleFunc {
