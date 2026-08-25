@@ -54,12 +54,14 @@ pages/                       ← Non-content pages (unchanged)
 
 content/                     ← Content directory (default; configurable via WithContentDir)
 ├── hello.md                 ← Auto-registered: GET /hello
+├── hello.yaml               ← Optional sidecar params for hello.md
 ├── hello.tpl                ← Bubble-up template for /hello (optional, sibling .md)
 ├── hello.html               ← Standalone page for /hello (optional, sibling .md)
 ├── 2026/
 │   ├── index.tpl            ← Bubble-up template for sibling .md files (no route)
 │   ├── index.md             ← Directory-level page: GET /2026/  (own H1, breadcrumb anchor)
 │   ├── deeper.md            ← Auto-registered: GET /2026/deeper
+│   ├── deeper.yaml          ← Optional sidecar params for deeper.md
 │   └── deeper.tpl           ← Optional specific template for /2026/deeper
 └── about.md                 ← Auto-registered: GET /about
 ```
@@ -85,6 +87,18 @@ Every `.md` file in the content directory auto-registers a route whose pattern i
 
 When a request matches a route that was registered from a `.md` file, the engine populates `ViewModel.Content` with a `*ContentView`. Templates reference it as `{{.Content.Title}}`, `{{.Content.Body}}`, etc. Templates that do not match a content route see `vm.Content == nil`.
 
+**Rule 1.4 — Sidecar params via `*.yaml`**
+
+A `.md` file may have an optional sibling `.yaml` with the same base name (e.g. `deeper.md` ↔ `deeper.yaml`). The YAML is parsed into `map[string]any` and exposed as `ContentView.Params`; templates access values via `{{.Content.Params.<key>}}`.
+
+- The YAML root must be a mapping; non-mapping roots are treated as no params.
+- Parse errors are logged but do not block the `.md` from loading — the route still registers with `Params == nil`.
+- AST-derived `Title` and `Description` are unaffected. YAML fields with the same names live in their own namespace under `.Content.Params` and do **not** override the AST values. There is no hook to override `Title` or `Description` — they are always AST-derived.
+- Hot reload: changes to a `.yaml` rebuild the sibling `.md`'s `ContentView`, so `Params` is always read from disk.
+- Only the `.yaml` extension is honored. The `.yml` suffix is intentionally not accepted.
+
+The `.yaml` is a pure key/value namespace. There is no schema, no validation, and no reserved key list — template authors define their own keys (e.g. `image`, `author`, `og`, `tags`).
+
 ---
 
 ## Section 2 — Data Types
@@ -99,10 +113,11 @@ type ContentView struct {
     Description string         // First blockquote (preferred) or top-level paragraph; empty if none
     Date        time.Time      // File mtime
     Body        template.HTML  // Rendered Markdown
+    Params      map[string]any // Parsed from sibling .yaml, if present; nil otherwise
 }
 ```
 
-Six fields. Two (`Title`, `Description`) come from Markdown semantics. Three (`Path`, `Slug`, `Date`) come from the filesystem. One (`Body`) comes from goldmark rendering.
+Seven fields. Two (`Title`, `Description`) come from Markdown semantics. Three (`Path`, `Slug`, `Date`) come from the filesystem. One (`Body`) comes from goldmark rendering. One (`Params`) comes from a sibling `.yaml` sidecar (see Rule 1.4).
 
 ### 2.2 `ViewModel` (defined in `viewer.go`, extended)
 
@@ -118,7 +133,7 @@ The new field is optional. Existing templates that never reference `.Content` co
 
 ### 2.3 No `ContentMeta` struct
 
-Earlier drafts proposed a `ContentMeta` struct with many YAML fields. That struct is removed. Anything beyond the six fields of `ContentView` is reachable via user-provided hooks (`WithContentMeta`) or `WithTemplateFunc`.
+Earlier drafts proposed a `ContentMeta` struct with many YAML fields. That struct is removed. Anything beyond the seven fields of `ContentView` is reachable via the sidecar `.yaml` (Section 1.4) or `WithTemplateFunc`.
 
 ---
 
@@ -196,10 +211,9 @@ The content engine is not a separate engine. It is a set of methods and one fiel
 ```go
 type HtmlViewEngine struct {
     // ... existing fields ...
-    md            *contentRenderer
-    contentDir    string                                      // default "content"
-    metaExtractor func(string, []byte, fs.FileInfo) ContentView // nil → use extractContentView
-    renderFn      func([]byte, string) (template.HTML, error)  // nil → use md.Render
+    md          *contentRenderer
+    contentDirs []string                                    // default ["content"]; empty disables
+    renderFn    func([]byte, string) (template.HTML, error) // nil → use md.Render
 }
 ```
 
@@ -256,12 +270,7 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
     fi, _ := fs.Stat(ve.fsys, mdPath)
 
     // 2. Extract metadata (filesystem + Markdown AST)
-    var cv ContentView
-    if ve.metaExtractor != nil {
-        cv = ve.metaExtractor(mdPath, buf, fi)
-    } else {
-        cv = extractContentView(mdPath, buf, fi, ve.md)
-    }
+    cv := extractContentView(mdPath, buf, fi, ve.contentDir, ve.md)
 
     // 3. Render Markdown → HTML
     var rendered template.HTML
@@ -279,6 +288,13 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath string) error {
         rendered = r
     }
     cv.Body = rendered
+
+    // 3.5 Load sidecar params from sibling .yaml, if present.
+    // Missing file → Params left nil; non-mapping root or parse
+    // error logged and Params left nil.
+    if params := ve.loadContentParams(mdPath); params != nil {
+        cv.Params = params
+    }
 
     // 4. Store in app.contentViews, keyed by route pattern
     pattern := "GET /" + cv.Slug
@@ -799,26 +815,23 @@ This is an escape hatch — most users never need it.
 
 ---
 
-## Section 11 — Escape Hatches (Three Options)
+## Section 11 — Escape Hatches (Two Options)
 
-The default implementation covers 90% of cases. Power users have three hooks, each replacing a default stage entirely:
+The default implementation covers 90% of cases. Power users have two hooks, each replacing a default stage entirely:
 
 ```go
 // 1. Replace the content directory (default "content")
-func WithContentDir(dir string) Option
+func WithContent(dirs ...string) Option
 
 // 2. Replace Markdown rendering entirely
 func WithContentRenderer(
     render func(content []byte, path string) (template.HTML, error),
 ) Option
-
-// 3. Replace metadata extraction entirely
-func WithContentMeta(
-    fn func(path string, content []byte, fi fs.FileInfo) ContentView,
-) Option
 ```
 
-These are the **only** user-facing options. Everything else is fixed by the principles above.
+These are the **only** user-facing options. Everything else (Title derivation, Slug derivation, Date source, Params loading) is fixed by the principles above.
+
+> **Note**: an earlier draft offered a third hook (`WithContentMeta`) for replacing the metadata extractor entirely. It has been removed — Title always comes from the first `# H1`, Description from the first blockquote/paragraph, Date from file mtime, and arbitrary key/value fields come from the sidecar `.yaml`. There is no remaining need to override these defaults.
 
 ---
 
@@ -847,7 +860,7 @@ The content engine is a **seven-file, ~150-line change** to `HtmlViewEngine`. It
 - One new file (`content.go`)
 - Three new fields (`ViewModel.Content`, `App.contentViews`, `HtmlViewEngine.md`)
 - Four new methods (`loadContentDir`, `loadContentFile`, `loadContentPage`, `bubbleUp`)
-- Three new options (`WithContentDir`, `WithContentRenderer`, `WithContentMeta`)
-- One hot-reload extension (`.md` branch in `FileChanged`)
+- Two new options (`WithContent`, `WithContentRenderer`)
+- One hot-reload extension (`.md` and `.yaml` branches in `FileChanged`)
 
 It does not add any new `Viewer`, any new routing interface, any new template pipeline, or any second layout directory. It does not inject any HTML structure into the Markdown output. The user's mental model is: "Markdown files are pages whose content lives in `.Content.*`."

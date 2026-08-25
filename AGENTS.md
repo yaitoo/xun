@@ -320,6 +320,5 @@ xun wraps the writer to do error-to-status mapping and middleware plumbing, but 
 | Compression | `xun.WithCompressor(&xun.GzipCompressor{}, &xun.DeflateCompressor{})` |
 | Markdown content | `xun.WithContent("blog", "docs")` + `.md` files in those dirs |
 | Custom Markdown renderer | `xun.WithContentRenderer(fn)` |
-| Custom metadata extractor | `xun.WithContentMeta(fn)` |
 | **Escape hatch for raw handlers** | `app.Mux().HandleFunc(pattern, h)` — bypasses all middleware |
 | Hijack conn (WebSocket / SSE) | `app.Mux().HandleFunc(...)` + `w.(http.Hijacker).Hijack()` |

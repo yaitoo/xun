@@ -17,10 +17,13 @@ import (
 // ContentView is the data exposed to templates via .Content for routes that
 // were registered from a .md file.
 //
-// Six fields:
+// Seven fields:
 //   - Title, Description are derived from Markdown semantics (AST walk).
 //   - Path, Slug, Date come from the filesystem.
 //   - Body is the rendered HTML produced by goldmark.
+//   - Params holds arbitrary key/value pairs from a sibling .yaml sidecar
+//     (see loadContentFile). Template authors define their own keys;
+//     no schema is enforced.
 type ContentView struct {
 	Path        string         // "content/2026/deeper.md"
 	Slug        string         // "2026/deeper"
@@ -28,6 +31,7 @@ type ContentView struct {
 	Description string         // First blockquote (preferred) or top-level paragraph; empty if none
 	Date        time.Time      // File mtime
 	Body        template.HTML  // Rendered Markdown
+	Params      map[string]any // Parsed from sibling .yaml, if present; nil otherwise
 }
 
 // contentRenderer wraps goldmark with GFM and exposes its parser so that

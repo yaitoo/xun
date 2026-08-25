@@ -294,7 +294,8 @@ type ContentView struct {
 
 - `xun.WithContent(dirs ...string)` — register one or more content directories (default `["content"]`). Passing `""` disables Markdown loading. Each directory doubles as a route prefix, so `WithContent("blog", "docs")` produces independent `/blog/...` and `/docs/...` trees.
 - `xun.WithContentRenderer(fn)` — replace the default Markdown renderer. Use this to plug in syntax highlighting, AST transforms, or a fully-configured `goldmark` instance.
-- `xun.WithContentMeta(fn)` — replace the default metadata extractor (e.g. to read a sidecar file or external database). The function returns a populated `ContentView`; the engine fills `Body` afterwards.
+
+Custom key/value metadata (image, author, OG tags, etc.) is read from a sibling `.yaml` next to each `.md`. See `docs/content.md` §1.4 for the full convention.
 
 #### A minimal example
 ```go
