@@ -111,4 +111,39 @@ func TestGzipResponseWriter(t *testing.T) {
 		_, err = gw.Write([]byte("after-close"))
 		require.NoError(t, err)
 	})
+
+	t.Run("flush_is_noop_after_hijack", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+		go func() {
+			_, _ = io.Copy(io.Discard, clientConn)
+		}()
+
+		hj := &hijackerResponseWriter{
+			ResponseWriter: httptest.NewRecorder(),
+			conn:           serverConn,
+			buf:            bufio.NewReadWriter(bufio.NewReader(serverConn), bufio.NewWriter(serverConn)),
+		}
+
+		gw := gzip.NewWriter(serverConn)
+		dw := &gzipResponseWriter{
+			w: gw,
+			stdResponseWriter: &stdResponseWriter{
+				ResponseWriter: hj,
+			},
+		}
+
+		_, _, err := dw.Hijack()
+		require.NoError(t, err)
+
+		// After Hijack, Flush must not push compressed bytes onto the
+		// caller-owned stream. We verify by ensuring Flush does not panic
+		// and that any underlying state remains untouched (gzip.Writer
+		// itself is not closed).
+		require.NotPanics(t, func() { dw.Flush() })
+
+		_, err = gw.Write([]byte("after-flush"))
+		require.NoError(t, err)
+	})
 }

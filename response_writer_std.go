@@ -62,7 +62,9 @@ func (rw *stdResponseWriter) Write(b []byte) (int, error) {
 }
 
 // Flush sends any buffered data to the client. It implements the http.Flusher interface,
-// allowing the response writer to flush the response immediately.
+// allowing the response writer to flush the response immediately. When the wrapped
+// ResponseWriter does not implement http.Flusher (e.g. some test recorders), Flush is a
+// no-op.
 func (rw *stdResponseWriter) Flush() {
 	f, ok := rw.ResponseWriter.(http.Flusher)
 	if ok {
@@ -86,13 +88,25 @@ func NewResponseWriter(rw http.ResponseWriter) ResponseWriter {
 // raw access to the underlying connection, such as WebSocket upgrades.
 //
 // Calling Hijack transfers ownership of the connection to the caller.
-// After Hijack, compression wrappers (gzip, deflate) skip their trailer
-// flush on Close so the caller-owned bytes are not corrupted.
+// After a successful Hijack, compression wrappers (gzip, deflate) skip
+// their trailer flush on Close so the caller-owned bytes are not corrupted.
+// The hijacked flag is set only on success: if Hijack returns an error,
+// the wrapper keeps working through the encoder as before.
+//
+// Body writes before Hijack are at the caller's risk: gzip/deflate buffers
+// response bytes internally; if a body has been written and Hijack is then
+// called, the gzipResponseWriter / deflateResponseWriter Hijack flushes the
+// encoder before transferring ownership. Callers should generally write
+// only headers (and WriteHeader for the upgrade status) before Hijack.
 func (rw *stdResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	h, ok := rw.ResponseWriter.(http.Hijacker)
 	if !ok {
 		return nil, nil, errors.New("xun: underlying ResponseWriter does not implement Hijacker")
 	}
+	conn, buf, err := h.Hijack()
+	if err != nil {
+		return nil, nil, err
+	}
 	rw.hijacked = true
-	return h.Hijack()
+	return conn, buf, nil
 }

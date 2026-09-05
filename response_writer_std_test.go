@@ -2,6 +2,7 @@ package xun
 
 import (
 	"bufio"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -63,6 +64,33 @@ func TestStdResponseWriter_Hijack_NotSupported(t *testing.T) {
 	_, _, err := std.Hijack()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "does not implement Hijacker")
+	require.False(t, std.hijacked, "hijacked flag must not be set when type assertion fails")
+}
+
+// errorHijacker is an http.ResponseWriter + http.Hijacker that returns a
+// fixed error from Hijack. It verifies that *stdResponseWriter.Hijack does
+// not set the hijacked flag when the underlying Hijack fails — the wrapper
+// must keep working through the encoder as if Hijack had not been called.
+type errorHijacker struct {
+	http.ResponseWriter
+	err error
+}
+
+func (h *errorHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return nil, nil, h.err
+}
+
+func TestStdResponseWriter_Hijack_UnderlyingErrorDoesNotSetFlag(t *testing.T) {
+	hijackErr := errors.New("simulated underlying hijack failure")
+	hj := &errorHijacker{
+		ResponseWriter: httptest.NewRecorder(),
+		err:            hijackErr,
+	}
+	std := &stdResponseWriter{ResponseWriter: hj}
+
+	_, _, err := std.Hijack()
+	require.ErrorIs(t, err, hijackErr)
+	require.False(t, std.hijacked, "hijacked flag must NOT be set when underlying Hijack returns an error")
 }
 
 func TestResponseWriter_ImplementsFlusherAndHijacker(t *testing.T) {

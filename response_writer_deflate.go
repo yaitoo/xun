@@ -1,7 +1,9 @@
 package xun
 
 import (
+	"bufio"
 	"compress/flate"
+	"net"
 )
 
 // deflateResponseWriter is a custom http.ResponseWriter that wraps the standard
@@ -30,11 +32,27 @@ func (rw *deflateResponseWriter) Close() {
 	rw.w.Close() // nolint: errcheck
 }
 
-// Flush writes any buffered data to the underlying writer and ensures that
-// the response is sent to the client. It locks the response writer to
-// prevent concurrent writes, flushes the compressed data, and then
-// flushes the standard response writer.
+// Flush writes any buffered data to the underlying writer and then flushes
+// the standard response writer. After Hijack transfers ownership of the
+// underlying connection, Flush is a no-op so compressed bytes are not
+// written onto the caller-owned stream.
 func (rw *deflateResponseWriter) Flush() {
+	if rw.hijacked {
+		return
+	}
 	rw.w.Flush() // nolint: errcheck
 	rw.stdResponseWriter.Flush()
+}
+
+// Hijack implements http.Hijacker. Before transferring ownership to the
+// caller, the deflate writer is flushed so any bytes already written through
+// the encoder are not lost. Callers should generally write only the upgrade
+// status and headers before Hijack — body writes before Hijack are at the
+// caller's risk because the compressed stream and the raw post-hijack
+// bytes share the same conn.
+func (rw *deflateResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if rw.w != nil {
+		_ = rw.w.Flush()
+	}
+	return rw.stdResponseWriter.Hijack()
 }
