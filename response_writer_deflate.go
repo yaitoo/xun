@@ -21,7 +21,12 @@ func (rw *deflateResponseWriter) Write(p []byte) (int, error) {
 
 // Close closes the underlying writer, flushing any buffered data to the client.
 // It is important to call this method to ensure all data is properly sent.
+// If Hijack has transferred ownership of the connection to the caller, Close
+// is a no-op so the deflate trailer is not written onto the caller-owned stream.
 func (rw *deflateResponseWriter) Close() {
+	if rw.hijacked {
+		return
+	}
 	rw.w.Close() // nolint: errcheck
 }
 

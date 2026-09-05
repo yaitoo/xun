@@ -20,7 +20,12 @@ func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
 }
 
 // Close closes the gzipResponseWriter, ensuring that the underlying writer is also closed.
+// If Hijack has transferred ownership of the connection to the caller, Close
+// is a no-op so the gzip trailer is not written onto the caller-owned stream.
 func (rw *gzipResponseWriter) Close() {
+	if rw.hijacked {
+		return
+	}
 	rw.w.Close() // nolint: errcheck
 }
 
