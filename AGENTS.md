@@ -285,7 +285,20 @@ app.Mux().HandleFunc("GET /api/ws", wsHandler(hub))
 - If the native handler needs the same auth as the rest of the app, replicate the session/cookie check on the raw `*http.Request`. There's no compile-time check that native and xun-managed auth agree — keep them in sync.
 
 ### Motivating use case — WebSocket
-xun wraps the writer to do error-to-status mapping and middleware plumbing, but the wrapper has no `Hijacker()`. WebSocket upgrades therefore MUST go through `app.Mux()` and call `w.(http.Hijacker).Hijack()` themselves, then write the `101 Switching Protocols` response by hand.
+The wrapped `ResponseWriter` exposes both `http.Flusher` and `http.Hijacker`, so WebSocket upgrades can stay inside `HandleFunc` and run the normal `app.Use` / `group.Use` middleware chain:
+
+```go
+app.Get("/api/ws", func(c *xun.Context) error {
+    conn, buf, err := c.Response.Hijack()
+    if err != nil {
+        return err
+    }
+    defer conn.Close()
+    // upgrade handshake + WebSocket framing on `conn` / `buf`...
+})
+```
+
+`app.Mux()` is still the right escape hatch for third-party `http.Handler` integrations (Prometheus, pprof, OpenTelemetry) and for low-precedence 404 fallbacks, but it is no longer required for raw-protocol handlers.
 
 ## 22) Cheat sheet
 | Need | API |
@@ -321,4 +334,7 @@ xun wraps the writer to do error-to-status mapping and middleware plumbing, but 
 | Markdown content | `xun.WithContent("blog", "docs")` + `.md` files in those dirs |
 | Custom Markdown renderer | `xun.WithContentRenderer(fn)` |
 | **Escape hatch for raw handlers** | `app.Mux().HandleFunc(pattern, h)` — bypasses all middleware |
-| Hijack conn (WebSocket / SSE) | `app.Mux().HandleFunc(...)` + `w.(http.Hijacker).Hijack()` |
+| Hijack conn (WebSocket / SSE) | `app.HandleFunc(...)` + `c.Response.Hijack()` — runs middleware |
+| Flush streaming response | `c.Response.Flush()` (SSE, chunked transfer) |
+| Enumerate registered routes | `app.Routes()` (returns `[]string` in `METHOD pattern` form) |
+| Look up a specific route | `app.HasRoute(method, pattern)` |

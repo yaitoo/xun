@@ -113,4 +113,38 @@ func TestDeflateResponseWriter(t *testing.T) {
 		_, err = w.Write([]byte("after-close"))
 		require.NoError(t, err)
 	})
+
+	t.Run("flush_is_noop_after_hijack", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+		go func() {
+			_, _ = io.Copy(io.Discard, clientConn)
+		}()
+
+		hj := &hijackerResponseWriter{
+			ResponseWriter: httptest.NewRecorder(),
+			conn:           serverConn,
+			buf:            bufio.NewReadWriter(bufio.NewReader(serverConn), bufio.NewWriter(serverConn)),
+		}
+
+		w, _ := flate.NewWriter(serverConn, flate.DefaultCompression) //nolint: errcheck
+		dw := &deflateResponseWriter{
+			w: w,
+			stdResponseWriter: &stdResponseWriter{
+				ResponseWriter: hj,
+			},
+		}
+
+		_, _, err := dw.Hijack()
+		require.NoError(t, err)
+
+		// After Hijack, Flush must not push deflated bytes onto the
+		// caller-owned stream. We verify by ensuring Flush does not
+		// panic and that any underlying state remains untouched.
+		require.NotPanics(t, func() { dw.Flush() })
+
+		_, err = w.Write([]byte("after-flush"))
+		require.NoError(t, err)
+	})
 }

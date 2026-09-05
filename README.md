@@ -724,11 +724,18 @@ func handleDashboard(c *xun.Context) error {
 | `c.View(data, "views/users/list")` | For shared partials under `app/views/` that have no owning route. |
 
 ### `app.Mux()` — the raw-mux escape hatch
-`app.Mux()` returns the underlying `*http.ServeMux`. Use it only when you need the **raw `http.ResponseWriter`** — WebSocket / SSE upgrades (`http.Hijacker`), third-party `http.Handler` integrations (Prometheus, pprof, OpenTelemetry), or low-precedence 404 fallbacks.
+`app.Mux()` returns the underlying `*http.ServeMux`. Use it only when you need to hand a request to a third-party `http.Handler` that doesn't fit xun's `HandleFunc` shape — Prometheus exporter, pprof, OpenTelemetry collector, low-precedence 404 fallbacks, or any library that returns a concrete `http.Handler`.
+
+The wrapped `ResponseWriter` already exposes `http.Flusher` and `http.Hijacker`, so WebSocket / SSE handlers do **not** need `app.Mux()`. Stay in `HandleFunc` and run the normal `app.Use` / `group.Use` middleware chain:
 
 ```go
 // routes.go
-app.Mux().HandleFunc("GET /api/ws", wsHandler(hub))
+app.Get("/api/ws", func(c *xun.Context) error {
+    conn, buf, err := c.Response.Hijack()
+    if err != nil { return err }
+    defer conn.Close()
+    // upgrade handshake + WebSocket framing on `conn` / `buf`...
+})
 ```
 
 Bypasses everything xun-managed — middleware, content negotiation, error-to-status mapping, access logs, even `X-Log-Id`. If the handler needs the same auth as the rest of the app, you must replicate it on the raw request. If you skip `WithMux(http.NewServeMux())` and fall back to `http.DefaultServeMux`, you pollute global state — always pass your own mux to `xun.New`.
