@@ -13,9 +13,15 @@ type deflateResponseWriter struct {
 	w *flate.Writer
 }
 
-// Write writes the data to the underlying gzip writer.
+// Write writes the data to the underlying deflate writer.
 // It implements the io.Writer interface.
+//
+// After a successful Hijack, Write is a no-op so the deflate encoder does not
+// emit compressed bytes onto the caller-owned stream.
 func (rw *deflateResponseWriter) Write(p []byte) (int, error) {
+	if rw.hijacked {
+		return len(p), nil
+	}
 	n, err := rw.w.Write(p)
 	rw.bodySentBytes += n
 	return n, err

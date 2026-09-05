@@ -1150,3 +1150,64 @@ func TestHandleFunc_HijackEndToEnd(t *testing.T) {
 	require.Contains(t, body, "101 Switching Protocols")
 	require.Contains(t, body, "hello-from-hijacked-conn")
 }
+
+// TestHandleFunc_HijackThenHandlerError covers the scenario where a handler
+// hijacks the conn successfully and then returns an error. The mux closure
+// runs the framework error-to-status path (X-Log-Id, 500, error log).
+// Those must not write to the caller-owned conn — otherwise the upgrade
+// response is corrupted.
+func TestHandleFunc_HijackThenHandlerError(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux))
+	defer app.Close()
+
+	handlerErr := errors.New("handler failed after hijack")
+
+	app.Get("/upgrade", func(c *Context) error {
+		conn, buf, err := c.Response.Hijack()
+		if err != nil {
+			return err
+		}
+		_, _ = buf.Writer.WriteString("HTTP/1.1 101 Switching Protocols\r\n" +
+			"Upgrade: custom\r\n" +
+			"\r\n" +
+			"hello")
+		_ = buf.Writer.Flush()
+		// Close the server-side conn so srv.Close doesn't block waiting
+		// for the per-connection goroutine. The client-side conn in the
+		// test reads "hello" before this close completes.
+		_ = conn.Close()
+		return handlerErr
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	addr := strings.TrimPrefix(srv.URL, "http://")
+	conn, err := net.Dial("tcp", addr)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.Write([]byte(
+		"GET /upgrade HTTP/1.1\r\n" +
+			"Host: " + addr + "\r\n" +
+			"Connection: Upgrade\r\n" +
+			"\r\n"))
+	require.NoError(t, err)
+
+	raw, err := io.ReadAll(conn)
+	require.NoError(t, err)
+
+	body := string(raw)
+	require.Contains(t, body, "101 Switching Protocols")
+	require.Contains(t, body, "hello")
+	// Critical: the framework error path (500 + X-Log-Id header + body)
+	// must NOT have been written to the conn. Verify the conn ends
+	// exactly at "hello" with no trailing HTTP status.
+	require.False(t, strings.Contains(body, "500"),
+		"framework error write must not reach the hijacked conn: %q", body)
+	require.False(t, strings.Contains(body, "X-Log-Id"),
+		"framework header write must not reach the hijacked conn: %q", body)
+	require.False(t, strings.Contains(body, "Internal Server Error"),
+		"framework body write must not reach the hijacked conn: %q", body)
+}

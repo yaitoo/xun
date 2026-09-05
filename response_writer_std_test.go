@@ -3,6 +3,7 @@ package xun
 import (
 	"bufio"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -104,4 +105,40 @@ func TestResponseWriter_FlushSucceedsOnRecorder(t *testing.T) {
 	rw := NewResponseWriter(rec)
 	// Should not panic; httptest.ResponseRecorder implements http.Flusher.
 	rw.Flush()
+}
+
+// After a successful Hijack, the framework error-to-status path (mux closure
+// writes X-Log-Id + 500 + body) must NOT reach the caller-owned conn. We
+// verify by hijacking, then driving the wrapper as the framework would when
+// the handler returns an error: WriteHeader(500), Write("body"). None of
+// these may hit the underlying writer.
+func TestStdResponseWriter_PostHijackWritesAreNoOps(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+	go func() {
+		_, _ = io.Copy(io.Discard, clientConn)
+	}()
+
+	hj := &hijackerResponseWriter{
+		ResponseWriter: httptest.NewRecorder(),
+		conn:           serverConn,
+		buf:            bufio.NewReadWriter(bufio.NewReader(serverConn), bufio.NewWriter(serverConn)),
+	}
+
+	std := &stdResponseWriter{ResponseWriter: hj}
+	_, _, err := std.Hijack()
+	require.NoError(t, err)
+	require.True(t, std.hijacked)
+
+	// Simulate framework error-to-status path. None of these may reach the
+	// underlying writer or the conn.
+	std.WriteHeader(http.StatusInternalServerError)
+	n, err := std.Write([]byte("framework error body"))
+	require.NoError(t, err)
+	require.Equal(t, 0, n)
+	std.Flush()
+
+	// StatusCode should still report OK because nothing was actually written.
+	require.Equal(t, http.StatusOK, std.StatusCode())
 }
