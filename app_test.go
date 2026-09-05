@@ -1028,3 +1028,125 @@ func TestMux(t *testing.T) {
 		require.Equal(t, 1, hits)
 	})
 }
+
+func TestAppRoutes_Snapshot(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux))
+	defer app.Close()
+
+	app.Get("/a", func(c *Context) error { return nil })
+	app.Post("/b", func(c *Context) error { return nil })
+	app.Delete("/c", func(c *Context) error { return nil })
+
+	routes := app.Routes()
+	require.ElementsMatch(t, []string{"GET /a", "POST /b", "DELETE /c"}, routes)
+
+	// returned slice is independent of app.routes — mutating it must not
+	// leak into the next snapshot.
+	routes[0] = "mutated"
+	routes2 := app.Routes()
+	for _, r := range routes2 {
+		require.NotEqual(t, "mutated", r)
+	}
+}
+
+func TestAppRoutes_Empty(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux))
+	defer app.Close()
+
+	routes := app.Routes()
+	require.NotNil(t, routes)
+	require.Len(t, routes, 0)
+}
+
+func TestAppHasRoute(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux))
+	defer app.Close()
+
+	app.Get("/a", func(c *Context) error { return nil })
+
+	require.True(t, app.HasRoute("GET", "/a"))
+	require.False(t, app.HasRoute("GET", "/b"))
+	require.False(t, app.HasRoute("POST", "/a"))
+	require.False(t, app.HasRoute("", "/a"))
+}
+
+func TestAppRoutes_IncludesHandlePage(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux))
+	defer app.Close()
+
+	app.HandlePage("GET /p", "p", &StringViewer{})
+
+	routes := app.Routes()
+	require.ElementsMatch(t, []string{"GET /p"}, routes)
+}
+
+func TestAppRoutes_IncludesHandleFile(t *testing.T) {
+	mux := http.NewServeMux()
+	fsys := fstest.MapFS{
+		"example.txt": &fstest.MapFile{Data: []byte("hi")},
+	}
+	app := New(WithMux(mux), WithFsys(fsys))
+	defer app.Close()
+
+	app.HandleFile("example.txt", &FileViewer{
+		fsys: fsys,
+		path: "example.txt",
+	})
+
+	routes := app.Routes()
+	require.Contains(t, routes, "GET /example.txt")
+}
+
+// TestHandleFunc_HijackEndToEnd verifies that c.Response.Hijack() works
+// end-to-end against a real net/http server: the caller takes over the
+// connection and writes a custom response. This is the path used by
+// WebSocket and other raw-protocol integrations.
+func TestHandleFunc_HijackEndToEnd(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux))
+	defer app.Close()
+
+	app.Get("/upgrade", func(c *Context) error {
+		conn, buf, err := c.Response.Hijack()
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		_, _ = buf.Writer.WriteString("HTTP/1.1 101 Switching Protocols\r\n" +
+			"Upgrade: custom\r\n" +
+			"Connection: Upgrade\r\n" +
+			"\r\n" +
+			"hello-from-hijacked-conn")
+		_ = buf.Writer.Flush()
+		return nil
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	addr := strings.TrimPrefix(srv.URL, "http://")
+	conn, err := net.Dial("tcp", addr)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.Write([]byte(
+		"GET /upgrade HTTP/1.1\r\n" +
+			"Host: " + addr + "\r\n" +
+			"Connection: Upgrade\r\n" +
+			"\r\n"))
+	require.NoError(t, err)
+
+	// Read the raw response from the hijacked connection. We don't go
+	// through net/http.Client because it would refuse to surface a 101
+	// at this layer.
+	raw, err := io.ReadAll(conn)
+	require.NoError(t, err)
+
+	body := string(raw)
+	require.Contains(t, body, "101 Switching Protocols")
+	require.Contains(t, body, "hello-from-hijacked-conn")
+}

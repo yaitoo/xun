@@ -1,12 +1,22 @@
 package xun
 
-import "net/http"
+import (
+	"bufio"
+	"errors"
+	"net"
+	"net/http"
+)
 
 // stdResponseWriter is a wrapper around http.ResponseWriter to implement the ResponseWriter interface.
 type stdResponseWriter struct {
 	http.ResponseWriter
 	bodySentBytes int
 	statusCode    int
+	// hijacked is set true after Hijack transfers ownership of the underlying
+	// connection to the caller. Compression wrappers (gzip, deflate) consult
+	// this flag to avoid writing their trailer bytes onto a connection the
+	// caller now owns.
+	hijacked bool
 }
 
 // Close implements the ResponseWriter interface Close method.
@@ -64,4 +74,25 @@ func (rw *stdResponseWriter) Flush() {
 // It returns a pointer to a stdResponseWriter, which implements the ResponseWriter interface.
 func NewResponseWriter(rw http.ResponseWriter) ResponseWriter {
 	return &stdResponseWriter{ResponseWriter: rw}
+}
+
+// Hijack implements the http.Hijacker interface. It returns the underlying
+// net.Conn and *bufio.ReadWriter from the wrapped http.ResponseWriter when
+// the wrapped writer itself implements http.Hijacker (e.g. *http.response
+// from a real net/http server). When the wrapped writer does not implement
+// http.Hijacker (e.g. httptest.ResponseRecorder), Hijack returns an error.
+//
+// Use Hijack from a HandleFunc to integrate with handlers that require
+// raw access to the underlying connection, such as WebSocket upgrades.
+//
+// Calling Hijack transfers ownership of the connection to the caller.
+// After Hijack, compression wrappers (gzip, deflate) skip their trailer
+// flush on Close so the caller-owned bytes are not corrupted.
+func (rw *stdResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := rw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("xun: underlying ResponseWriter does not implement Hijacker")
+	}
+	rw.hijacked = true
+	return h.Hijack()
 }

@@ -160,6 +160,34 @@ func (app *App) Close() {
 	defer app.mu.Unlock()
 }
 
+// Routes returns a snapshot of every route currently registered on the App,
+// including those registered via HandlePage (i.e. auto-discovered from
+// WithFsys(pages/)) and HandleFile. Each entry is in the canonical
+// "METHOD pattern" form (e.g. "GET /dash/users/{id}"); see HandleFunc / Get /
+// Post / Put / Delete for the input format.
+//
+// The returned slice is a copy; callers may iterate it without holding any
+// lock on the App. Registration is expected to complete before Routes is
+// called. Calling Routes concurrently with HandleFunc / HandlePage /
+// HandleFile (e.g. during hot-reload) is not supported.
+//
+// The order of entries in the returned slice is not stable across calls;
+// sort the result if a stable order is required.
+func (app *App) Routes() []string {
+	out := make([]string, 0, len(app.routes))
+	for pat := range app.routes {
+		out = append(out, pat)
+	}
+	return out
+}
+
+// HasRoute reports whether a route is registered for the given (method,
+// pattern) pair. Cheaper than scanning Routes().
+func (app *App) HasRoute(method, pattern string) bool {
+	_, ok := app.routes[method+" "+pattern]
+	return ok
+}
+
 // Mux returns the underlying *http.ServeMux. It is an escape hatch for
 // registering native http.Handlers directly, bypassing xun's routing
 // layer (middlewares, the viewer / content-negotiation path, and the
@@ -178,7 +206,8 @@ func (app *App) Close() {
 // via Mux bypass ALL middleware (both app.Use and group.Use) and are
 // fully responsible for their own status, headers, body, and logging;
 // they do not produce X-Log-Id on failure. Routes registered via Mux
-// are NOT listed by app.Start() — that method only iterates app.routes.
+// are NOT listed by app.Start() or app.Routes() — both methods only
+// iterate app.routes.
 //
 // Caveats:
 //
