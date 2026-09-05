@@ -146,4 +146,43 @@ func TestGzipResponseWriter(t *testing.T) {
 		_, err = gw.Write([]byte("after-flush"))
 		require.NoError(t, err)
 	})
+
+	t.Run("post_hijack_writes_are_noops", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+		go func() {
+			_, _ = io.Copy(io.Discard, clientConn)
+		}()
+
+		hj := &hijackerResponseWriter{
+			ResponseWriter: httptest.NewRecorder(),
+			conn:           serverConn,
+			buf:            bufio.NewReadWriter(bufio.NewReader(serverConn), bufio.NewWriter(serverConn)),
+		}
+
+		gw := gzip.NewWriter(serverConn)
+		dw := &gzipResponseWriter{
+			w: gw,
+			stdResponseWriter: &stdResponseWriter{
+				ResponseWriter: hj,
+			},
+		}
+
+		_, _, err := dw.Hijack()
+		require.NoError(t, err)
+
+		// Framework error path: WriteHeader + Write + Flush must all be
+		// no-ops after Hijack. We verify they don't panic and don't
+		// write to the conn.
+		require.NotPanics(t, func() {
+			dw.WriteHeader(http.StatusInternalServerError)
+			_, _ = dw.Write([]byte("framework error"))
+			dw.Flush()
+		})
+
+		// gw must still be open (Close() skipped because hijacked).
+		_, err = gw.Write([]byte("still-open"))
+		require.NoError(t, err)
+	})
 }

@@ -28,7 +28,14 @@ func (*stdResponseWriter) Close() {
 // It ensures that the header is only written once by checking if the statusCode
 // has already been set. If the statusCode is zero, it updates the statusCode
 // and calls the underlying ResponseWriter's WriteHeader method to send the header.
+//
+// After a successful Hijack, WriteHeader is a no-op: the underlying connection
+// is now owned by the caller, and framework writes (e.g. the mux closure's
+// error-to-status path) must not corrupt the caller's protocol stream.
 func (rw *stdResponseWriter) WriteHeader(statusCode int) {
+	if rw.hijacked {
+		return
+	}
 	if rw.statusCode == 0 {
 		rw.statusCode = statusCode
 		rw.ResponseWriter.WriteHeader(statusCode)
@@ -53,7 +60,16 @@ func (rw *stdResponseWriter) BodyBytesSent() int {
 
 // Write writes the data to the underlying ResponseWriter and tracks the number of bytes sent.
 // It returns the number of bytes written and any error encountered during the write operation.
+//
+// After a successful Hijack, Write is a no-op: the underlying connection is owned
+// by the caller, and any further write through the wrapper would corrupt the
+// caller-owned protocol stream. Write reports 0 bytes written and a nil error
+// so framework error handling (which ignores Write's return value) does not
+// produce spurious errors after a successful Hijack.
 func (rw *stdResponseWriter) Write(b []byte) (int, error) {
+	if rw.hijacked {
+		return 0, nil
+	}
 	n, err := rw.ResponseWriter.Write(b)
 
 	rw.bodySentBytes = rw.bodySentBytes + n
@@ -65,7 +81,14 @@ func (rw *stdResponseWriter) Write(b []byte) (int, error) {
 // allowing the response writer to flush the response immediately. When the wrapped
 // ResponseWriter does not implement http.Flusher (e.g. some test recorders), Flush is a
 // no-op.
+//
+// After a successful Hijack, Flush is a no-op: the underlying connection is owned
+// by the caller, and any flush through the wrapper would write to the caller-owned
+// stream.
 func (rw *stdResponseWriter) Flush() {
+	if rw.hijacked {
+		return
+	}
 	f, ok := rw.ResponseWriter.(http.Flusher)
 	if ok {
 		f.Flush()

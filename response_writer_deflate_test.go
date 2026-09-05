@@ -147,4 +147,42 @@ func TestDeflateResponseWriter(t *testing.T) {
 		_, err = w.Write([]byte("after-flush"))
 		require.NoError(t, err)
 	})
+
+	t.Run("post_hijack_writes_are_noops", func(t *testing.T) {
+		serverConn, clientConn := net.Pipe()
+		defer serverConn.Close()
+		defer clientConn.Close()
+		go func() {
+			_, _ = io.Copy(io.Discard, clientConn)
+		}()
+
+		hj := &hijackerResponseWriter{
+			ResponseWriter: httptest.NewRecorder(),
+			conn:           serverConn,
+			buf:            bufio.NewReadWriter(bufio.NewReader(serverConn), bufio.NewWriter(serverConn)),
+		}
+
+		w, _ := flate.NewWriter(serverConn, flate.DefaultCompression) //nolint: errcheck
+		dw := &deflateResponseWriter{
+			w: w,
+			stdResponseWriter: &stdResponseWriter{
+				ResponseWriter: hj,
+			},
+		}
+
+		_, _, err := dw.Hijack()
+		require.NoError(t, err)
+
+		// Framework error path: WriteHeader + Write + Flush must all be
+		// no-ops after Hijack.
+		require.NotPanics(t, func() {
+			dw.WriteHeader(http.StatusInternalServerError)
+			_, _ = dw.Write([]byte("framework error"))
+			dw.Flush()
+		})
+
+		// w must still be open.
+		_, err = w.Write([]byte("still-open"))
+		require.NoError(t, err)
+	})
 }

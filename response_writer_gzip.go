@@ -15,7 +15,13 @@ type gzipResponseWriter struct {
 
 // Write writes the data to the underlying gzip writer.
 // It implements the io.Writer interface.
+//
+// After a successful Hijack, Write is a no-op so the gzip encoder does not
+// emit compressed bytes onto the caller-owned stream.
 func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
+	if rw.hijacked {
+		return len(p), nil
+	}
 	n, err := rw.w.Write(p)
 	rw.bodySentBytes += n
 	return n, err
