@@ -26,9 +26,12 @@ type deflateResponseWriter struct {
 // It implements the io.Writer interface.
 //
 // After a successful Hijack, Write is a no-op so the deflate encoder does not
-// emit compressed bytes onto the caller-owned stream.
+// emit compressed bytes onto the caller-owned stream. After Close, Write is
+// also a no-op so a stray write through a wrapper whose encoder has already
+// been returned to the pool does not panic on the nil rw.w nor pull a
+// fresh encoder out of the pool into a half-closed wrapper.
 func (rw *deflateResponseWriter) Write(p []byte) (int, error) {
-	if rw.hijacked {
+	if rw.hijacked || rw.closed {
 		return len(p), nil
 	}
 	n, err := rw.w.Write(p)
@@ -69,9 +72,10 @@ func (rw *deflateResponseWriter) Close() {
 // Flush writes any buffered data to the underlying writer and then flushes
 // the standard response writer. After Hijack transfers ownership of the
 // underlying connection, Flush is a no-op so compressed bytes are not
-// written onto the caller-owned stream.
+// written onto the caller-owned stream. After Close, Flush is also a
+// no-op so a stray flush does not panic on the nil rw.w.
 func (rw *deflateResponseWriter) Flush() {
-	if rw.hijacked {
+	if rw.hijacked || rw.closed {
 		return
 	}
 	rw.w.Flush() // nolint: errcheck
