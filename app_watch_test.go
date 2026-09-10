@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -427,5 +428,43 @@ func TestCloseWithoutWatchIsNoop(t *testing.T) {
 	require.NotPanics(t, func() {
 		app.Close()
 		app.Close()
+	})
+}
+
+// unwalkableFS fails every Open, which is enough to make fs.WalkDir — and so
+// Watcher.Add — return an error. It stands in for a real WithFsys pointed at a
+// directory that does not exist.
+type unwalkableFS struct{}
+
+func (unwalkableFS) Open(string) (fs.File, error) { return nil, fs.ErrNotExist }
+
+// TestCloseAfterWatcherAddFailed covers app.go's watcher-add error branch,
+// where the App keeps a non-nil watcher but never starts one: New logs the
+// failure and skips enableHotReload, so nothing is ever received on the
+// watcher's done channel.
+//
+// That combination is what makes Close interesting here. Stop signals by
+// closing done rather than sending on it, so it does not need a receiver — but
+// the obvious "fix" for #132, a blocking send, would hang the caller forever on
+// exactly this path. The synctest bubble is the assertion: a Close that blocks
+// leaves the root goroutine stuck with nothing to wake it, which fails as a
+// deadlock.
+//
+// The empty WithViewEngines keeps the engines away from the broken fs so this
+// stays a test about the watcher branch alone.
+func TestCloseAfterWatcherAddFailed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		app := New(
+			WithMux(http.NewServeMux()),
+			WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil))),
+			WithFsys(unwalkableFS{}),
+			WithWatch(),
+			WithViewEngines(),
+		)
+
+		require.NotNil(t, app.watcher, "New must still hold the watcher after Add fails")
+
+		app.Close()
+		app.Close() // idempotent
 	})
 }
