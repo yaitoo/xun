@@ -17,6 +17,14 @@ type Context struct {
 	Request  *http.Request
 
 	TempData TempData
+
+	// accepts / languages cache the parsed result of Accept() /
+	// AcceptLanguage() for the lifetime of the request. Context is per
+	// request (see app.go), so these fields never leak across requests.
+	accepts       []MimeType
+	acceptsDone   bool
+	languages     []string
+	languagesDone bool
 }
 
 // WriteStatus sets the HTTP status code for the response.
@@ -124,26 +132,47 @@ func (c *Context) Redirect(url string, statusCode ...int) {
 // AcceptLanguage returns a slice of strings representing the languages
 // that the client accepts, in order of preference.
 // The languages are normalized to lowercase and whitespace is trimmed.
+//
+// The result is cached on the Context: subsequent calls return the same
+// slice without re-parsing the Accept-Language header. Context is per
+// request (see app.go), so the cache cannot leak across requests.
 func (c *Context) AcceptLanguage() (languages []string) {
+	if c.languagesDone {
+		return c.languages
+	}
+	c.languagesDone = true
+
 	accepted := c.Request.Header.Get("Accept-Language")
 	if accepted == "" {
 		return
 	}
 	options := strings.Split(accepted, ",")
-	l := len(options)
-	languages = make([]string, l)
+	c.languages = make([]string, 0, len(options))
 
-	for i := 0; i < l; i++ {
-		locale := strings.SplitN(options[i], ";", 2)
-		languages[i] = strings.Trim(locale[0], " ")
+	for _, opt := range options {
+		locale := strings.SplitN(opt, ";", 2)
+		lang := strings.TrimSpace(locale[0])
+		if lang == "" {
+			continue
+		}
+		c.languages = append(c.languages, lang)
 	}
-	return
+	return c.languages
 }
 
-// Accept returns a slice of strings representing the media types
+// Accept returns a slice of MimeType representing the media types
 // that the client accepts, in order of preference.
 // The media types are normalized to lowercase and whitespace is trimmed.
+//
+// The result is cached on the Context: subsequent calls return the same
+// slice without re-parsing the Accept header. Context is per request
+// (see app.go), so the cache cannot leak across requests.
 func (c *Context) Accept() (types []MimeType) {
+	if c.acceptsDone {
+		return c.accepts
+	}
+	c.acceptsDone = true
+
 	accepted := c.Request.Header.Get("Accept")
 	if accepted == "" {
 		return
@@ -152,17 +181,19 @@ func (c *Context) Accept() (types []MimeType) {
 	// text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
 
 	options := strings.Split(accepted, ",")
-	l := len(options)
-	types = make([]MimeType, l)
+	c.accepts = make([]MimeType, 0, len(options))
 
-	for i := 0; i < l; i++ {
-		if n := strings.IndexByte(options[i], ';'); n >= 0 {
-			types[i] = NewMimeType(strings.TrimSpace(options[i][:n]))
-		} else {
-			types[i] = NewMimeType(strings.TrimSpace(options[i]))
+	for _, opt := range options {
+		if n := strings.IndexByte(opt, ';'); n >= 0 {
+			opt = opt[:n]
 		}
+		opt = strings.TrimSpace(opt)
+		if opt == "" {
+			continue
+		}
+		c.accepts = append(c.accepts, NewMimeType(opt))
 	}
-	return
+	return c.accepts
 }
 
 // RequestReferer returns the referer of the request.
