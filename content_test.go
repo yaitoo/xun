@@ -201,48 +201,175 @@ func TestRenderGFMTable(t *testing.T) {
 }
 
 // =============================================================================
-// extractContentView
+// contentRenderer.Process
 // =============================================================================
+//
+// Process must produce output identical to Extract + Render so the call site
+// in viewengine_html.loadContentFile can safely switch to the combined path
+// without changing observable behavior.
 
-func TestExtractContentViewFromPath(t *testing.T) {
+func TestProcessMatchesExtractPlusRender(t *testing.T) {
 	r := newContentRenderer()
+	content := []byte(`# Title
+
+> A lede paragraph.
+
+Body paragraph.
+
+## Section
+
+More content.`)
+
+	title, description, body, err := r.Process(content)
+	require.NoError(t, err)
+
+	// Same extraction as the standalone Extract path.
+	wantTitle, wantDesc := r.Extract(content)
+	require.Equal(t, wantTitle, title)
+	require.Equal(t, wantDesc, description)
+
+	// Same rendered HTML as the standalone Render path.
+	wantBody, err := r.Render(content)
+	require.NoError(t, err)
+	require.Equal(t, string(wantBody), string(body))
+}
+
+func TestProcessEmptyContent(t *testing.T) {
+	r := newContentRenderer()
+
+	title, description, body, err := r.Process(nil)
+	require.NoError(t, err)
+	require.Empty(t, title)
+	require.Empty(t, description)
+	require.Empty(t, string(body))
+}
+
+func TestProcessEmptyContentAfterParse(t *testing.T) {
+	// nil → reader is empty → parser produces an empty document. Same
+	// path as TestRenderEmptyContent but going through Process.
+	r := newContentRenderer()
+
+	title, description, body, err := r.Process([]byte(""))
+	require.NoError(t, err)
+	require.Empty(t, title)
+	require.Empty(t, description)
+	require.Empty(t, string(body))
+}
+
+func TestProcessBodyIsIndependentOfPool(t *testing.T) {
+	// The bytes handed back to template.HTML must survive BufPool.Put —
+	// otherwise a subsequent Put/Get cycle (e.g. from a sibling request)
+	// would corrupt the cached ContentView.Body.
+	r := newContentRenderer()
+	content := []byte("# Title\n\nBody that needs to outlive the pool buffer.")
+
+	_, _, body, err := r.Process(content)
+	require.NoError(t, err)
+
+	// Drain the pool: every BufPool entry that came back from Put is
+	// reused or discarded, and any future Get returns a fresh empty
+	// slice. The string we captured above must remain untouched.
+	for i := 0; i < 200; i++ {
+		_, err := r.Render(content)
+		require.NoError(t, err)
+	}
+
+	require.Contains(t, string(body), "<h1>Title</h1>")
+	require.Contains(t, string(body), "Body that needs to outlive the pool buffer.")
+}
+
+func TestRenderAllocationRegression(t *testing.T) {
+	// Locks in the BufPool reuse: each Render call after a warm-up must
+	// not allocate a fresh bytes.Buffer header. The exact number depends
+	// on Go's inlining and on goldmark's internal allocation pattern, so
+	// the ceiling must sit BELOW the pre-patch count to actually catch
+	// the regression it's meant to catch.
+	//
+	// Measured post-patch steady state on this Go version + goldmark 1.8.6:
+	// 23 allocs/op (goldmark's parser + renderer dominate; our buffer
+	// header is the only line item we control). The pre-patch code
+	// allocated an additional bytes.Buffer header plus its initial empty
+	// []byte{} on every call, pushing the count to ≈25 allocs/op. The
+	// ceiling of 24 allocs/op is one slot above the current steady state
+	// (for minor toolchain noise) but one slot below the pre-patch count,
+	// so reintroducing the per-call buffer allocation will fail this test.
+	r := newContentRenderer()
+	md := []byte("# Title\n\n" + strings.Repeat("Body paragraph that pads the output enough to keep goldmark busy. ", 32))
+
+	// Warm up: drain the pool and let it warm to the steady-state capacity.
+	for i := 0; i < 64; i++ {
+		_, err := r.Render(md)
+		require.NoError(t, err)
+	}
+
+	allocs := testing.AllocsPerRun(200, func() {
+		_, err := r.Render(md)
+		require.NoError(t, err)
+	})
+
+	require.LessOrEqual(t, allocs, 24.0,
+		"Render should reuse BufPool (got %v allocs/op, expected ≤ 24; a higher count means the bytes.Buffer is being allocated per call again)", allocs)
+}
+
+// =============================================================================
+// buildContentView
+// =============================================================================
+//
+// buildContentView fills the slug/date/path fields from filesystem info and
+// copies through the title/description/body that the caller already
+// produced. The H1 extraction logic itself lives in extractFromAST and is
+// covered by the TestExtract* suite above; these tests pin down the slug
+// derivation rules and the date pass-through.
+
+func TestBuildContentViewFromPath(t *testing.T) {
 	date := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
 	fi := &fakeFileInfo{name: "hello.md", modTime: date}
 
-	cv := extractContentView("content/hello.md", []byte("# Hello"), fi, "content", r)
+	cv := buildContentView("content/hello.md", fi, "content", "Hello", "", template.HTML("<p>body</p>"))
 
 	require.Equal(t, "content/hello.md", cv.Path)
 	require.Equal(t, "hello", cv.Slug)
 	require.Equal(t, "Hello", cv.Title)
 	require.Equal(t, date, cv.Date)
-	require.Empty(t, cv.Body)
+	require.Equal(t, template.HTML("<p>body</p>"), cv.Body)
 }
 
-func TestExtractContentViewNestedSlug(t *testing.T) {
-	r := newContentRenderer()
+func TestBuildContentViewNestedSlug(t *testing.T) {
 	fi := &fakeFileInfo{name: "deeper.md"}
 
-	cv := extractContentView("content/2026/deeper.md", []byte("# Deeper"), fi, "content", r)
+	cv := buildContentView("content/2026/deeper.md", fi, "content", "Deeper", "", template.HTML(""))
 
 	require.Equal(t, "2026/deeper", cv.Slug)
 }
 
-func TestExtractContentViewFallbackTitle(t *testing.T) {
-	r := newContentRenderer()
+func TestBuildContentViewEmptyTitleWhenAbsent(t *testing.T) {
+	// Title is the caller's responsibility: buildContentView only
+	// forwards what it's given. The "no H1 → empty Title" contract is
+	// enforced by extractFromAST (covered by TestExtractNoH1 above);
+	// this test pins down that buildContentView does not invent a
+	// title from the filename or path.
 	fi := &fakeFileInfo{name: "no-heading.md"}
 
-	cv := extractContentView("content/no-heading.md", []byte("No heading here"), fi, "content", r)
+	cv := buildContentView("content/no-heading.md", fi, "content", "", "", template.HTML(""))
 
-	// No H1 → Title left empty per spec; callers guard with {{if .Title}}.
 	require.Empty(t, cv.Title)
 }
 
-func TestExtractContentViewNilFileInfo(t *testing.T) {
-	r := newContentRenderer()
-
-	cv := extractContentView("content/x.md", []byte("# X"), nil, "content", r)
+func TestBuildContentViewNilFileInfo(t *testing.T) {
+	cv := buildContentView("content/x.md", nil, "content", "X", "", template.HTML(""))
 
 	require.True(t, cv.Date.IsZero())
+}
+
+func TestBuildContentViewNoContentDir(t *testing.T) {
+	// When contentDir is "" the prefix is not stripped, so the slug
+	// keeps the full path minus ".md". This matters for tests and any
+	// future caller that doesn't pass a contentDir.
+	fi := &fakeFileInfo{name: "x.md"}
+
+	cv := buildContentView("x.md", fi, "", "X", "", template.HTML(""))
+
+	require.Equal(t, "x", cv.Slug)
 }
 
 // =============================================================================
@@ -264,7 +391,7 @@ More content.`),
 		},
 		"content/2026/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<article><h1>{{.Content.Title}}</h1><p>{{.Content.Description}}</p>{{.Content.Body}}</article>{{end}}`)},
-		"content/index.tpl":       {Data: []byte(`<!--layout:site-->
+		"content/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<h1>{{.Content.Title}}</h1>{{.Content.Body}}{{end}}`)},
 	}
 
@@ -283,9 +410,9 @@ More content.`),
 	resp.Body.Close()
 
 	body := string(buf)
-	require.Contains(t, body, "Hello")              // title from H1
+	require.Contains(t, body, "Hello")               // title from H1
 	require.Contains(t, body, "World from markdown") // rendered body
-	require.Contains(t, body, "<html>")             // layout wrapper
+	require.Contains(t, body, "<html>")              // layout wrapper
 
 	req, _ = http.NewRequest("GET", srv.URL+"/content/2026/deeper", nil)
 	req.Header.Set("Accept", "text/html")
@@ -295,11 +422,11 @@ More content.`),
 	resp.Body.Close()
 
 	body = string(buf)
-	require.Contains(t, body, "Deeper Post")             // title
-	require.Contains(t, body, "A lede paragraph.")       // description (blockquote)
-	require.Contains(t, body, "<article>")               // bubble-up to 2026/index.tpl
-	require.Contains(t, body, "<h2>Section</h2>")         // markdown h2 in body
-	require.Contains(t, body, "More content.")            // markdown paragraph
+	require.Contains(t, body, "Deeper Post")       // title
+	require.Contains(t, body, "A lede paragraph.") // description (blockquote)
+	require.Contains(t, body, "<article>")         // bubble-up to 2026/index.tpl
+	require.Contains(t, body, "<h2>Section</h2>")  // markdown h2 in body
+	require.Contains(t, body, "More content.")     // markdown paragraph
 }
 
 func TestContentEngineBubbleUpToRoot(t *testing.T) {
@@ -409,7 +536,7 @@ func TestContentTemplateAndPageCoexist(t *testing.T) {
 		"content/blog/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<article><h1>{{.Content.Title}}</h1><div>{{.Content.Body}}</div></article>{{end}}`)},
 		"content/blog/index.md": {Data: []byte("# 博客首页\n\n这里是博客根页内容。")},
-		"content/blog/post.md": {Data: []byte("# 第一篇\n\n文章正文。")},
+		"content/blog/post.md":  {Data: []byte("# 第一篇\n\n文章正文。")},
 	}
 
 	mux := http.NewServeMux()
@@ -455,7 +582,7 @@ func TestContentTemplateAndPageCoexist(t *testing.T) {
 // bubbleUp even if it sits next to sibling .md files.
 func TestContentHtmlNotBubbleUp(t *testing.T) {
 	fsys := fstest.MapFS{
-		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"layouts/site.html":   {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
 		"content/blog/foo.md": {Data: []byte("# Foo")},
 		"content/blog/index.html": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<p>standalone html page, not a template</p>{{end}}`)},
@@ -737,7 +864,7 @@ func TestContentFileIndexMdRegistersAtDirRoot(t *testing.T) {
 		"blog/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<article>{{.Content.Title}} | {{.Content.Body}}</article>{{end}}`)},
 		"blog/index.md": {Data: []byte("# Blog Root\n\nIntro for the blog.")},
-		"blog/post.md": {Data: []byte("# Post\n\nPost body.")},
+		"blog/post.md":  {Data: []byte("# Post\n\nPost body.")},
 	}
 
 	mux := http.NewServeMux()
