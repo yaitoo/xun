@@ -1,0 +1,2 @@
+// Package-level embed helper for viewengine_static_test.go.
+// Exists only to make the testdata/ directory a valid //go:embed source.

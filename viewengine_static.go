@@ -28,6 +28,7 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) {
 		if t.Kind() == reflect.Ptr { //nolint: govet
 			ve.isEmbedFsys = t.Elem().PkgPath() == "embed"
 		}
+		root.Close() // nolint: errcheck
 	}
 
 	fs.WalkDir(fsys, "public", func(path string, d fs.DirEntry, err error) error { // nolint: errcheck
