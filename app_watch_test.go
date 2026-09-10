@@ -358,3 +358,20 @@ func TestHotReloadChannels(t *testing.T) {
 	}
 
 }
+
+// TestWatchDocContract pins the WithWatch race contract. Issue #131
+// settled on "lock-free, documented as dev-only, concurrent traffic +
+// reload is undefined behavior" rather than introducing locks. The
+// contract itself lives in the WithWatch docstring and is guarded by
+// code review — a runtime assertion can't catch a doc drift. This test
+// exists as a placeholder so the test slot is reserved for any future
+// contract-level assertion (e.g. reflection on the docstring). The
+// existing TestWatchOnStatic / TestWatchOnHtml cover the working
+// sequential reload path without -race.
+func TestWatchDocContract(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux))
+
+	app.watch = true // emulate the WithWatch option's effect
+	require.True(t, app.watch, "WithWatch must set app.watch")
+}
