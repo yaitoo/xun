@@ -69,6 +69,19 @@ func WithWatch() Option {
 }
 
 // WithFsys sets the fs.FS for the App. If not set, Page Router is disabled.
+//
+// fsys is retained by the App for its full lifetime: stored on app.fsys and
+// referenced by every FileViewer registered during New (each viewer opens
+// fsys again per request). When WithWatch is set, the watcher also keeps a
+// reference for change events. WithFsys must therefore point at an fs.FS that
+// remains valid until App.Close — closing fsys after New will surface as 404s
+// or panics on subsequent requests.
+//
+// StaticViewEngine additionally opens fsys at "." exactly once during New, as
+// a probe to detect whether fsys is backed by embed.FS (so ETags can be
+// computed at registration time instead of per request). That probe fs.File is
+// closed before StaticViewEngine.Load returns, so no descriptor is leaked from
+// the probe itself; the underlying fsys is unaffected by the probe.
 func WithFsys(fsys fs.FS) Option {
 	return func(app *App) {
 		app.fsys = fsys
