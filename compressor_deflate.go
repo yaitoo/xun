@@ -2,11 +2,28 @@ package xun
 
 import (
 	"compress/flate"
+	"io"
 	"net/http"
+	"sync"
 )
 
 // DeflateCompressor is a struct that provides functionality for compressing data using the DEFLATE algorithm.
 type DeflateCompressor struct {
+}
+
+// deflateWriterPool recycles *flate.Writer across requests. A fresh
+// flate.Writer at DefaultCompression carries a ~256 KiB deflate state;
+// allocating it per request dominated the GC profile of compressed apps.
+// The pool is goroutine-safe: each pooled encoder is bound to a single
+// request between Get and Put, and Reset on Get / Put drops any residual
+// reference to the previous ResponseWriter.
+var deflateWriterPool = sync.Pool{
+	New: func() any {
+		// DefaultCompression is a valid compression level; flate.NewWriter
+		// only errors when the level is out of range.
+		w, _ := flate.NewWriter(io.Discard, flate.DefaultCompression) //nolint: errcheck
+		return w
+	},
 }
 
 // AcceptEncoding returns the encoding type that the DeflateCompressor supports.
@@ -16,11 +33,16 @@ func (c *DeflateCompressor) AcceptEncoding() string {
 }
 
 // New creates a new deflateResponseWriter that wraps the provided http.ResponseWriter.
-// It sets the "Content-Encoding" header to "deflate" and initializes a flate.Writer
-// with the default compression level.
+// It sets the "Content-Encoding" header to "deflate" and binds a flate.Writer
+// (acquired from deflateWriterPool) to the underlying writer.
+//
+// The *flate.Writer is reused via Reset on every call, so the ~256 KiB
+// deflate state at DefaultCompression is recycled across requests instead
+// of being reallocated on every compressed response.
 func (c *DeflateCompressor) New(rw http.ResponseWriter) ResponseWriter {
 	rw.Header().Set("Content-Encoding", "deflate")
-	w, _ := flate.NewWriter(rw, flate.DefaultCompression) //nolint: errcheck because flate.DefaultCompression is a valid compression level
+	w := deflateWriterPool.Get().(*flate.Writer)
+	w.Reset(rw)
 
 	return &deflateResponseWriter{
 		w: w,
