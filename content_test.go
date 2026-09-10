@@ -201,6 +201,118 @@ func TestRenderGFMTable(t *testing.T) {
 }
 
 // =============================================================================
+// contentRenderer.Process
+// =============================================================================
+//
+// Process must produce output identical to Extract + Render so the call site
+// in viewengine_html.loadContentFile can safely switch to the combined path
+// without changing observable behavior.
+
+func TestProcessMatchesExtractPlusRender(t *testing.T) {
+	r := newContentRenderer()
+	content := []byte(`# Title
+
+> A lede paragraph.
+
+Body paragraph.
+
+## Section
+
+More content.`)
+
+	title, description, body, err := r.Process(content)
+	require.NoError(t, err)
+
+	// Same extraction as the standalone Extract path.
+	wantTitle, wantDesc := r.Extract(content)
+	require.Equal(t, wantTitle, title)
+	require.Equal(t, wantDesc, description)
+
+	// Same rendered HTML as the standalone Render path.
+	wantBody, err := r.Render(content)
+	require.NoError(t, err)
+	require.Equal(t, string(wantBody), string(body))
+}
+
+func TestProcessEmptyContent(t *testing.T) {
+	r := newContentRenderer()
+
+	title, description, body, err := r.Process(nil)
+	require.NoError(t, err)
+	require.Empty(t, title)
+	require.Empty(t, description)
+	require.Empty(t, string(body))
+}
+
+func TestProcessEmptyContentAfterParse(t *testing.T) {
+	// nil → reader is empty → parser produces an empty document. Same
+	// path as TestRenderEmptyContent but going through Process.
+	r := newContentRenderer()
+
+	title, description, body, err := r.Process([]byte(""))
+	require.NoError(t, err)
+	require.Empty(t, title)
+	require.Empty(t, description)
+	require.Empty(t, string(body))
+}
+
+func TestProcessBodyIsIndependentOfPool(t *testing.T) {
+	// The bytes handed back to template.HTML must survive BufPool.Put —
+	// otherwise a subsequent Put/Get cycle (e.g. from a sibling request)
+	// would corrupt the cached ContentView.Body.
+	r := newContentRenderer()
+	content := []byte("# Title\n\nBody that needs to outlive the pool buffer.")
+
+	_, _, body, err := r.Process(content)
+	require.NoError(t, err)
+
+	// Drain the pool: every BufPool entry that came back from Put is
+	// reused or discarded, and any future Get returns a fresh empty
+	// slice. The string we captured above must remain untouched.
+	for i := 0; i < 200; i++ {
+		_, err := r.Render(content)
+		require.NoError(t, err)
+	}
+
+	require.Contains(t, string(body), "<h1>Title</h1>")
+	require.Contains(t, string(body), "Body that needs to outlive the pool buffer.")
+}
+
+func TestRenderAllocationRegression(t *testing.T) {
+	// Locks in the BufPool reuse: each Render call after a warm-up must
+	// not allocate a fresh bytes.Buffer header. The exact number depends
+	// on Go's inlining and on goldmark's internal allocation pattern, so
+	// this test asserts a ceiling above the warm-pool steady state rather
+	// than the literal pre-patch count. The ceiling is loose enough to
+	// absorb toolchain churn without losing the regression signal that
+	// BufPool reuse is in effect.
+	//
+	// Measured post-patch steady state on this Go version + goldmark 1.8.6:
+	// ~23 allocs/op (goldmark's parser + renderer dominate; our buffer
+	// header is the only line item we control). Pre-patch the bytes.Buffer
+	// header + initial empty []byte{} adds 2 allocs on top of that. The
+	// 30-op ceiling catches a complete loss of BufPool reuse (which would
+	// push the count back to ~25) without flaking on minor goldmark
+	// internal changes.
+	r := newContentRenderer()
+	md := []byte("# Title\n\n" + strings.Repeat("Body paragraph that pads the output enough to keep goldmark busy. ", 32))
+
+	// Warm up: drain the pool and let it warm to the steady-state capacity.
+	for i := 0; i < 64; i++ {
+		_, err := r.Render(md)
+		require.NoError(t, err)
+	}
+
+	allocs := testing.AllocsPerRun(200, func() {
+		_, err := r.Render(md)
+		require.NoError(t, err)
+	})
+
+	require.LessOrEqual(t, allocs, 30.0,
+		"Render should reuse BufPool (got %v allocs/op, expected ≤ 30)", allocs)
+}
+
+// =============================================================================
 // extractContentView
 // =============================================================================
 

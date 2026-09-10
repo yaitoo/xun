@@ -331,14 +331,29 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 	}
 	fi, _ := fs.Stat(ve.fsys, mdPath)
 
-	cv := extractContentView(mdPath, buf, fi, dir, ve.md)
+	// Single parse: walk the AST for title/description, then either
+	// delegate the body to a user-supplied renderFn (set via
+	// WithContentRenderer) or render the same AST to HTML via BufPool.
+	// The previous shape (extractContentView + renderMarkdown) parsed the
+	// .md twice — once for extraction, once inside goldmark.Convert.
+	doc, title, description := ve.md.parseAndExtract(buf)
 
-	rendered, err := ve.renderMarkdown(buf, mdPath)
-	if err != nil {
-		ve.app.logger.Error("xun: render markdown", slog.String("path", mdPath), slog.Any("err", err))
-		return err
+	var body template.HTML
+	if ve.renderFn != nil {
+		body, err = ve.renderFn(buf, mdPath)
+		if err != nil {
+			ve.app.logger.Error("xun: render markdown", slog.String("path", mdPath), slog.Any("err", err))
+			return err
+		}
+	} else {
+		body, err = ve.md.renderAST(doc, buf)
+		if err != nil {
+			ve.app.logger.Error("xun: render markdown", slog.String("path", mdPath), slog.Any("err", err))
+			return err
+		}
 	}
-	cv.Body = rendered
+
+	cv := buildContentView(mdPath, fi, dir, title, description, body)
 
 	// Sidecar params: sibling .yaml, if present, parses into Params.
 	// Missing file → Params left as-is (nil).
@@ -554,15 +569,6 @@ func (ve *HtmlViewEngine) bubbleUp(mdPath string) string {
 // because components/layouts/pages/views never carry .tpl siblings.
 func (ve *HtmlViewEngine) templateKey(p string) string {
 	return p
-}
-
-// renderMarkdown dispatches to the user-provided renderFn when available,
-// otherwise falls back to the default goldmark renderer.
-func (ve *HtmlViewEngine) renderMarkdown(content []byte, path string) (template.HTML, error) {
-	if ve.renderFn != nil {
-		return ve.renderFn(content, path)
-	}
-	return ve.md.Render(content)
 }
 
 // existsFS returns true when the given path can be stat'd successfully.
