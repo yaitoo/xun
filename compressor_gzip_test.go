@@ -121,6 +121,32 @@ func TestGzipCompressor(t *testing.T) {
 
 }
 
+func TestGzipCompressor_DoubleClose(t *testing.T) {
+	// Close must be idempotent. A handler that calls c.Response.Close()
+	// plus the framework's defer also call Close(); without
+	// idempotency the *gzip.Writer would be Put into gzipWriterPool
+	// twice, letting two concurrent Gets hand the same pointer to two
+	// requests and corrupt shared bufio/deflate state across them.
+	c := &GzipCompressor{}
+
+	rw := httptest.NewRecorder()
+	rw.Header().Set("Content-Encoding", "gzip")
+	w := c.New(rw)
+	gw := w.(*gzipResponseWriter)
+
+	w.Close()
+	require.True(t, gw.closed, "first Close must set the closed flag")
+	require.Nil(t, gw.w, "first Close must release the encoder pointer")
+
+	bodyLenAfterFirst := rw.Body.Len()
+
+	// Second Close must not panic, must not write to the recorder,
+	// must not re-Put the encoder.
+	require.NotPanics(t, func() { w.Close() })
+	require.Equal(t, bodyLenAfterFirst, rw.Body.Len(),
+		"second Close must not write additional bytes to the recorder")
+}
+
 func TestGzipCompressor_PoolAllocations(t *testing.T) {
 	// Measure allocations over a tight Get/Close cycle. Driving the
 	// measurement through httptest.NewServer + client.Do would let the
@@ -160,19 +186,21 @@ func TestGzipCompressor_PoolAllocations(t *testing.T) {
 }
 
 func BenchmarkGzipCompressor(b *testing.B) {
-	fsys := fstest.MapFS{
-		"public/skin.css": {Data: []byte(strings.Repeat("body { color: red; }\n", 64))},
-	}
+	// 16 KiB of compressible-but-not-trivial payload — typical for a
+	// JSON/HTML response where the encoder's deflate state actually
+	// does work, and where the per-request encoder allocation would
+	// dominate without pooling.
+	payload := strings.Repeat("the quick brown fox jumps over the lazy dog\n", 380)
 
 	m := http.NewServeMux()
 	srv := httptest.NewServer(m)
 	defer srv.Close()
 
-	app := New(WithMux(m), WithFsys(fsys), WithCompressor(&GzipCompressor{}))
+	app := New(WithMux(m), WithCompressor(&GzipCompressor{}))
 	defer app.Close()
 
 	app.Get("/payload", func(c *Context) error {
-		return c.View("payload body")
+		return c.View(payload)
 	})
 
 	go app.Start()

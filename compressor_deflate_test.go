@@ -110,6 +110,32 @@ func TestDeflateCompressor(t *testing.T) {
 
 }
 
+func TestDeflateCompressor_DoubleClose(t *testing.T) {
+	// Close must be idempotent. A handler that calls c.Response.Close()
+	// plus the framework's defer also call Close(); without
+	// idempotency the *flate.Writer would be Put into deflateWriterPool
+	// twice, letting two concurrent Gets hand the same pointer to two
+	// requests and corrupt shared deflate state across them.
+	c := &DeflateCompressor{}
+
+	rw := httptest.NewRecorder()
+	rw.Header().Set("Content-Encoding", "deflate")
+	w := c.New(rw)
+	fw := w.(*deflateResponseWriter)
+
+	w.Close()
+	require.True(t, fw.closed, "first Close must set the closed flag")
+	require.Nil(t, fw.w, "first Close must release the encoder pointer")
+
+	bodyLenAfterFirst := rw.Body.Len()
+
+	// Second Close must not panic, must not write to the recorder,
+	// must not re-Put the encoder.
+	require.NotPanics(t, func() { w.Close() })
+	require.Equal(t, bodyLenAfterFirst, rw.Body.Len(),
+		"second Close must not write additional bytes to the recorder")
+}
+
 func TestDeflateCompressor_PoolAllocations(t *testing.T) {
 	// See TestGzipCompressor_PoolAllocations for rationale. We
 	// deliberately do not assert Same-pointer identity between two
@@ -138,19 +164,21 @@ func TestDeflateCompressor_PoolAllocations(t *testing.T) {
 }
 
 func BenchmarkDeflateCompressor(b *testing.B) {
-	fsys := fstest.MapFS{
-		"public/skin.css": {Data: []byte(strings.Repeat("body { color: red; }\n", 64))},
-	}
+	// 16 KiB of compressible-but-not-trivial payload — typical for a
+	// JSON/HTML response where the encoder's deflate state actually
+	// does work, and where the per-request encoder allocation would
+	// dominate without pooling.
+	payload := strings.Repeat("the quick brown fox jumps over the lazy dog\n", 380)
 
 	m := http.NewServeMux()
 	srv := httptest.NewServer(m)
 	defer srv.Close()
 
-	app := New(WithMux(m), WithFsys(fsys), WithCompressor(&DeflateCompressor{}))
+	app := New(WithMux(m), WithCompressor(&DeflateCompressor{}))
 	defer app.Close()
 
 	app.Get("/payload", func(c *Context) error {
-		return c.View("payload body")
+		return c.View(payload)
 	})
 
 	go app.Start()

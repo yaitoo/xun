@@ -12,6 +12,14 @@ import (
 type gzipResponseWriter struct {
 	*stdResponseWriter
 	w *gzip.Writer
+	// closed is set after the first Close returns the encoder to the
+	// pool. A second Close is a no-op so the same *gzip.Writer is
+	// never Put into gzipWriterPool twice; two concurrent Gets of
+	// the same encoder pointer would corrupt shared bufio/deflate
+	// state across requests. Pre-pool this was harmless because
+	// gzip.Writer.Close is idempotent; pooling turned double-Close
+	// into a correctness hazard.
+	closed bool
 }
 
 // Write writes the data to the underlying gzip writer.
@@ -42,13 +50,20 @@ func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
 // because reusing an encoder whose destination was the caller-owned conn
 // would write pooled-state bytes back into a stream the framework no longer
 // owns. The hijacked guard runs before any pool access.
+//
+// Close is idempotent: a second call after a successful Close is a
+// no-op so the same encoder is never Put twice. Idempotency is
+// required because handlers may explicitly call Close in addition to
+// the framework's defer.
 func (rw *gzipResponseWriter) Close() {
-	if rw.hijacked {
+	if rw.closed || rw.hijacked {
 		return
 	}
+	rw.closed = true
 	rw.w.Close() // nolint: errcheck
 	rw.w.Reset(io.Discard)
 	gzipWriterPool.Put(rw.w)
+	rw.w = nil
 }
 
 // Flush writes any buffered data to the underlying writer and then flushes
