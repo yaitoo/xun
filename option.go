@@ -25,7 +25,36 @@ func WithMux(mux *http.ServeMux) Option {
 	}
 }
 
-// WithWatch enable hot reload feature, please don't enable it on production. It is not thread-safe.
+// WithWatch enables hot reload — a developer-only feature. DO NOT use in
+// production: production deployments have no dynamic registration and
+// should embed assets instead.
+//
+// # Race contract
+//
+// WithWatch spawns a background goroutine that re-runs file scans and
+// mutates internal App maps (app.viewers, app.routes, app.contentViews,
+// app.AssetURLs) on every fs change. Request handlers read those same
+// maps on every request. WithWatch therefore makes those reads and
+// writes concurrent — without locking.
+//
+// In dev, this means:
+//
+//   - Concurrent traffic + file changes is undefined behavior. The race
+//     detector (`go test -race`) WILL flag it. That is expected, not a bug.
+//   - Reload testing should be sequential: stop the server (or wait for
+//     in-flight requests to drain), modify files, restart / re-test.
+//
+// In production, none of it applies — no WithWatch, no race.
+//
+// This contract matches net/http's own: ServeMux registration and
+// dispatch are also not safe to race, and net/http relies on the user
+// to serialize them. WithWatch is the same kind of dev-only tool.
+//
+// # Lifecycle
+//
+// Pass WithWatch into New() along with WithFsys so initial loads run
+// before any requests are served. There is no public API to "stop"
+// the watcher goroutine — it runs for the lifetime of the App.
 func WithWatch() Option {
 	return func(app *App) {
 		app.watch = true

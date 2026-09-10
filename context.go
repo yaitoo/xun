@@ -87,6 +87,9 @@ func (c *Context) getViewer(name string) (Viewer, bool) {
 	if name == "" {
 		return nil, false
 	}
+	// app.viewers is mutated by the hot-reload goroutine when WithWatch
+	// is enabled; with WithWatch (dev-only) concurrent access during
+	// reload is undefined behavior — see the WithWatch doc.
 	v, ok := c.App.viewers[name]
 	if ok {
 		mime := v.MimeType()
