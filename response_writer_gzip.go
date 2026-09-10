@@ -15,8 +15,8 @@ type gzipResponseWriter struct {
 	// closed is set after the first Close returns the encoder to the
 	// pool. A second Close is a no-op so the same *gzip.Writer is
 	// never Put into gzipWriterPool twice; two concurrent Gets of
-	// the same encoder pointer would corrupt shared bufio/deflate
-	// state across requests. Pre-pool this was harmless because
+	// the same encoder pointer would corrupt shared deflate state
+	// across requests. Pre-pool this was harmless because
 	// gzip.Writer.Close is idempotent; pooling turned double-Close
 	// into a correctness hazard.
 	closed bool
@@ -39,9 +39,10 @@ func (rw *gzipResponseWriter) Write(p []byte) (int, error) {
 // Close closes the gzipResponseWriter, ensuring that the underlying writer is also closed.
 //
 // After flushing the gzip trailer, the *gzip.Writer is returned to
-// gzipWriterPool so the internal deflate state and bufio buffer are recycled
-// across requests. Reset(io.Discard) before Put drops the residual reference
-// to the previous ResponseWriter so the pooled encoder does not pin the
+// gzipWriterPool so the inner *flate.Writer's deflate state (64 KiB
+// sliding window + fast-encoder history buffer) is recycled across
+// requests. Reset(io.Discard) before Put drops the residual reference to
+// the previous ResponseWriter so the pooled encoder does not pin the
 // per-request conn alive.
 //
 // If Hijack has transferred ownership of the connection to the caller,

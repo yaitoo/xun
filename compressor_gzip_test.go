@@ -126,7 +126,7 @@ func TestGzipCompressor_DoubleClose(t *testing.T) {
 	// plus the framework's defer also call Close(); without
 	// idempotency the *gzip.Writer would be Put into gzipWriterPool
 	// twice, letting two concurrent Gets hand the same pointer to two
-	// requests and corrupt shared bufio/deflate state across them.
+	// requests and corrupt shared deflate state across them.
 	c := &GzipCompressor{}
 
 	rw := httptest.NewRecorder()
