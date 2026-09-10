@@ -102,9 +102,7 @@ func (ve *HtmlViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event
 		}
 		if event.Has(fsnotify.Remove) {
 			_, _, pattern := splitFile(contentPatternBase(event.Name))
-			app.mu.Lock()
 			delete(app.contentViews, pattern)
-			app.mu.Unlock()
 			return nil
 		}
 		if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
@@ -358,9 +356,7 @@ func (ve *HtmlViewEngine) loadContentFile(mdPath, dir string) error {
 	// same canonical-URL contract loadPage produces for pages/<dir>/index.html,
 	// and avoids SEO duplicate-content at /<dir> vs /<dir>/.
 	_, _, pattern := splitFile(contentPatternBase(mdPath))
-	ve.app.mu.Lock()
 	ve.app.contentViews[pattern] = &cv
-	ve.app.mu.Unlock()
 
 	tmplPath := ve.bubbleUp(mdPath)
 	if tmplPath == "" {

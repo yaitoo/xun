@@ -107,7 +107,8 @@ func New(opts ...Option) *App {
 }
 
 func (app *App) getAssetUrl(pattern string) string {
-	// lock-free, because AssetURLs is initialized in New() in production
+	// Lock-free, because WithWatch is dev-only and concurrent access
+	// during reload is undefined behavior — see WithWatch doc.
 	if _, ok := app.AssetURLs[pattern]; ok {
 		return app.AssetURLs[pattern]
 	}
@@ -116,10 +117,11 @@ func (app *App) getAssetUrl(pattern string) string {
 }
 
 // lookupContent returns the ContentView for a given route pattern, or nil.
-// Safe to call concurrently with content engine load/reload operations.
+//
+// WithWatch is dev-only and not safe to call concurrently with reload —
+// see the WithWatch doc. In production (no WithWatch), contentViews is
+// immutable after startup, so no lock is needed.
 func (app *App) lookupContent(pattern string) *ContentView {
-	app.mu.RLock()
-	defer app.mu.RUnlock()
 	return app.contentViews[pattern]
 }
 
@@ -182,7 +184,9 @@ func (app *App) Routes() []string {
 }
 
 // HasRoute reports whether a route is registered for the given (method,
-// pattern) pair. Cheaper than scanning Routes().
+// pattern) pair. Cheaper than scanning Routes(). Registration is expected
+// to complete before HasRoute is called; not safe to call concurrently
+// with hot-reload.
 func (app *App) HasRoute(method, pattern string) bool {
 	_, ok := app.routes[method+" "+pattern]
 	return ok
@@ -280,6 +284,10 @@ func (app *App) Next(hf HandleFunc) HandleFunc {
 // and registers the route in the application's routing table.
 // If a route with the same pattern already exists, it returns immediately
 // without making any changes.
+//
+// WithWatch is dev-only and not safe to call concurrently with reload —
+// see the WithWatch doc. In production, registration should complete before
+// the *http.Server begins serving requests.
 func (app *App) HandleFile(name string, v *FileViewer) {
 	ro := &RoutingOptions{}
 
@@ -340,6 +348,10 @@ func (app *App) HandleFile(name string, v *FileViewer) {
 // and registers the route in the application's routing table.
 // If a route with the same pattern already exists, it updates
 // the existing route with the new Viewer.
+//
+// WithWatch is dev-only and not safe to call concurrently with reload —
+// see the WithWatch doc. In production, registration should complete before
+// the *http.Server begins serving requests.
 func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	ro := &RoutingOptions{
 		viewers: []Viewer{v},
@@ -428,6 +440,10 @@ func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseW
 // createHandler registers a new route with the given pattern, handler function, routing options, and middleware chain.
 // It updates the route if it already exists or creates a new one if it doesn't.
 // The function also sets up the HTTP handler for the route and manages the viewers for different MIME types.
+//
+// WithWatch is dev-only and not safe to call concurrently with reload —
+// see the WithWatch doc. In production, registration should complete before
+// the *http.Server begins serving requests.
 func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
 	ro := &RoutingOptions{
 		viewers: app.handlerViewers,
