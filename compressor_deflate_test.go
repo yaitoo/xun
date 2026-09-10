@@ -116,12 +116,19 @@ func TestDeflateCompressor_DoubleClose(t *testing.T) {
 	// idempotency the *flate.Writer would be Put into deflateWriterPool
 	// twice, letting two concurrent Gets hand the same pointer to two
 	// requests and corrupt shared deflate state across them.
+	//
+	// The same scenario also exercises the post-Close surface: a
+	// wrapper that has been closed (and therefore has fw.w == nil)
+	// must not panic on subsequent Write or Flush calls.
 	c := &DeflateCompressor{}
 
 	rw := httptest.NewRecorder()
 	rw.Header().Set("Content-Encoding", "deflate")
 	w := c.New(rw)
 	fw := w.(*deflateResponseWriter)
+
+	_, err := fw.Write([]byte("before-close"))
+	require.NoError(t, err)
 
 	w.Close()
 	require.True(t, fw.closed, "first Close must set the closed flag")
@@ -134,6 +141,22 @@ func TestDeflateCompressor_DoubleClose(t *testing.T) {
 	require.NotPanics(t, func() { w.Close() })
 	require.Equal(t, bodyLenAfterFirst, rw.Body.Len(),
 		"second Close must not write additional bytes to the recorder")
+
+	// Post-Close Write must not panic on the nil rw.w and must not
+	// pull a fresh encoder out of the pool into a half-closed
+	// wrapper. It returns (len(p), nil), matching the post-Hijack
+	// no-op convention.
+	require.NotPanics(t, func() {
+		n, err := w.Write([]byte("after-close"))
+		require.NoError(t, err)
+		require.Equal(t, len("after-close"), n)
+	})
+
+	// Post-Close Flush must not panic on the nil rw.w.
+	require.NotPanics(t, func() { w.Flush() })
+
+	require.Equal(t, bodyLenAfterFirst, rw.Body.Len(),
+		"post-Close Write/Flush must not write to the recorder")
 }
 
 func TestDeflateCompressor_PoolAllocations(t *testing.T) {
