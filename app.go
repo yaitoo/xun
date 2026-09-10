@@ -153,13 +153,27 @@ func (app *App) Start() {
 
 }
 
-// Close safely locks the App instance, ensuring that no other
-// goroutines can access it until the lock is released. This method
-// should be called when the App instance is no longer needed to
-// prevent any further operations on it.
+// Close releases the resources the App itself owns. Concretely, it stops the
+// file watcher started by WithWatch, which lets both hot-reload goroutines
+// return. Without WithWatch the App owns no background resources and Close is
+// a no-op.
+//
+// Close does NOT shut down the HTTP server: the App does not own one — the
+// caller passes in a *http.ServeMux and runs the *http.Server itself. Routes
+// registered on that mux keep serving after Close; only hot reload stops. Use
+// http.Server.Shutdown for the server, in whichever order suits the caller —
+// stopping the watcher only makes the App's internal state more stable, never
+// less.
+//
+// Close is idempotent and safe to call from any goroutine. The watcher cannot
+// be restarted afterwards; build a new App if you need to watch again.
 func (app *App) Close() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
+
+	if app.watcher != nil {
+		app.watcher.Stop()
+	}
 }
 
 // Routes returns a snapshot of every route currently registered on the App,
@@ -515,6 +529,19 @@ func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOptio
 
 }
 
+// enableHotReload drains the watcher and re-runs every ViewEngine's
+// FileChanged for each event. It runs until the watcher is stopped.
+//
+// Shutdown path: App.Close stops the watcher, which makes Watcher.Start
+// return and close Events and Errors, which lands this loop in one of the
+// !ok branches below. The deferred Stop covers the reverse direction — if
+// this loop ever exits first, it terminates the watcher rather than leaving
+// Start polling with nobody listening. Stop is idempotent and never blocks,
+// so calling it from both ends is safe.
+//
+// app.watcher is read without holding app.mu, which is safe because Close
+// never reassigns the field — it only calls Stop, which synchronizes
+// internally.
 func (app *App) enableHotReload() {
 	defer app.watcher.Stop()
 	go app.watcher.Start()
