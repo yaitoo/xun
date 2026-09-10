@@ -282,18 +282,17 @@ func TestRenderAllocationRegression(t *testing.T) {
 	// Locks in the BufPool reuse: each Render call after a warm-up must
 	// not allocate a fresh bytes.Buffer header. The exact number depends
 	// on Go's inlining and on goldmark's internal allocation pattern, so
-	// this test asserts a ceiling above the warm-pool steady state rather
-	// than the literal pre-patch count. The ceiling is loose enough to
-	// absorb toolchain churn without losing the regression signal that
-	// BufPool reuse is in effect.
+	// the ceiling must sit BELOW the pre-patch count to actually catch
+	// the regression it's meant to catch.
 	//
 	// Measured post-patch steady state on this Go version + goldmark 1.8.6:
-	// ~23 allocs/op (goldmark's parser + renderer dominate; our buffer
-	// header is the only line item we control). Pre-patch the bytes.Buffer
-	// header + initial empty []byte{} adds 2 allocs on top of that. The
-	// 30-op ceiling catches a complete loss of BufPool reuse (which would
-	// push the count back to ~25) without flaking on minor goldmark
-	// internal changes.
+	// 23 allocs/op (goldmark's parser + renderer dominate; our buffer
+	// header is the only line item we control). The pre-patch code
+	// allocated an additional bytes.Buffer header plus its initial empty
+	// []byte{} on every call, pushing the count to ≈25 allocs/op. The
+	// ceiling of 24 allocs/op is one slot above the current steady state
+	// (for minor toolchain noise) but one slot below the pre-patch count,
+	// so reintroducing the per-call buffer allocation will fail this test.
 	r := newContentRenderer()
 	md := []byte("# Title\n\n" + strings.Repeat("Body paragraph that pads the output enough to keep goldmark busy. ", 32))
 
@@ -308,8 +307,8 @@ func TestRenderAllocationRegression(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	require.LessOrEqual(t, allocs, 30.0,
-		"Render should reuse BufPool (got %v allocs/op, expected ≤ 30)", allocs)
+	require.LessOrEqual(t, allocs, 24.0,
+		"Render should reuse BufPool (got %v allocs/op, expected ≤ 24; a higher count means the bytes.Buffer is being allocated per call again)", allocs)
 }
 
 // =============================================================================
