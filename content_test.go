@@ -313,48 +313,64 @@ func TestRenderAllocationRegression(t *testing.T) {
 }
 
 // =============================================================================
-// extractContentView
+// buildContentView
 // =============================================================================
+//
+// buildContentView fills the slug/date/path fields from filesystem info and
+// copies through the title/description/body that the caller already
+// produced. The H1 extraction logic itself lives in extractFromAST and is
+// covered by the TestExtract* suite above; these tests pin down the slug
+// derivation rules and the date pass-through.
 
-func TestExtractContentViewFromPath(t *testing.T) {
-	r := newContentRenderer()
+func TestBuildContentViewFromPath(t *testing.T) {
 	date := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
 	fi := &fakeFileInfo{name: "hello.md", modTime: date}
 
-	cv := extractContentView("content/hello.md", []byte("# Hello"), fi, "content", r)
+	cv := buildContentView("content/hello.md", fi, "content", "Hello", "", template.HTML("<p>body</p>"))
 
 	require.Equal(t, "content/hello.md", cv.Path)
 	require.Equal(t, "hello", cv.Slug)
 	require.Equal(t, "Hello", cv.Title)
 	require.Equal(t, date, cv.Date)
-	require.Empty(t, cv.Body)
+	require.Equal(t, template.HTML("<p>body</p>"), cv.Body)
 }
 
-func TestExtractContentViewNestedSlug(t *testing.T) {
-	r := newContentRenderer()
+func TestBuildContentViewNestedSlug(t *testing.T) {
 	fi := &fakeFileInfo{name: "deeper.md"}
 
-	cv := extractContentView("content/2026/deeper.md", []byte("# Deeper"), fi, "content", r)
+	cv := buildContentView("content/2026/deeper.md", fi, "content", "Deeper", "", template.HTML(""))
 
 	require.Equal(t, "2026/deeper", cv.Slug)
 }
 
-func TestExtractContentViewFallbackTitle(t *testing.T) {
-	r := newContentRenderer()
+func TestBuildContentViewEmptyTitleWhenAbsent(t *testing.T) {
+	// Title is the caller's responsibility: buildContentView only
+	// forwards what it's given. The "no H1 → empty Title" contract is
+	// enforced by extractFromAST (covered by TestExtractNoH1 above);
+	// this test pins down that buildContentView does not invent a
+	// title from the filename or path.
 	fi := &fakeFileInfo{name: "no-heading.md"}
 
-	cv := extractContentView("content/no-heading.md", []byte("No heading here"), fi, "content", r)
+	cv := buildContentView("content/no-heading.md", fi, "content", "", "", template.HTML(""))
 
-	// No H1 → Title left empty per spec; callers guard with {{if .Title}}.
 	require.Empty(t, cv.Title)
 }
 
-func TestExtractContentViewNilFileInfo(t *testing.T) {
-	r := newContentRenderer()
-
-	cv := extractContentView("content/x.md", []byte("# X"), nil, "content", r)
+func TestBuildContentViewNilFileInfo(t *testing.T) {
+	cv := buildContentView("content/x.md", nil, "content", "X", "", template.HTML(""))
 
 	require.True(t, cv.Date.IsZero())
+}
+
+func TestBuildContentViewNoContentDir(t *testing.T) {
+	// When contentDir is "" the prefix is not stripped, so the slug
+	// keeps the full path minus ".md". This matters for tests and any
+	// future caller that doesn't pass a contentDir.
+	fi := &fakeFileInfo{name: "x.md"}
+
+	cv := buildContentView("x.md", fi, "", "X", "", template.HTML(""))
+
+	require.Equal(t, "x", cv.Slug)
 }
 
 // =============================================================================
@@ -376,7 +392,7 @@ More content.`),
 		},
 		"content/2026/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<article><h1>{{.Content.Title}}</h1><p>{{.Content.Description}}</p>{{.Content.Body}}</article>{{end}}`)},
-		"content/index.tpl":       {Data: []byte(`<!--layout:site-->
+		"content/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<h1>{{.Content.Title}}</h1>{{.Content.Body}}{{end}}`)},
 	}
 
@@ -395,9 +411,9 @@ More content.`),
 	resp.Body.Close()
 
 	body := string(buf)
-	require.Contains(t, body, "Hello")              // title from H1
+	require.Contains(t, body, "Hello")               // title from H1
 	require.Contains(t, body, "World from markdown") // rendered body
-	require.Contains(t, body, "<html>")             // layout wrapper
+	require.Contains(t, body, "<html>")              // layout wrapper
 
 	req, _ = http.NewRequest("GET", srv.URL+"/content/2026/deeper", nil)
 	req.Header.Set("Accept", "text/html")
@@ -407,11 +423,11 @@ More content.`),
 	resp.Body.Close()
 
 	body = string(buf)
-	require.Contains(t, body, "Deeper Post")             // title
-	require.Contains(t, body, "A lede paragraph.")       // description (blockquote)
-	require.Contains(t, body, "<article>")               // bubble-up to 2026/index.tpl
-	require.Contains(t, body, "<h2>Section</h2>")         // markdown h2 in body
-	require.Contains(t, body, "More content.")            // markdown paragraph
+	require.Contains(t, body, "Deeper Post")       // title
+	require.Contains(t, body, "A lede paragraph.") // description (blockquote)
+	require.Contains(t, body, "<article>")         // bubble-up to 2026/index.tpl
+	require.Contains(t, body, "<h2>Section</h2>")  // markdown h2 in body
+	require.Contains(t, body, "More content.")     // markdown paragraph
 }
 
 func TestContentEngineBubbleUpToRoot(t *testing.T) {
@@ -521,7 +537,7 @@ func TestContentTemplateAndPageCoexist(t *testing.T) {
 		"content/blog/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<article><h1>{{.Content.Title}}</h1><div>{{.Content.Body}}</div></article>{{end}}`)},
 		"content/blog/index.md": {Data: []byte("# 博客首页\n\n这里是博客根页内容。")},
-		"content/blog/post.md": {Data: []byte("# 第一篇\n\n文章正文。")},
+		"content/blog/post.md":  {Data: []byte("# 第一篇\n\n文章正文。")},
 	}
 
 	mux := http.NewServeMux()
@@ -567,7 +583,7 @@ func TestContentTemplateAndPageCoexist(t *testing.T) {
 // bubbleUp even if it sits next to sibling .md files.
 func TestContentHtmlNotBubbleUp(t *testing.T) {
 	fsys := fstest.MapFS{
-		"layouts/site.html": {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
+		"layouts/site.html":   {Data: []byte(`<html>{{block "content" .}}{{end}}</html>`)},
 		"content/blog/foo.md": {Data: []byte("# Foo")},
 		"content/blog/index.html": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<p>standalone html page, not a template</p>{{end}}`)},
@@ -849,7 +865,7 @@ func TestContentFileIndexMdRegistersAtDirRoot(t *testing.T) {
 		"blog/index.tpl": {Data: []byte(`<!--layout:site-->
 {{define "content"}}<article>{{.Content.Title}} | {{.Content.Body}}</article>{{end}}`)},
 		"blog/index.md": {Data: []byte("# Blog Root\n\nIntro for the blog.")},
-		"blog/post.md": {Data: []byte("# Post\n\nPost body.")},
+		"blog/post.md":  {Data: []byte("# Post\n\nPost body.")},
 	}
 
 	mux := http.NewServeMux()

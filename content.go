@@ -208,17 +208,3 @@ func buildContentView(mdPath string, fi fs.FileInfo, contentDir, title, descript
 		Body:        body,
 	}
 }
-
-// extractContentView combines filesystem info and Markdown semantics into a
-// ContentView. The Body field is left zero; the caller fills it after rendering.
-//
-// Title and Description are derived from the Markdown AST. If the document
-// has no # H1, Title is left empty (callers should guard with {{if .Title}}).
-//
-// For the loadContentFile path, prefer Process directly to avoid paying
-// for the AST parse twice (once here, once in the subsequent render).
-func extractContentView(mdPath string, content []byte, fi fs.FileInfo, contentDir string, r *contentRenderer) ContentView {
-	doc := r.parser.Parse(text.NewReader(content))
-	title, description := r.extractFromAST(doc, content)
-	return buildContentView(mdPath, fi, contentDir, title, description, template.HTML(""))
-}
