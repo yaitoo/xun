@@ -88,7 +88,10 @@ func (w *Watcher) Add(path string) error {
 // Stop deliberately does not close them.
 //
 // Start on an already-stopped Watcher returns immediately without polling.
-// Calling Start more than once on the same Watcher is not supported.
+//
+// Running two Starts on the same Watcher concurrently is unsupported, and is
+// not defended against: whichever one returns first closes Events, which can
+// panic the other mid-send. Start each Watcher once.
 func (w *Watcher) Start() {
 	defer w.closeOnce.Do(func() {
 		close(w.Events)
