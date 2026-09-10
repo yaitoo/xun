@@ -136,7 +136,16 @@ func (c *Context) Redirect(url string, statusCode ...int) {
 // The result is cached on the Context: subsequent calls return the same
 // slice without re-parsing the Accept-Language header. Context is per
 // request (see app.go), so the cache cannot leak across requests.
-func (c *Context) AcceptLanguage() (languages []string) {
+//
+// The returned slice is owned by the Context. Mutating it (including
+// in-place writes or appends that fit within the slice's capacity) will
+// corrupt the cache for the rest of the request. If you need to modify
+// the result, take a copy first.
+//
+// If the Accept-Language header is mutated after the first call, the
+// second call still returns the cached parsed value; the new header is
+// not re-parsed.
+func (c *Context) AcceptLanguage() []string {
 	if c.languagesDone {
 		return c.languages
 	}
@@ -144,7 +153,7 @@ func (c *Context) AcceptLanguage() (languages []string) {
 
 	accepted := c.Request.Header.Get("Accept-Language")
 	if accepted == "" {
-		return
+		return nil
 	}
 	options := strings.Split(accepted, ",")
 	c.languages = make([]string, 0, len(options))
@@ -167,7 +176,15 @@ func (c *Context) AcceptLanguage() (languages []string) {
 // The result is cached on the Context: subsequent calls return the same
 // slice without re-parsing the Accept header. Context is per request
 // (see app.go), so the cache cannot leak across requests.
-func (c *Context) Accept() (types []MimeType) {
+//
+// The returned slice is owned by the Context. Mutating it (including
+// in-place writes or appends that fit within the slice's capacity) will
+// corrupt the cache for the rest of the request. If you need to modify
+// the result, take a copy first.
+//
+// If the Accept header is mutated after the first call, the second call
+// still returns the cached parsed value; the new header is not re-parsed.
+func (c *Context) Accept() []MimeType {
 	if c.acceptsDone {
 		return c.accepts
 	}
@@ -175,7 +192,7 @@ func (c *Context) Accept() (types []MimeType) {
 
 	accepted := c.Request.Header.Get("Accept")
 	if accepted == "" {
-		return
+		return nil
 	}
 
 	// text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
