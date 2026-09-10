@@ -12,11 +12,12 @@ type DeflateCompressor struct {
 }
 
 // deflateWriterPool recycles *flate.Writer across requests. A fresh
-// flate.Writer at DefaultCompression carries a ~256 KiB deflate state;
-// allocating it per request dominated the GC profile of compressed apps.
-// The pool is goroutine-safe: each pooled encoder is bound to a single
-// request between Get and Put, and Reset on Get / Put drops any residual
-// reference to the previous ResponseWriter.
+// flate.Writer at DefaultCompression carries a 64 KiB sliding window plus
+// an up-to-320 KiB fast-encoder history buffer (~384 KiB total).
+// Allocating that state per request dominated the GC profile of
+// compressed apps. The pool is goroutine-safe: each pooled encoder is
+// bound to a single request between Get and Put, and Reset on Get / Put
+// drops any residual reference to the previous ResponseWriter.
 var deflateWriterPool = sync.Pool{
 	New: func() any {
 		// DefaultCompression is a valid compression level; flate.NewWriter
@@ -36,9 +37,10 @@ func (c *DeflateCompressor) AcceptEncoding() string {
 // It sets the "Content-Encoding" header to "deflate" and binds a flate.Writer
 // (acquired from deflateWriterPool) to the underlying writer.
 //
-// The *flate.Writer is reused via Reset on every call, so the ~256 KiB
-// deflate state at DefaultCompression is recycled across requests instead
-// of being reallocated on every compressed response.
+// The *flate.Writer is reused via Reset on every call. Reset rebinds the
+// destination io.Writer and clears the deflate state, so the 64 KiB
+// sliding window and fast-encoder history buffer are recycled across
+// requests instead of being reallocated on every compressed response.
 func (c *DeflateCompressor) New(rw http.ResponseWriter) ResponseWriter {
 	rw.Header().Set("Content-Encoding", "deflate")
 	w := deflateWriterPool.Get().(*flate.Writer)

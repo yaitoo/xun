@@ -11,12 +11,14 @@ import (
 type GzipCompressor struct {
 }
 
-// gzipWriterPool recycles *gzip.Writer across requests. A fresh gzip.Writer
-// carries a 4 KiB bufio.Writer plus a ~256 KiB deflate state at
-// DefaultCompression; allocating it per request dominated the GC profile of
-// compressed apps. The pool is goroutine-safe: each pooled encoder is bound
-// to a single request between Get and Put, and Reset on Get / Put drops any
-// residual reference to the previous ResponseWriter.
+// gzipWriterPool recycles *gzip.Writer across requests. A fresh
+// gzip.Writer at DefaultCompression carries an inner *flate.Writer whose
+// deflate state includes a 64 KiB sliding window plus an up-to-320 KiB
+// fast-encoder history buffer (~384 KiB total). Allocating that state per
+// request dominated the GC profile of compressed apps. The pool is
+// goroutine-safe: each pooled encoder is bound to a single request between
+// Get and Put, and Reset on Get / Put drops any residual reference to the
+// previous ResponseWriter.
 var gzipWriterPool = sync.Pool{
 	New: func() any { return gzip.NewWriter(io.Discard) },
 }
@@ -31,8 +33,11 @@ func (c *GzipCompressor) AcceptEncoding() string {
 // It sets the "Content-Encoding" header to "gzip" and returns the wrapped writer.
 //
 // The *gzip.Writer is acquired from gzipWriterPool and rebound to rw via
-// Reset, so the internal deflate state and bufio buffer are recycled across
-// requests instead of being reallocated on every compressed response.
+// Reset. Reset rebinds the underlying io.Writer and clears the deflate
+// state — gzip.Writer.Reset preserves the inner *flate.Writer pointer, so
+// its 64 KiB sliding window and fast-encoder history buffer are recycled
+// across requests instead of being reallocated on every compressed
+// response.
 func (c *GzipCompressor) New(rw http.ResponseWriter) ResponseWriter {
 	rw.Header().Set("Content-Encoding", "gzip")
 
