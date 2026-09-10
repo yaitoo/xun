@@ -53,8 +53,15 @@ func WithMux(mux *http.ServeMux) Option {
 // # Lifecycle
 //
 // Pass WithWatch into New() along with WithFsys so initial loads run
-// before any requests are served. There is no public API to "stop"
-// the watcher goroutine — it runs for the lifetime of the App.
+// before any requests are served.
+//
+// Call App.Close to stop watching. It terminates the watcher and lets
+// both hot-reload goroutines return, so an App that is created and
+// discarded — in a test binary, say — does not leave a polling loop
+// walking the fs for the rest of the process. Close is idempotent.
+//
+// Stopping is one-way: the watcher cannot be resumed after Close. Build
+// a new App if you need to watch again.
 func WithWatch() Option {
 	return func(app *App) {
 		app.watch = true

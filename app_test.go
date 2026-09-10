@@ -16,8 +16,10 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/yaitoo/xun/fsnotify"
 )
 
 var (
@@ -25,6 +27,16 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	// Park every watcher's poll loop for the whole binary. The watch tests
+	// drive hot reload by delivering events by hand, so a poller walking
+	// fstest.MapFS while a test mutates it would be a hard runtime throw.
+	//
+	// This is set once, here, rather than per-test: CheckInterval is a plain
+	// package global that each Watcher.Start reads as it comes up, so writing
+	// it while any watcher goroutine is alive is a data race. Writing it
+	// before m.Run happens-before every goroutine the tests create.
+	fsnotify.CheckInterval = time.Hour
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) { // skipcq: RVV-B0012

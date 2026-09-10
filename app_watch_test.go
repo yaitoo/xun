@@ -9,11 +9,33 @@ import (
 	"os"
 	"testing"
 	"testing/fstest"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/yaitoo/xun/fsnotify"
 )
+
+// reloadBarrier is an event no ViewEngine acts on: every engine ignores a
+// Remove for an extension-less name, so delivering it has no side effect.
+var reloadBarrier = fsnotify.Event{Name: "__reload_barrier__", Op: fsnotify.Remove}
+
+// reload delivers events to the App's hot-reload goroutine and returns only
+// once all of them have been fully processed.
+//
+// enableHotReload handles events strictly serially — receive, run every
+// engine's FileChanged, loop back to the select — so a send that completes
+// proves the *previous* event finished processing. The trailing inert
+// barrier turns that into a synchronisation point: when its send returns,
+// every real event ahead of it is done. That is what lets these tests assert
+// immediately instead of sleeping and hoping.
+func reload(app *App, events ...fsnotify.Event) {
+	for _, ev := range events {
+		app.watcher.Events <- ev
+	}
+
+	app.watcher.Events <- reloadBarrier
+}
 
 func TestWatchOnStatic(t *testing.T) {
 	fsys := fstest.MapFS{
@@ -59,21 +81,17 @@ func TestWatchOnStatic(t *testing.T) {
 
 	require.Equal(t, "admin", string(buf))
 
-	// fixed data race issue on fstest.MapFile
-	app.watcher.Stop()
+	// The poll loop is parked for the whole test binary (see TestMain), so
+	// these writes cannot race a concurrent walk.
 	fsys["public/index.html"] = &fstest.MapFile{Data: []byte("index added"), ModTime: time.Now()}
 	fsys["public/home.html"] = &fstest.MapFile{Data: []byte("home updated"), ModTime: time.Now()}
 	delete(fsys, "public/admin.html")
 
-	checkInterval := fsnotify.CheckInterval
-	defer func() {
-		fsnotify.CheckInterval = checkInterval
-	}()
-
-	fsnotify.CheckInterval = 100 * time.Millisecond
-	go app.watcher.Start()
-
-	time.Sleep(1 * time.Second)
+	reload(app,
+		fsnotify.Event{Name: "public/index.html", Op: fsnotify.Create},
+		fsnotify.Event{Name: "public/home.html", Op: fsnotify.Write},
+		fsnotify.Event{Name: "public/admin.html", Op: fsnotify.Remove},
+	)
 
 	req, err = http.NewRequest("GET", srv.URL+"/", nil)
 	require.NoError(t, err)
@@ -184,9 +202,8 @@ func TestWatchOnHtml(t *testing.T) {
 
 	require.Equal(t, "<html><head><title>header</title></head><body><div>shared</div></body></html>", string(buf))
 
-	// fixed data race issue on fstest.MapFile
-	app.watcher.Stop()
-
+	// The poll loop is parked for the whole test binary (see TestMain), so
+	// these writes cannot race a concurrent walk.
 	fsys["components/header.html"].Data = []byte("<title>header updated</title>")
 	fsys["components/header.html"].ModTime = time.Now()
 
@@ -208,16 +225,17 @@ func TestWatchOnHtml(t *testing.T) {
 	// deleted
 	delete(fsys, "pages/admin/user.html")
 
-	checkInterval := fsnotify.CheckInterval
-	fsnotify.CheckInterval = 100 * time.Millisecond
-	defer func() {
-		fsnotify.CheckInterval = checkInterval
-	}()
-
-	go app.watcher.Start()
-	time.Sleep(1 * time.Second)
-
-	app.watcher.Stop()
+	// Same order the poller would emit: WalkDir visits lexically, and the
+	// Remove pass over the file map runs last.
+	reload(app,
+		fsnotify.Event{Name: "components/header.html", Op: fsnotify.Write},
+		fsnotify.Event{Name: "layouts/home.html", Op: fsnotify.Write},
+		fsnotify.Event{Name: "pages/about.html", Op: fsnotify.Create},
+		fsnotify.Event{Name: "pages/admin/index.html", Op: fsnotify.Write},
+		fsnotify.Event{Name: "pages/index.html", Op: fsnotify.Write},
+		fsnotify.Event{Name: "views/shared.html", Op: fsnotify.Write},
+		fsnotify.Event{Name: "pages/admin/user.html", Op: fsnotify.Remove},
+	)
 
 	req, err = http.NewRequest("GET", srv.URL+"/", nil)
 	req.Header.Set("Accept", "text/html")
@@ -319,17 +337,21 @@ func TestHotReloadChannels(t *testing.T) {
 		throwError func(app *App)
 	}{
 		{
-			name:      "should_not_panic_when_watcher_events_channel_is_closed",
+			// Stop is the only way Events/Errors close now: Start owns
+			// both channels and closes them on its way out. Closing them
+			// from here, as this test used to, would race the sender.
+			name:      "should_not_panic_when_watcher_is_stopped",
 			createApp: func() *App { return createApp() },
 			throwError: func(app *App) {
-				close(app.watcher.Events)
+				app.watcher.Stop()
 			},
 		},
 		{
-			name:      "should_not_panic_when_watcher_errors_channel_is_closed",
+			name:      "should_not_panic_when_watcher_is_stopped_twice",
 			createApp: func() *App { return createApp() },
 			throwError: func(app *App) {
-				close(app.watcher.Errors)
+				app.watcher.Stop()
+				app.watcher.Stop()
 			},
 		},
 		{
@@ -359,19 +381,51 @@ func TestHotReloadChannels(t *testing.T) {
 
 }
 
-// TestWatchDocContract pins the WithWatch race contract. Issue #131
-// settled on "lock-free, documented as dev-only, concurrent traffic +
-// reload is undefined behavior" rather than introducing locks. The
-// contract itself lives in the WithWatch docstring and is guarded by
-// code review — a runtime assertion can't catch a doc drift. This test
-// exists as a placeholder so the test slot is reserved for any future
-// contract-level assertion (e.g. reflection on the docstring). The
-// existing TestWatchOnStatic / TestWatchOnHtml cover the working
-// sequential reload path without -race.
-func TestWatchDocContract(t *testing.T) {
-	mux := http.NewServeMux()
-	app := New(WithMux(mux))
+// TestCloseStopsWatcherGoroutines is the regression test for #132: an App
+// that opted into WithWatch used to keep both hot-reload goroutines — and the
+// poll loop's fs walk — alive for the rest of the process, because Close did
+// nothing and nothing ever closed the watcher's channels.
+//
+// The assertion is the synctest bubble itself: Test waits for every goroutine
+// started inside it to exit, and fails on deadlock. So a watcher that outlives
+// Close fails the test directly, with no goroutine counting, no slack for
+// scheduler noise, and no interference from other tests. Against the old
+// implementation this test deadlocked; the goroutine-counting version it
+// replaces reported "2 before, 42 after" for the loop below.
+//
+// No HTTP here on purpose: real socket I/O is not durably blocking, so a
+// bubble and httptest do not mix. The reload behaviour is covered by
+// TestWatchOnStatic and friends, which stay outside a bubble.
+func TestCloseStopsWatcherGoroutines(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		for range 5 {
+			fsys := fstest.MapFS{
+				"public/home.html": {Data: []byte("home"), Mode: os.ModePerm, ModTime: time.Now()},
+			}
 
-	app.watch = true // emulate the WithWatch option's effect
-	require.True(t, app.watch, "WithWatch must set app.watch")
+			// A fresh mux per iteration: New falls back to
+			// http.DefaultServeMux, and re-registering the same pattern on it
+			// panics.
+			app := New(WithMux(http.NewServeMux()), WithFsys(fsys), WithWatch())
+			app.Start()
+
+			app.Close()
+			app.Close() // idempotent
+
+			// Converge before the next iteration so a leak is attributed to
+			// the App that caused it rather than to the last one.
+			synctest.Wait()
+		}
+	})
+}
+
+// TestCloseWithoutWatchIsNoop pins that Close stays safe on an App that never
+// opted into WithWatch, where app.watcher is nil.
+func TestCloseWithoutWatchIsNoop(t *testing.T) {
+	app := New(WithMux(http.NewServeMux()))
+
+	require.NotPanics(t, func() {
+		app.Close()
+		app.Close()
+	})
 }

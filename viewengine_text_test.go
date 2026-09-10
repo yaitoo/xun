@@ -141,9 +141,8 @@ func TestWatchOnText(t *testing.T) {
 
 	require.Equal(t, fsys["text/robots.txt"].Data, buf)
 
-	// fixed data race issue on fstest.MapFile
-	app.watcher.Stop()
-
+	// The poll loop is parked for the whole test binary (see TestMain), so
+	// these writes cannot race a concurrent walk.
 	fsys["text/sitemap.xml"] = &fstest.MapFile{Data: []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`), ModTime: time.Now()}
 
@@ -153,16 +152,13 @@ func TestWatchOnText(t *testing.T) {
 	// deleted
 	delete(fsys, "text/robots.txt")
 
-	checkInterval := fsnotify.CheckInterval
-	fsnotify.CheckInterval = 100 * time.Millisecond
-	defer func() {
-		fsnotify.CheckInterval = checkInterval
-	}()
-
-	go app.watcher.Start()
-	time.Sleep(1 * time.Second)
-
-	app.watcher.Stop()
+	// Same order the poller would emit: WalkDir visits lexically, and the
+	// Remove pass over the file map runs last.
+	reload(app,
+		fsnotify.Event{Name: "text/new.txt", Op: fsnotify.Create},
+		fsnotify.Event{Name: "text/sitemap.xml", Op: fsnotify.Write},
+		fsnotify.Event{Name: "text/robots.txt", Op: fsnotify.Remove},
+	)
 
 	req, err = http.NewRequest("GET", srv.URL+"/new.txt", nil)
 	req.Header.Set("Accept", "text/plain, */*")
