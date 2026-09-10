@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -107,4 +108,77 @@ func TestDeflateCompressor(t *testing.T) {
 		})
 	}
 
+}
+
+func TestDeflateCompressor_PoolAllocations(t *testing.T) {
+	// See TestGzipCompressor_PoolAllocations for rationale. We
+	// deliberately do not assert Same-pointer identity between two
+	// Get calls: sync.Pool makes no LIFO guarantee and may evict the
+	// encoder between Put and Get under GC pressure (notably under
+	// -race). The AllocsPerRun signal is reliable across 1000
+	// iterations.
+
+	c := &DeflateCompressor{}
+
+	// Warmup: prime the local pool.
+	rw := httptest.NewRecorder()
+	rw.Header().Set("Content-Encoding", "deflate")
+	w := c.New(rw)
+	w.Close()
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		rw := httptest.NewRecorder()
+		rw.Header().Set("Content-Encoding", "deflate")
+		w := c.New(rw)
+		w.Close()
+	})
+
+	require.Less(t, allocs, 20.0,
+		"expected deflate encoder pooling to be active, but allocations per run were %.1f", allocs)
+}
+
+func BenchmarkDeflateCompressor(b *testing.B) {
+	fsys := fstest.MapFS{
+		"public/skin.css": {Data: []byte(strings.Repeat("body { color: red; }\n", 64))},
+	}
+
+	m := http.NewServeMux()
+	srv := httptest.NewServer(m)
+	defer srv.Close()
+
+	app := New(WithMux(m), WithFsys(fsys), WithCompressor(&DeflateCompressor{}))
+	defer app.Close()
+
+	app.Get("/payload", func(c *Context) error {
+		return c.View("payload body")
+	})
+
+	go app.Start()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/payload", nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	req.Header.Set("Accept-Encoding", "deflate")
+
+	// Warmup: prime the pool and HTTP transport before measuring.
+	for i := 0; i < 10; i++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
 }

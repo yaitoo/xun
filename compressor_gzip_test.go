@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -118,4 +119,88 @@ func TestGzipCompressor(t *testing.T) {
 		})
 	}
 
+}
+
+func TestGzipCompressor_PoolAllocations(t *testing.T) {
+	// Measure allocations over a tight Get/Close cycle. Driving the
+	// measurement through httptest.NewServer + client.Do would let the
+	// HTTP transport's ~60+ allocs/run dwarf the encoder signal; here
+	// we exercise the compressor directly so the pooled-vs-fresh gap
+	// dominates.
+	//
+	// Empirically: pooled is ~13 allocs/run, fresh is ~23 allocs/run.
+	// Threshold 20 catches a regression that reverts to fresh
+	// allocation but tolerates normal noise from
+	// httptest.ResponseRecorder. Note that we cannot assert a
+	// Same-pointer identity between two Get calls: sync.Pool makes
+	// no LIFO guarantee and may evict the encoder between Put and
+	// Get under GC pressure (notably under -race), so an
+	// identity-based test is flaky. The allocation-count signal is
+	// reliable across 1000 iterations because the pool's New func is
+	// only invoked when the per-P cache is empty, not on every Get.
+
+	c := &GzipCompressor{}
+
+	// Warmup: prime the local pool so subsequent Get returns the
+	// pooled encoder rather than invoking New.
+	rw := httptest.NewRecorder()
+	rw.Header().Set("Content-Encoding", "gzip")
+	w := c.New(rw)
+	w.Close()
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		rw := httptest.NewRecorder()
+		rw.Header().Set("Content-Encoding", "gzip")
+		w := c.New(rw)
+		w.Close()
+	})
+
+	require.Less(t, allocs, 20.0,
+		"expected gzip encoder pooling to be active, but allocations per run were %.1f", allocs)
+}
+
+func BenchmarkGzipCompressor(b *testing.B) {
+	fsys := fstest.MapFS{
+		"public/skin.css": {Data: []byte(strings.Repeat("body { color: red; }\n", 64))},
+	}
+
+	m := http.NewServeMux()
+	srv := httptest.NewServer(m)
+	defer srv.Close()
+
+	app := New(WithMux(m), WithFsys(fsys), WithCompressor(&GzipCompressor{}))
+	defer app.Close()
+
+	app.Get("/payload", func(c *Context) error {
+		return c.View("payload body")
+	})
+
+	go app.Start()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/payload", nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	// Warmup: prime the pool and HTTP transport before measuring.
+	for i := 0; i < 10; i++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
 }

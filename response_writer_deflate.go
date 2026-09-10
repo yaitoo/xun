@@ -3,6 +3,7 @@ package xun
 import (
 	"bufio"
 	"compress/flate"
+	"io"
 	"net"
 )
 
@@ -29,13 +30,25 @@ func (rw *deflateResponseWriter) Write(p []byte) (int, error) {
 
 // Close closes the underlying writer, flushing any buffered data to the client.
 // It is important to call this method to ensure all data is properly sent.
-// If Hijack has transferred ownership of the connection to the caller, Close
-// is a no-op so the deflate trailer is not written onto the caller-owned stream.
+//
+// After flushing, the *flate.Writer is returned to deflateWriterPool so the
+// internal deflate state is recycled across requests. Reset(io.Discard)
+// before Put drops the residual reference to the previous ResponseWriter so
+// the pooled encoder does not pin the per-request conn alive.
+//
+// If Hijack has transferred ownership of the connection to the caller,
+// Close is a no-op: the deflate trailer must NOT be written onto the
+// caller-owned stream, and the encoder must NOT be returned to the pool,
+// because reusing an encoder whose destination was the caller-owned conn
+// would write pooled-state bytes back into a stream the framework no longer
+// owns. The hijacked guard runs before any pool access.
 func (rw *deflateResponseWriter) Close() {
 	if rw.hijacked {
 		return
 	}
 	rw.w.Close() // nolint: errcheck
+	rw.w.Reset(io.Discard)
+	deflateWriterPool.Put(rw.w)
 }
 
 // Flush writes any buffered data to the underlying writer and then flushes
