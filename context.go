@@ -145,6 +145,8 @@ func (c *Context) Redirect(url string, statusCode ...int) {
 // If the Accept-Language header is mutated after the first call, the
 // second call still returns the cached parsed value; the new header is
 // not re-parsed.
+//
+// Returns nil if the header is empty or contains no usable entries.
 func (c *Context) AcceptLanguage() []string {
 	if c.languagesDone {
 		return c.languages
@@ -156,7 +158,6 @@ func (c *Context) AcceptLanguage() []string {
 		return nil
 	}
 	options := strings.Split(accepted, ",")
-	c.languages = make([]string, 0, len(options))
 
 	for _, opt := range options {
 		locale := strings.SplitN(opt, ";", 2)
@@ -164,7 +165,7 @@ func (c *Context) AcceptLanguage() []string {
 		if lang == "" {
 			continue
 		}
-		c.languages = append(c.languages, lang)
+		c.languages = append(c.languages, strings.ToLower(lang))
 	}
 	return c.languages
 }
@@ -184,6 +185,8 @@ func (c *Context) AcceptLanguage() []string {
 //
 // If the Accept header is mutated after the first call, the second call
 // still returns the cached parsed value; the new header is not re-parsed.
+//
+// Returns nil if the header is empty or contains no usable entries.
 func (c *Context) Accept() []MimeType {
 	if c.acceptsDone {
 		return c.accepts
@@ -198,7 +201,6 @@ func (c *Context) Accept() []MimeType {
 	// text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
 
 	options := strings.Split(accepted, ",")
-	c.accepts = make([]MimeType, 0, len(options))
 
 	for _, opt := range options {
 		if n := strings.IndexByte(opt, ';'); n >= 0 {
@@ -208,7 +210,7 @@ func (c *Context) Accept() []MimeType {
 		if opt == "" {
 			continue
 		}
-		c.accepts = append(c.accepts, NewMimeType(opt))
+		c.accepts = append(c.accepts, NewMimeType(strings.ToLower(opt)))
 	}
 	return c.accepts
 }

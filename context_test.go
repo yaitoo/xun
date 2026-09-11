@@ -324,6 +324,14 @@ func TestContextAccept(t *testing.T) {
 			},
 		},
 		{
+			name:   "uppercase_normalized",
+			header: "TEXT/HTML,Application/JSON",
+			expected: []MimeType{
+				{Type: "text", SubType: "html"},
+				{Type: "application", SubType: "json"},
+			},
+		},
+		{
 			name:     "trailing_comma_skipped",
 			header:   "text/html,",
 			expected: []MimeType{{Type: "text", SubType: "html"}},
@@ -356,7 +364,7 @@ func TestContextAccept(t *testing.T) {
 			got := ctx.Accept()
 
 			if test.expected == nil {
-				require.Empty(t, got)
+				require.Nil(t, got)
 			} else {
 				require.Equal(t, test.expected, got)
 			}
@@ -396,6 +404,17 @@ func TestContextAcceptEmptyHeaderCached(t *testing.T) {
 	require.Nil(t, ctx.Accept())
 }
 
+func TestContextAcceptOnlyCommasReturnsNil(t *testing.T) {
+	// Regression: pre-fix, Accept(",,,") returned a non-nil empty slice
+	// because the loop pre-allocated `make([]MimeType, 0, len)`. The
+	// docstring promises a nil return when there are no usable entries.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", ",,,")
+	ctx := &Context{Request: req}
+
+	require.Nil(t, ctx.Accept())
+}
+
 func TestContextAcceptLanguage(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -410,36 +429,41 @@ func TestContextAcceptLanguage(t *testing.T) {
 		{
 			name:     "single",
 			header:   "en-US",
-			expected: []string{"en-US"},
+			expected: []string{"en-us"},
 		},
 		{
 			name:     "multiple",
 			header:   "en-US,fr,de",
-			expected: []string{"en-US", "fr", "de"},
+			expected: []string{"en-us", "fr", "de"},
 		},
 		{
 			name:     "with_q_value",
 			header:   "en-US;q=0.9,fr;q=0.8",
-			expected: []string{"en-US", "fr"},
+			expected: []string{"en-us", "fr"},
 		},
 		{
 			name:     "surrounding_whitespace",
 			header:   " en-US , fr ",
-			expected: []string{"en-US", "fr"},
+			expected: []string{"en-us", "fr"},
 		},
 		{
 			name:     "trailing_comma_skipped",
 			header:   "en-US,",
-			expected: []string{"en-US"},
+			expected: []string{"en-us"},
 		},
 		{
 			name:     "leading_comma_skipped",
 			header:   ",en-US",
-			expected: []string{"en-US"},
+			expected: []string{"en-us"},
 		},
 		{
 			name:     "only_commas",
 			header:   ",,,",
+			expected: nil,
+		},
+		{
+			name:     "only_whitespace",
+			header:   "   ",
 			expected: nil,
 		},
 	}
@@ -455,7 +479,7 @@ func TestContextAcceptLanguage(t *testing.T) {
 			got := ctx.AcceptLanguage()
 
 			if test.expected == nil {
-				require.Empty(t, got)
+				require.Nil(t, got)
 			} else {
 				require.Equal(t, test.expected, got)
 			}
@@ -477,5 +501,5 @@ func TestContextAcceptLanguageCached(t *testing.T) {
 	second := ctx.AcceptLanguage()
 
 	require.Equal(t, first, second)
-	require.Equal(t, []string{"en-US", "fr"}, second)
+	require.Equal(t, []string{"en-us", "fr"}, second)
 }
