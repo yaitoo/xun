@@ -266,3 +266,240 @@ func TestDeleteHeader(t *testing.T) {
 	v = ctx.Response.Header().Get("test")
 	require.Empty(t, v)
 }
+
+func TestContextAccept(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected []MimeType
+	}{
+		{
+			name:     "empty",
+			header:   "",
+			expected: nil,
+		},
+		{
+			name:     "single",
+			header:   "text/html",
+			expected: []MimeType{{Type: "text", SubType: "html"}},
+		},
+		{
+			name:   "multiple",
+			header: "text/html,application/json",
+			expected: []MimeType{
+				{Type: "text", SubType: "html"},
+				{Type: "application", SubType: "json"},
+			},
+		},
+		{
+			name:   "with_q_value",
+			header: "text/html;q=0.9,application/json;q=0.8",
+			expected: []MimeType{
+				{Type: "text", SubType: "html"},
+				{Type: "application", SubType: "json"},
+			},
+		},
+		{
+			name:   "surrounding_whitespace",
+			header: " text/html , application/json ",
+			expected: []MimeType{
+				{Type: "text", SubType: "html"},
+				{Type: "application", SubType: "json"},
+			},
+		},
+		{
+			name:   "whitespace_around_semicolon",
+			header: "text/html ; q=0.9,application/json",
+			expected: []MimeType{
+				{Type: "text", SubType: "html"},
+				{Type: "application", SubType: "json"},
+			},
+		},
+		{
+			name:   "wildcards",
+			header: "*/*,text/*",
+			expected: []MimeType{
+				{Type: "*", SubType: "*"},
+				{Type: "text", SubType: "*"},
+			},
+		},
+		{
+			name:   "uppercase_normalized",
+			header: "TEXT/HTML,Application/JSON",
+			expected: []MimeType{
+				{Type: "text", SubType: "html"},
+				{Type: "application", SubType: "json"},
+			},
+		},
+		{
+			name:     "trailing_comma_skipped",
+			header:   "text/html,",
+			expected: []MimeType{{Type: "text", SubType: "html"}},
+		},
+		{
+			name:     "leading_comma_skipped",
+			header:   ",text/html",
+			expected: []MimeType{{Type: "text", SubType: "html"}},
+		},
+		{
+			name:     "only_commas",
+			header:   ",,,",
+			expected: nil,
+		},
+		{
+			name:     "only_whitespace",
+			header:   "   ",
+			expected: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if test.header != "" {
+				req.Header.Set("Accept", test.header)
+			}
+			ctx := &Context{Request: req}
+
+			got := ctx.Accept()
+
+			if test.expected == nil {
+				require.Nil(t, got)
+			} else {
+				require.Equal(t, test.expected, got)
+			}
+		})
+	}
+}
+
+func TestContextAcceptCached(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "text/html,application/json")
+	ctx := &Context{Request: req}
+
+	first := ctx.Accept()
+
+	// Mutate the header after the first call. If Accept() is properly
+	// cached on the Context, the second call must return the original
+	// parsed slice, not re-parse the new header.
+	req.Header.Set("Accept", "application/xml,text/plain")
+
+	second := ctx.Accept()
+
+	require.Equal(t, first, second)
+	require.Equal(t, []MimeType{
+		{Type: "text", SubType: "html"},
+		{Type: "application", SubType: "json"},
+	}, second)
+}
+
+func TestContextAcceptEmptyHeaderCached(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	// No Accept header set: Accept() should return nil and remember it.
+	ctx := &Context{Request: req}
+
+	require.Nil(t, ctx.Accept())
+
+	req.Header.Set("Accept", "text/html")
+	require.Nil(t, ctx.Accept())
+}
+
+func TestContextAcceptOnlyCommasReturnsNil(t *testing.T) {
+	// Regression: pre-fix, Accept(",,,") returned a non-nil empty slice
+	// because the loop pre-allocated `make([]MimeType, 0, len)`. The
+	// docstring promises a nil return when there are no usable entries.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", ",,,")
+	ctx := &Context{Request: req}
+
+	require.Nil(t, ctx.Accept())
+}
+
+func TestContextAcceptLanguage(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected []string
+	}{
+		{
+			name:     "empty",
+			header:   "",
+			expected: nil,
+		},
+		{
+			name:     "single",
+			header:   "en-US",
+			expected: []string{"en-us"},
+		},
+		{
+			name:     "multiple",
+			header:   "en-US,fr,de",
+			expected: []string{"en-us", "fr", "de"},
+		},
+		{
+			name:     "with_q_value",
+			header:   "en-US;q=0.9,fr;q=0.8",
+			expected: []string{"en-us", "fr"},
+		},
+		{
+			name:     "surrounding_whitespace",
+			header:   " en-US , fr ",
+			expected: []string{"en-us", "fr"},
+		},
+		{
+			name:     "trailing_comma_skipped",
+			header:   "en-US,",
+			expected: []string{"en-us"},
+		},
+		{
+			name:     "leading_comma_skipped",
+			header:   ",en-US",
+			expected: []string{"en-us"},
+		},
+		{
+			name:     "only_commas",
+			header:   ",,,",
+			expected: nil,
+		},
+		{
+			name:     "only_whitespace",
+			header:   "   ",
+			expected: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			if test.header != "" {
+				req.Header.Set("Accept-Language", test.header)
+			}
+			ctx := &Context{Request: req}
+
+			got := ctx.AcceptLanguage()
+
+			if test.expected == nil {
+				require.Nil(t, got)
+			} else {
+				require.Equal(t, test.expected, got)
+			}
+		})
+	}
+}
+
+func TestContextAcceptLanguageCached(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept-Language", "en-US,fr")
+	ctx := &Context{Request: req}
+
+	first := ctx.AcceptLanguage()
+
+	// Mutate the header after the first call. If AcceptLanguage() is
+	// cached, the second call must return the original parsed slice.
+	req.Header.Set("Accept-Language", "ja,zh-CN")
+
+	second := ctx.AcceptLanguage()
+
+	require.Equal(t, first, second)
+	require.Equal(t, []string{"en-us", "fr"}, second)
+}
