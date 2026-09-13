@@ -205,24 +205,29 @@ from your content engine. No `text/sitemap.xml` indirection, no extra handler.
 </urlset>
 ```
 
-`.Data` is `[]xun.SitemapURL{Loc, LastMod}` projected from three sources:
+`.Data` is `[]xun.SitemapURL{Loc, LastMod}` projected from `app.contentViews`
+only. The scope is intentionally narrow:
 
-| Source | Detection | Example | `LastMod` |
-|--------|-----------|---------|-----------|
-| `pages/**/*.html` | `HtmlViewer` in route's viewers | `pages/about.html` → `/about` | empty |
-| `public/**/*.html` | `FileViewer` + path ends in `/` or `.html` | `public/index.html` → `/`, `public/foo.html` → `/foo.html` | empty |
-| `contentViews` | entry exists in `app.contentViews` | `content/post.md` → `/content/post` | file mtime (RFC3339) |
+| Source | `Loc` | `LastMod` |
+|--------|-------|-----------|
+| `content/*.md` (with bubble-up template) | e.g. `content/post.md` → `/content/post` | file mtime (RFC3339) |
+| `content/<dir>/index.md` | e.g. `content/blog/index.md` → `/blog/` (canonical trailing slash) | file mtime (RFC3339) |
 
-Routes registered via `app.Get` are **excluded** — the framework
-classifies those as user handlers, not "pages", even if they happen to
-serve HTML. Static assets in `public/` (CSS, JS, images, fonts, feeds)
-are excluded by extension. The `/sitemap.xml` route itself is excluded so
-the sitemap doesn't point at itself.
+Out of scope (by design — see `content_sitemap.go` doc comments for the
+rationale):
 
-`Loc` is a URL path only (e.g. `/about`, `/blog/`) — the framework does
-not know which scheme + host your site is deployed under, so the template
-prepends the host itself. Guard `LastMod` with `{{ if .LastMod }}` since
-only content-engine routes carry a tracked mtime.
+- `pages/*.html` and `public/*.html` — user-authored, no mtime metadata
+  in the framework; add them to the sitemap by hand if needed.
+- `app.Get` routes — classified as user handlers, not pages.
+- Static assets in `public/` (CSS, JS, images, fonts, feeds).
+- `.md` files without a bubble-up template (orphan entries — no route
+  to point crawlers at).
+
+`Loc` is a URL path only (e.g. `/content/post`) — the framework does
+not know which scheme + host your site is deployed under, so the
+template prepends the host itself. Guard `LastMod` with
+`{{ if .LastMod }}` (always safe; content views always carry a mtime
+unless the source file lacks one).
 
 #### Filtering
 There is no `WithSitemap` option. Filtering happens in your `sitemap.xml`

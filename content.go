@@ -18,7 +18,7 @@ import (
 //
 // Seven fields:
 //   - Title, Description are derived from Markdown semantics (AST walk).
-//   - Path, Slug, Date come from the filesystem.
+//   - Path, Slug, LastMod come from the filesystem.
 //   - Body is the rendered HTML produced by goldmark.
 //   - Params holds arbitrary key/value pairs from a sibling .yaml sidecar
 //     (see loadContentFile). Template authors define their own keys;
@@ -28,7 +28,7 @@ type ContentView struct {
 	Slug        string         // "2026/deeper"
 	Title       string         // First # H1; empty if none
 	Description string         // First blockquote (preferred) or top-level paragraph; empty if none
-	Date        time.Time      // File mtime
+	LastMod     time.Time      // File mtime, formatted RFC3339 in SitemapURL. Empty when Stat failed.
 	Body        template.HTML  // Rendered Markdown
 	Params      map[string]any // Parsed from sibling .yaml, if present; nil otherwise
 }
@@ -193,7 +193,7 @@ func buildContentView(mdPath string, fi fs.FileInfo, contentDir, title, descript
 		slug = strings.TrimPrefix(slug, contentDir+"/")
 	}
 
-	// Date: file mtime if available.
+	// LastMod: file mtime if available.
 	var date time.Time
 	if fi != nil {
 		date = fi.ModTime()
@@ -204,7 +204,7 @@ func buildContentView(mdPath string, fi fs.FileInfo, contentDir, title, descript
 		Slug:        slug,
 		Title:       title,
 		Description: description,
-		Date:        date,
+		LastMod:     date,
 		Body:        body,
 	}
 }

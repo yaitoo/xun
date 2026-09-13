@@ -588,12 +588,12 @@ func TestSitemap_PlainXML_NoActions_RendersIdentity(t *testing.T) {
 	require.Equal(t, literal, string(buf))
 }
 
-func TestSitemap_IncludesPagesAndContentRoutes(t *testing.T) {
-	// SitemapURLs walks app.routes and includes three sources only:
-	// pages/**/*.html, public/**/*.html, and contentViews (routed).
-	// User app.Get handlers (JsonViewer) are NOT included — they are
-	// not "pages" by the framework's classification, even if they
-	// happen to serve HTML.
+func TestSitemap_OnlyContentRoutes(t *testing.T) {
+	// SitemapURLs walks app.contentViews, not app.routes. pages/*.html,
+	// public/*.html, and app.Get routes are intentionally outside the
+	// framework's sitemap scope — see content_sitemap.go for the
+	// rationale. This test pins that scope: only content/*.md entries
+	// with a registered route appear.
 	fsys := fstest.MapFS{
 		"index.tpl":               {Data: []byte(indexTpl)},
 		"pages/about.html":        {Data: []byte(`<h1>About</h1>`)},
@@ -619,13 +619,12 @@ func TestSitemap_IncludesPagesAndContentRoutes(t *testing.T) {
 		locSet[u.Loc] = true
 	}
 
-	require.Contains(t, locSet, "/about", "pages/about.html should be in sitemap")
-	require.Contains(t, locSet, "/blog/", "pages/blog/index.html → /blog/")
-	require.Contains(t, locSet, "/content/post", "content/post.md")
-	require.Contains(t, locSet, "/about.html", "public/about.html (FileViewer + .html)")
-	require.NotContains(t, locSet, "/api/health", "user app.Get handler is excluded")
-	require.NotContains(t, locSet, "/style.css", "non-HTML public/ asset excluded")
-	require.NotContains(t, locSet, "/sitemap.xml", "sitemap itself excluded")
+	require.Contains(t, locSet, "/content/post", "content/post.md is the only source")
+	require.NotContains(t, locSet, "/about", "pages/*.html is outside sitemap scope")
+	require.NotContains(t, locSet, "/blog/", "pages/*.html is outside sitemap scope")
+	require.NotContains(t, locSet, "/about.html", "public/*.html is outside sitemap scope")
+	require.NotContains(t, locSet, "/api/health", "user app.Get is outside sitemap scope")
+	require.NotContains(t, locSet, "/style.css", "static asset is outside sitemap scope")
 }
 
 func TestSitemap_LastModOnlyForContentRoutes(t *testing.T) {

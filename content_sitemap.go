@@ -6,105 +6,136 @@ import (
 	"time"
 )
 
-// SitemapURL is one <url> entry in a sitemap.xml.
+// SitemapURL is one <url> entry in a sitemap.xml. The framework only
+// surfaces content engine routes — see App.SitemapURLs for the rationale.
 //
-// Loc is a URL *path* (e.g. "/about", "/blog/", "/content/post") — the
-// framework does not know which scheme + host your site is deployed
-// under, so the host prefix is the template's job:
+// # Field naming
 //
-//	<loc>https://example.com{{ .Loc }}</loc>
+// Loc and LastMod mirror the sitemap.xml element names
+// (<loc>https://...</loc> and <lastmod>RFC3339</lastmod>) on purpose:
+// templates can write `{{ .Loc }}` / `{{ .LastMod }}` without consulting
+// a cheat sheet, and the connection between the field and the rendered
+// element is obvious from the names alone.
 //
-// Putting the host into Loc would force callers to thread scheme/host
-// through every call site and make off-the-shelf `c.App.SitemapURLs()`
-// callers unable to do anything useful.
+//   - Loc     — URL *path* (e.g. "/content/post"), not a full URL.
+//   - LastMod — RFC3339 timestamp of the source file's mtime
+//               (ContentView.LastMod, populated via fs.Stat(...).ModTime()
+//               at load time). Empty when Stat failed — guard with
+//               `{{ if .LastMod }}`.
 //
-// Only Loc and LastMod are surfaced: changefreq and priority are not
-// derivable from a Markdown file (the framework has no signal for either),
-// and Google has publicly stated they ignore them. If you need them,
-// add them at the template layer by extending SitemapURL in your own code
-// or by post-processing App.SitemapURLs output.
+// Both fields are deliberately minimal:
 //
-// Filtering is intentionally not exposed here: drop entries in your
-// sitemap.xml template by checking whatever fields you encode on SitemapURL
-// or by inspecting app.routes / app.contentViews via a custom handler.
+//   - Loc is a path because the framework does not know which scheme +
+//     host your site is deployed under. The host prefix is the template's
+//     job — `<loc>https://example.com{{ .Loc }}</loc>`. Putting the host
+//     into Loc would force callers to thread scheme/host through every
+//     call site and make off-the-shelf `c.App.SitemapURLs()` callers
+//     unable to do anything useful.
+//
+//   - LastMod is just file mtime. There is no "created" timestamp, no
+//     scheduled-publish date, no update-vs-create distinction. Sites
+//     that need richer metadata should compute it at .md parse time
+//     (goldmark AST, sidecar .yaml) and surface it via their own helper.
+//
+// changefreq and priority are deliberately NOT fields here:
+//
+//   - The framework has no reliable signal for either (a .md file gives
+//     no hint whether its author updates it daily or yearly).
+//   - Google has publicly stated they ignore both fields.
+//
+// If you need changefreq / priority, extend SitemapURL at the template
+// layer by post-processing App.SitemapURLs output, or write a custom
+// handler that walks app.contentViews.
+//
+// # Filtering
+//
+// SitemapURL has no Filter hook. If you need to drop drafts, encode the
+// signal into a convention your template understands (URL prefix,
+// sidecar .yaml that your template reads via a custom funcMap, etc.).
+// Putting a Filter on App.SitemapURLs would mean the framework tracks
+// state on every .md — the docs already recommend keeping the
+// framework's surface minimal.
 type SitemapURL struct {
-	Loc     string // URL path, e.g. "/about". Host/scheme are template-side.
+	Loc     string // URL path, e.g. "/content/post". Host/scheme are template-side.
 	LastMod string // RFC3339; empty when the source has no trackable mtime.
 }
 
-// SitemapURLs returns every indexable URL the App knows about, drawn from
-// exactly three sources:
+// SitemapURLs returns the URL entries derived from app.contentViews,
+// sorted by Loc for stable output. Safe to call anywhere (no Context
+// dependency — Loc is a path, not an absolute URL).
 //
-//  1. pages/**/*.html        — registered by HtmlViewEngine.loadPage
-//     (HtmlViewer). Path is the URL with .html stripped and /{$} index
-//     marker canonicalised to a trailing slash.
+// # Scope: content engine only
 //
-//  2. public/**/*.html       — registered by StaticViewEngine.handle
-//     (FileViewer). Path is the URL with .html / index.html stripping
-//     handled by HandleFile. Only routes whose path ends in "/" or
-//     ".html" are included — CSS / JS / images / fonts are skipped.
+// SitemapURLs walks app.contentViews, not app.routes. This is an
+// intentional, narrow scope:
 //
-//  3. contentViews           — every entry that has a registered route
-//     (orphans without a bubble-up template are excluded). The route
-//     is an HtmlViewer wrapping the bubble-up template.
+//   - content/*.md (with a bubble-up template) is the framework's
+//     managed content surface. Every entry has a route, a slug, a
+//     timestamp, and a known URL pattern. The framework owns the
+//     data and the lifecycle; emitting them in the sitemap is
+//     straightforward and reliable.
 //
-// Routes registered via app.Get with their own handler (JsonViewer in
-// r.Viewers[0]) are excluded — they aren't a "page" by the framework's
-// classification, even if they happen to serve HTML.
+//   - pages/*.html and public/*.html are user-authored. The framework
+//     has no mtime, no slug convention, no semantic metadata for them.
+//     The user knows which of their pages are indexable; if they want
+//     them in the sitemap, they add the URLs to their template by
+//     hand (or by extending SitemapURL and post-processing).
 //
-// LastMod is only set for content engine routes (the file mtime is
-// tracked in ContentView.Date). pages/* and public/* have no trackable
-// mtime in the framework, so LastMod stays empty — guard in your
-// template with `{{ if .LastMod }}`.
+//   - app.Get routes are user handlers. By the framework's
+//     classification they aren't "pages" — including them in a
+//     sitemap (a content-discovery format) by default would surprise
+//     every caller who set up an API or webhook endpoint.
+//
+// This narrow scope is the framework's way of staying out of the
+// user's way. The framework guarantees: every URL in App.SitemapURLs
+// resolves to a working page on this server. The user decides
+// whether that's the right set for their sitemap; if not, they
+// post-process.
+//
+// # Path construction
+//
+// URL paths are derived from the routes-map pattern key (e.g.
+// "GET /content/post" → "/content/post"), not from cv.Slug. cv.Slug
+// is path-relative to the content directory; the actual route includes
+// the content-dir prefix. With WithContent("blog") and blog/post.md,
+// the route is /blog/post, but cv.Slug would be "post" — emitting
+// /post would 404.
+//
+// Index pages get a trailing slash. blog/index.md → pattern
+// "GET /blog/{$}" → canonical "/blog/" (matches the route exactly;
+// without the slash, /blog 307-redirects to /blog/, wasting one
+// round-trip per crawler fetch).
+//
+// Patterns with {var} segments have no concrete URL and are skipped.
+//
+// # Orphan skipping
+//
+// Entries without a registered route are skipped. loadContentFile
+// writes to contentViews before checking for a bubble-up template,
+// so orphan entries exist when a .md has no .tpl sibling / ancestor.
+// A sitemap URL for an unrouted page is worse than no URL.
+//
+// # Output guarantee
+//
+// Every Loc returned here resolves to a working page on this server.
+// Sort is by Loc for stable output (sitemaps don't care about order
+// but stable order helps tests and review).
 func (app *App) SitemapURLs() []SitemapURL {
-	out := make([]SitemapURL, 0, len(app.routes))
-	for pattern, r := range app.routes {
-		if !strings.HasPrefix(pattern, "GET ") {
+	out := make([]SitemapURL, 0, len(app.contentViews))
+	for pattern, cv := range app.contentViews {
+		if _, hasRoute := app.routes[pattern]; !hasRoute {
 			continue
 		}
-		if pattern == "GET /sitemap.xml" {
-			continue
-		}
-
 		p := strings.TrimPrefix(pattern, "GET ")
 		switch {
 		case strings.HasSuffix(p, "/{$}"):
-			// Index page canonical URL has a trailing slash. Without it,
-			// /blog 307-redirects to /blog/, costing one round-trip per
-			// crawler fetch.
 			p = strings.TrimSuffix(p, "/{$}") + "/"
 		case strings.ContainsAny(p, "{}"):
-			// Variable segment — no concrete URL possible.
 			continue
 		}
-
-		if _, isContent := app.contentViews[pattern]; isContent {
-			// Source 3: content engine route.
-		} else if len(r.Viewers) > 0 {
-			switch r.Viewers[0].(type) {
-			case *HtmlViewer:
-				// Source 1: pages/*.html.
-			case *FileViewer:
-				// Source 2: public/**/*.html. Only keep paths that look
-				// like HTML pages (end with "/" from index.html handling,
-				// or with ".html" for non-index .html files). Everything
-				// else in public/ is a static asset.
-				if !(strings.HasSuffix(p, "/") || strings.HasSuffix(p, ".html")) {
-					continue
-				}
-			default:
-				// JsonViewer (user app.Get), XmlViewer, etc. — not a page.
-				continue
-			}
-		} else {
-			continue
-		}
-
 		u := SitemapURL{Loc: p}
-		// LastMod is meaningful only for content engine routes — pages/*
-		// and public/* have no tracked mtime in the framework.
-		if cv, ok := app.contentViews[pattern]; ok && !cv.Date.IsZero() {
-			u.LastMod = cv.Date.UTC().Format(time.RFC3339)
+		if !cv.LastMod.IsZero() {
+			u.LastMod = cv.LastMod.UTC().Format(time.RFC3339)
 		}
 		out = append(out, u)
 	}
