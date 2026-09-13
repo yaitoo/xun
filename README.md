@@ -198,17 +198,31 @@ from your content engine. No `text/sitemap.xml` indirection, no extra handler.
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 {{ range .Data -}}
   <url>
-    <loc>{{ .Loc }}</loc>
-    <lastmod>{{ .LastMod }}</lastmod>
+    <loc>https://example.com{{ .Loc }}</loc>
+    {{ if .LastMod }}<lastmod>{{ .LastMod }}</lastmod>{{ end }}
   </url>
 {{ end -}}
 </urlset>
 ```
 
-`.Data` is `[]xun.SitemapURL{Loc, LastMod}` projected from the `contentViews`
-loaded by `WithContent` (default `content/`). `LastMod` is the .md file's mtime
-formatted as RFC3339. If a `.md` has no stat-able mtime, `LastMod` is empty —
-guard with `{{ if .LastMod }}`.
+`.Data` is `[]xun.SitemapURL{Loc, LastMod}` projected from three sources:
+
+| Source | Detection | Example | `LastMod` |
+|--------|-----------|---------|-----------|
+| `pages/**/*.html` | `HtmlViewer` in route's viewers | `pages/about.html` → `/about` | empty |
+| `public/**/*.html` | `FileViewer` + path ends in `/` or `.html` | `public/index.html` → `/`, `public/foo.html` → `/foo.html` | empty |
+| `contentViews` | entry exists in `app.contentViews` | `content/post.md` → `/content/post` | file mtime (RFC3339) |
+
+Routes registered via `app.Get` are **excluded** — the framework
+classifies those as user handlers, not "pages", even if they happen to
+serve HTML. Static assets in `public/` (CSS, JS, images, fonts, feeds)
+are excluded by extension. The `/sitemap.xml` route itself is excluded so
+the sitemap doesn't point at itself.
+
+`Loc` is a URL path only (e.g. `/about`, `/blog/`) — the framework does
+not know which scheme + host your site is deployed under, so the template
+prepends the host itself. Guard `LastMod` with `{{ if .LastMod }}` since
+only content-engine routes carry a tracked mtime.
 
 #### Filtering
 There is no `WithSitemap` option. Filtering happens in your `sitemap.xml`
@@ -223,7 +237,7 @@ steps aside — your handler wins. The `TextViewer` is still exposed as
 
 ```go
 app.Get("/sitemap.xml", func(c *xun.Context) error {
-    return c.View(c.App.SitemapURLs(c), "sitemap.xml")
+    return c.View(c.App.SitemapURLs(), "sitemap.xml")
 })
 ```
 

@@ -76,8 +76,8 @@ func TestSitemap_RendersFromContent(t *testing.T) {
 
 	// Both posts present, with the test server's host:port and the
 	// content-dir prefix that the route actually carries.
-	require.Contains(t, body, "<loc>"+srv.URL+"/content/older</loc>")
-	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
+	require.Contains(t, body, "<loc>/content/older</loc>")
+	require.Contains(t, body, "<loc>/content/post</loc>")
 	require.Contains(t, body, "<lastmod>2025-12-01T00:00:00Z</lastmod>")
 	require.Contains(t, body, "<lastmod>2026-09-01T00:00:00Z</lastmod>")
 
@@ -134,8 +134,8 @@ func TestSitemap_OrphanContentViewIsSkipped(t *testing.T) {
 	buf, _ := io.ReadAll(resp.Body)
 	body := string(buf)
 
-	require.Contains(t, body, "<loc>"+srv.URL+"/content/routed</loc>")
-	require.NotContains(t, body, "<loc>"+srv.URL+"/content/orphan</loc>")
+	require.Contains(t, body, "<loc>/content/routed</loc>")
+	require.NotContains(t, body, "<loc>/content/orphan</loc>")
 }
 
 func TestSitemap_CustomContentDir_PathIncludesPrefix(t *testing.T) {
@@ -166,8 +166,8 @@ func TestSitemap_CustomContentDir_PathIncludesPrefix(t *testing.T) {
 	body := string(buf)
 
 	// The URL must include the /blog/ prefix, not just /post.
-	require.Contains(t, body, "<loc>"+srv.URL+"/blog/post</loc>")
-	require.NotContains(t, body, "<loc>"+srv.URL+"/post</loc>")
+	require.Contains(t, body, "<loc>/blog/post</loc>")
+	require.NotContains(t, body, "<loc>/post</loc>")
 }
 
 func TestSitemap_IndexPageHasTrailingSlash(t *testing.T) {
@@ -199,9 +199,9 @@ func TestSitemap_IndexPageHasTrailingSlash(t *testing.T) {
 	buf, _ := io.ReadAll(resp.Body)
 	body := string(buf)
 
-	require.Contains(t, body, "<loc>"+srv.URL+"/blog/</loc>")
-	require.Contains(t, body, "<loc>"+srv.URL+"/blog/post</loc>")
-	require.NotContains(t, body, "<loc>"+srv.URL+"/blog</loc>")
+	require.Contains(t, body, "<loc>/blog/</loc>")
+	require.Contains(t, body, "<loc>/blog/post</loc>")
+	require.NotContains(t, body, "<loc>/blog</loc>")
 }
 
 func TestSitemap_RemovePreservesUserHandler(t *testing.T) {
@@ -297,7 +297,7 @@ func TestSitemap_RecoversFromParseFailure(t *testing.T) {
 	defer resp.Body.Close()
 	buf, _ = io.ReadAll(resp.Body)
 	body := string(buf)
-	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
+	require.Contains(t, body, "<loc>/content/post</loc>")
 	require.NotEqual(t, "{{ unterminated", string(buf))
 }
 
@@ -344,7 +344,7 @@ func TestSitemap_RemoveAndRecreate_ReinstallsHandler(t *testing.T) {
 	buf, _ := io.ReadAll(resp.Body)
 	body := string(buf)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
+	require.Contains(t, body, "<loc>/content/post</loc>")
 }
 
 func TestSitemap_ViewerExposedAndUsable(t *testing.T) {
@@ -385,7 +385,7 @@ func TestSitemap_UserHandlerOverridesAutoRegistration(t *testing.T) {
 	// User takes over the route BEFORE engines load. handleSitemap must
 	// yield to this registration but still expose the viewer.
 	app.Get("/sitemap.xml", func(c *Context) error {
-		return c.View(c.App.SitemapURLs(c), sitemapName)
+		return c.View(c.App.SitemapURLs(), sitemapName)
 	})
 
 	app.Start()
@@ -403,7 +403,7 @@ func TestSitemap_UserHandlerOverridesAutoRegistration(t *testing.T) {
 
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(buf), "<loc>"+srv.URL+"/content/post</loc>")
+	require.Contains(t, string(buf), "<loc>/content/post</loc>")
 }
 
 func TestSitemap_NoFile_404FromMux(t *testing.T) {
@@ -488,7 +488,7 @@ func TestSitemap_FileChanged_Reloads(t *testing.T) {
 	buf, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	first := string(buf)
-	require.Contains(t, first, "<loc>"+srv.URL+"/content/post</loc>")
+	require.Contains(t, first, "<loc>/content/post</loc>")
 
 	// Mutate the file on disk and deliver a Write event by hand. The poll
 	// loop is parked (see TestMain), so we can race neither.
@@ -515,7 +515,7 @@ func TestSitemap_FileChanged_Reloads(t *testing.T) {
 	// New template renders the sentinel, confirming the route handler was
 	// re-bound to a freshly-parsed template.
 	require.Contains(t, second, "HANDOFF")
-	require.Contains(t, second, "<loc>"+srv.URL+"/content/post</loc>")
+	require.Contains(t, second, "<loc>/content/post</loc>")
 }
 
 func TestSitemap_FileChanged_Remove_ResetsToNotFound(t *testing.T) {
@@ -586,4 +586,76 @@ func TestSitemap_PlainXML_NoActions_RendersIdentity(t *testing.T) {
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, literal, string(buf))
+}
+
+func TestSitemap_IncludesPagesAndContentRoutes(t *testing.T) {
+	// SitemapURLs walks app.routes and includes three sources only:
+	// pages/**/*.html, public/**/*.html, and contentViews (routed).
+	// User app.Get handlers (JsonViewer) are NOT included — they are
+	// not "pages" by the framework's classification, even if they
+	// happen to serve HTML.
+	fsys := fstest.MapFS{
+		"index.tpl":               {Data: []byte(indexTpl)},
+		"pages/about.html":        {Data: []byte(`<h1>About</h1>`)},
+		"pages/blog/index.html":   {Data: []byte(`<h1>Blog</h1>`)},
+		"content/post.md":         {Data: []byte("# P")},
+		"public/about.html":       {Data: []byte(`<h1>Static</h1>`)},
+		"public/style.css":        {Data: []byte("body{}")},
+		"public/sitemap.xml":      {Data: []byte(plainSitemapTemplate)},
+	}
+
+	mux := http.NewServeMux()
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Get("/api/health", func(c *Context) error {
+		return c.View("ok", "text/plain")
+	})
+	app.Start()
+	defer app.Close()
+
+	urls := app.SitemapURLs()
+
+	locSet := map[string]bool{}
+	for _, u := range urls {
+		locSet[u.Loc] = true
+	}
+
+	require.Contains(t, locSet, "/about", "pages/about.html should be in sitemap")
+	require.Contains(t, locSet, "/blog/", "pages/blog/index.html → /blog/")
+	require.Contains(t, locSet, "/content/post", "content/post.md")
+	require.Contains(t, locSet, "/about.html", "public/about.html (FileViewer + .html)")
+	require.NotContains(t, locSet, "/api/health", "user app.Get handler is excluded")
+	require.NotContains(t, locSet, "/style.css", "non-HTML public/ asset excluded")
+	require.NotContains(t, locSet, "/sitemap.xml", "sitemap itself excluded")
+}
+
+func TestSitemap_LastModOnlyForContentRoutes(t *testing.T) {
+	// LastMod is only meaningful for content engine routes — pages and
+	// user handlers don't have a tracked mtime. The template-side guard
+	// `{{ if .LastMod }}` relies on this.
+	fsys := fstest.MapFS{
+		"index.tpl": {Data: []byte(indexTpl)},
+		"pages/page.html": {Data: []byte("<h1>P</h1>")},
+		"content/post.md": &fstest.MapFile{
+			Data:    []byte("# P"),
+			ModTime: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+		},
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	mux := http.NewServeMux()
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Start()
+	defer app.Close()
+
+	urls := app.SitemapURLs()
+
+	byLoc := map[string]SitemapURL{}
+	for _, u := range urls {
+		byLoc[u.Loc] = u
+	}
+
+	require.Equal(t, "2026-09-01T00:00:00Z", byLoc["/content/post"].LastMod,
+		"content route should carry LastMod from mtime")
+	require.Empty(t, byLoc["/page"].LastMod,
+		"page route has no mtime; LastMod must be empty for the {{ if .LastMod }} guard")
 }
