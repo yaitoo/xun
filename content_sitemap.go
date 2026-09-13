@@ -35,7 +35,7 @@ type SitemapOptions struct {
 // templates (via c.View(data, "sitemap.xml")) call this —
 // they cannot drift.
 //
-// Two corrections keep the URLs honest:
+// Three corrections keep the URLs honest:
 //
 //   - The URL path is derived from the routes-map pattern key (e.g.
 //     "GET /blog/post"), NOT from cv.Slug. cv.Slug is path-relative
@@ -43,26 +43,45 @@ type SitemapOptions struct {
 //     prefix. With WithContent("blog") and blog/post.md, the route is
 //     /blog/post, but cv.Slug would be "post" — emitting /post 404s.
 //
+//   - Index pages get their trailing slash. blog/index.md → pattern
+//     "GET /blog/{$}" → canonical URL "/blog/" (matches the route
+//     exactly; without the slash, /blog 307-redirects to /blog/ which
+//     wastes a hop on every crawler fetch).
+//
 //   - Entries without a registered route are skipped. loadContentFile
 //     writes to contentViews before checking for a bubble-up template,
 //     so orphan entries exist when a .md has no .tpl sibling / ancestor.
 //     A sitemap URL for an unrouted page is worse than no URL.
+//
+// opts.Filter takes precedence; when nil, the WithSitemap-configured
+// app.sitemapFilter is used so a single Filter covers both the framework
+// handler and a user-taken-over route that calls SitemapURLs with
+// SitemapOptions{}.
 func (app *App) SitemapURLs(opts SitemapOptions, c *Context) []SitemapURL {
+	filter := opts.Filter
+	if filter == nil {
+		filter = app.sitemapFilter
+	}
+
 	out := make([]SitemapURL, 0, len(app.contentViews))
 	for pattern, cv := range app.contentViews {
 		// Skip orphans: .md with no bubble-up template never gets a route.
 		if _, hasRoute := app.routes[pattern]; !hasRoute {
 			continue
 		}
-		if opts.Filter != nil && !opts.Filter(cv) {
+		if filter != nil && !filter(cv) {
 			continue
 		}
 		// pattern is e.g. "GET /blog/post" or "GET /blog/{$}" for index.md.
-		// Strip method prefix and /{$} suffix to get a concrete URL path.
-		// Skip patterns containing '{' / '}' — no concrete URL is possible.
 		p := strings.TrimPrefix(pattern, "GET ")
-		p = strings.TrimSuffix(p, "/{$}")
-		if strings.ContainsAny(p, "{}") {
+		switch {
+		case strings.HasSuffix(p, "/{$}"):
+			// Index page canonical URL has a trailing slash. Without it,
+			// /blog 307-redirects to /blog/, costing one round-trip per
+			// crawler fetch.
+			p = strings.TrimSuffix(p, "/{$}") + "/"
+		case strings.ContainsAny(p, "{}"):
+			// Variable segment — no concrete URL possible.
 			continue
 		}
 		u := SitemapURL{Loc: buildSitemapLoc(c, p)}

@@ -63,23 +63,17 @@ func (ve *StaticViewEngine) Load(fsys fs.FS, app *App) {
 //
 // If the file changed is a Write/Remove event and the path is in the "public"
 // directory, nothing should be done — except for public/sitemap.xml, which
-// re-parses on Write/Create and resets the route to 404 on Remove.
+// re-parses on Write/Create and clears the viewer on Remove.
 func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Event) error {
 	if event.Name == sitemapPath {
 		switch {
 		case event.Has(fsnotify.Remove):
-			// Replace the handler with a 404 instead of delete(app.routes, ...):
-			// http.ServeMux does not support unregistering patterns, and the
-			// closure captured by mux holds `r` by pointer — deleting the
-			// routes-map entry would still leave the mux closure live, so a
-			// subsequent createHandler on the same pattern would panic on
-			// duplicate registration. The residual routes-map entry is a
-			// debuggability nit (app.Routes() still lists GET /sitemap.xml),
-			// but the served behavior is correct: notFoundHandler runs.
-			if r, ok := app.routes[sitemapKey]; ok {
-				r.Handle = notFoundHandler
-				r.Viewers = nil
-			}
+			// Just clear the viewer. The auto-handler closure (if installed)
+			// re-reads app.viewers[sitemapName] on every request, so a missing
+			// viewer turns into a 404 from inside the closure. A user-taken-
+			// over route is unaffected — their handler never inspects our
+			// viewer map. This avoids clobbering user handlers with a stub
+			// notFoundHandler on every dev-only file delete.
 			delete(app.viewers, sitemapName)
 		case event.Has(fsnotify.Write), event.Has(fsnotify.Create):
 			ve.handleSitemap(fsys, app, event.Name)
@@ -125,52 +119,72 @@ func (ve *StaticViewEngine) handle(fsys fs.FS, app *App, path string) {
 }
 
 // handleSitemap parses public/sitemap.xml as a TextTemplate and exposes
-// the TextViewer via app.viewers[sitemapPath]. The auto-registered route
+// the TextViewer via app.viewers[sitemapName]. The auto-registered route
 // handler at GET /sitemap.xml renders the viewer with App.SitemapURLs as
 // the Data payload.
 //
-// Override semantics:
-//   - parse failure → fall back to FileViewer (preserves existing behavior
-//     for malformed template content; the user still gets bytes for the URL).
-//   - app.routes[sitemapKey] already exists → skip auto-registration; the
-//     user owns the route. app.viewers[sitemapPath] is still populated so
-//     the user's handler can call c.View(data, "public/sitemap.xml") to
-//     reuse the parsed viewer.
+// Three branches over route state:
+//
+//   - No route yet → install the auto-handler closure (initial Load or
+//     first time the file appears). The closure looks up app.viewers
+//     dynamically so later Write events just refresh the viewer.
+//
+//   - Route exists with a FileViewer viewer (r.Viewers[0] == *FileViewer)
+//     → this is the parse-failure fallback from a prior Load. Replace
+//     with the auto-handler closure so the dynamic template takes over.
+//     This is the recovery path: malformed template on first Load →
+//     fix → Write event → parse succeeds → upgrade.
+//
+//   - Route exists with anything else → user owns it (or our own
+//     auto-handler closure from an earlier successful Load). Don't touch
+//     r.Handle; the closure will see the refreshed viewer on the next
+//     request via the dynamic lookup.
 func (ve *StaticViewEngine) handleSitemap(fsys fs.FS, app *App, path string) {
 	t := &TextTemplate{name: path}
 	if err := t.Load(fsys, app.funcMap); err != nil {
 		app.logger.Error("xun: parse sitemap",
 			slog.String("path", path), slog.Any("err", err))
-		// FileViewer 兜底：HandleFile 是 first-writer-wins，路由已被用户接管则跳过
+		// Parse failure: register FileViewer so the URL still serves bytes.
+		// HandleFile is first-writer-wins — if the user already took the
+		// route, this is a no-op and the user's handler keeps running.
 		app.HandleFile("sitemap.xml", NewFileViewer(fsys, path, ve.isEmbedFsys, "", ""))
 		return
 	}
 
 	viewer := NewTextViewer(t)
-	// 始终暴露 viewer：用户 handler 可通过 c.View(data, "sitemap.xml") 复用
 	app.viewers[sitemapName] = viewer
-	// 仅当 route 未被用户接管时才自动注册 handler。
-	// 闭包动态查 viewer：FileChanged Write 只需更新 app.viewers[sitemapName]，
-	// 下次请求闭包自然拿到新 TextViewer，无需重建 r.Handle。
-	if _, exists := app.routes[sitemapKey]; !exists {
-		app.createHandler(sitemapKey, func(c *Context) error {
-			v, ok := c.App.viewers[sitemapName]
-			if !ok {
-				c.WriteStatus(http.StatusNotFound)
-				return nil
+
+	if r, exists := app.routes[sitemapKey]; exists {
+		// Recovery: a previous parse failure left a FileViewer at this
+		// route. Replace it with the dynamic template handler.
+		if len(r.Viewers) > 0 {
+			if _, isFile := r.Viewers[0].(*FileViewer); isFile {
+				app.createHandler(sitemapKey, sitemapHandler, nil, app)
 			}
-			return v.Render(c, c.App.SitemapURLs(SitemapOptions{
-				Filter: c.App.sitemapFilter,
-			}, c))
-		}, nil, app)
+		}
+		// Otherwise: user owns it, or our auto-handler already runs and
+		// will see the refreshed viewer on the next request.
+		return
 	}
+
+	app.createHandler(sitemapKey, sitemapHandler, nil, app)
 }
 
-// notFoundHandler is installed at GET /sitemap.xml when public/sitemap.xml
-// is removed at runtime, so in-flight requests don't crash on a nil Handle.
-func notFoundHandler(c *Context) error {
-	c.WriteStatus(http.StatusNotFound)
-	return nil
+// sitemapHandler is the auto-registered handler for GET /sitemap.xml.
+// Resolves the viewer dynamically on each request so FileChanged Write
+// events can refresh the viewer without rebuilding the closure. When the
+// viewer is absent (e.g., right after a Remove event), it returns 404 —
+// we never touch r.Handle on Remove, so we don't risk clobbering a
+// user-taken-over route.
+func sitemapHandler(c *Context) error {
+	v, ok := c.App.viewers[sitemapName]
+	if !ok {
+		c.WriteStatus(http.StatusNotFound)
+		return nil
+	}
+	return v.Render(c, c.App.SitemapURLs(SitemapOptions{
+		Filter: c.App.sitemapFilter,
+	}, c))
 }
 
 const cacheControl = "public, max-age=31536000, immutable"

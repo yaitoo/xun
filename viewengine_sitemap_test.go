@@ -170,6 +170,230 @@ func TestSitemap_CustomContentDir_PathIncludesPrefix(t *testing.T) {
 	require.NotContains(t, body, "<loc>"+srv.URL+"/post</loc>")
 }
 
+func TestSitemap_IndexPageHasTrailingSlash(t *testing.T) {
+	// Regression for review finding #5: blog/index.md → pattern
+	// "GET /blog/{$}" → sitemap must emit /blog/ (canonical, matches the
+	// route), not /blog (which would 307-redirect and waste a hop on
+	// every crawler fetch).
+	fsys := fstest.MapFS{
+		"index.tpl":       {Data: []byte(indexTpl)},
+		"blog/index.md":   {Data: []byte("# Blog Index")},
+		"blog/index.tpl":  {Data: []byte(`{{ define "layout" }}B{{ end }}`)},
+		"blog/post.md":    {Data: []byte("# P")},
+		"public/sitemap.xml": &fstest.MapFile{Data: []byte(plainSitemapTemplate)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("blog"))
+	app.Start()
+	defer app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	buf, _ := io.ReadAll(resp.Body)
+	body := string(buf)
+
+	require.Contains(t, body, "<loc>"+srv.URL+"/blog/</loc>")
+	require.Contains(t, body, "<loc>"+srv.URL+"/blog/post</loc>")
+	require.NotContains(t, body, "<loc>"+srv.URL+"/blog</loc>")
+}
+
+func TestSitemap_FilterAppliesOnUserTakenOverRoute(t *testing.T) {
+	// Regression for review finding #1 (filter-fallback half): a user
+	// handler that calls SitemapURLs with empty options must still
+	// honor the WithSitemap-configured Filter. Otherwise drafts leak
+	// through silently when the user has registered their own handler.
+	fsys := fstest.MapFS{
+		"index.tpl": {Data: []byte(indexTpl)},
+		"content/post.md":    {Data: []byte("# P")},
+		"content/draft.md":   {Data: []byte("# D")},
+		"content/draft.yaml": {Data: []byte("draft: true\n")},
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(
+		WithMux(mux),
+		WithFsys(fsys),
+		WithSitemap(Sitemap{
+			Filter: func(cv *ContentView) bool {
+				return cv.Params == nil || cv.Params["draft"] != true
+			},
+		}),
+	)
+
+	// User handler takes over the route, but with empty SitemapOptions.
+	app.Get("/sitemap.xml", func(c *Context) error {
+		return c.View(c.App.SitemapURLs(SitemapOptions{}, c), sitemapName)
+	})
+
+	app.Start()
+	defer app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	buf, _ := io.ReadAll(resp.Body)
+	body := string(buf)
+
+	// Filter from WithSitemap must apply even though opts.Filter is nil.
+	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
+	require.NotContains(t, body, "<loc>"+srv.URL+"/content/draft</loc>")
+}
+
+func TestSitemap_RemovePreservesUserHandler(t *testing.T) {
+	// Regression for review finding #2: removing public/sitemap.xml
+	// must not clobber a handler the user registered via app.Get.
+	fsys := fstest.MapFS{
+		"index.tpl":          {Data: []byte(indexTpl)},
+		"content/post.md":    {Data: []byte("# P")},
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithWatch())
+
+	customCalled := false
+	app.Get("/sitemap.xml", func(c *Context) error {
+		customCalled = true
+		c.WriteHeader("X-Custom", "yes")
+		c.Response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, err := c.Response.Write([]byte("custom"))
+		return err
+	})
+
+	app.Start()
+	defer app.Close()
+
+	// Sanity: custom handler runs initially.
+	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.True(t, customCalled)
+	require.Equal(t, "custom", string(buf))
+
+	// Now simulate the user deleting public/sitemap.xml.
+	customCalled = false
+	delete(fsys, "public/sitemap.xml")
+	reload(app, fsnotify.Event{Name: "public/sitemap.xml", Op: fsnotify.Remove})
+
+	// Custom handler must still run.
+	req, _ = http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.True(t, customCalled)
+	require.Equal(t, "custom", string(buf))
+	require.Equal(t, "yes", resp.Header.Get("X-Custom"))
+}
+
+func TestSitemap_RecoversFromParseFailure(t *testing.T) {
+	// Regression for review finding #3: if the initial template is
+	// malformed, the route is served by FileViewer (raw bytes). When
+	// the user fixes the template and a Write event fires, the dynamic
+	// handler must take over — not the static bytes.
+	fsys := fstest.MapFS{
+		"index.tpl":          {Data: []byte(indexTpl)},
+		"content/post.md":    {Data: []byte("# P")},
+		"public/sitemap.xml": {Data: []byte("{{ unterminated"), ModTime: time.Now()},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithWatch())
+	app.Start()
+	defer app.Close()
+
+	// Initial: FileViewer fallback, raw bytes.
+	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	buf, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	require.Equal(t, "{{ unterminated", string(buf))
+
+	// User fixes the file.
+	fsys["public/sitemap.xml"] = &fstest.MapFile{
+		Data: []byte(plainSitemapTemplate),
+		ModTime: time.Now(),
+	}
+	reload(app, fsnotify.Event{Name: "public/sitemap.xml", Op: fsnotify.Write})
+
+	// Now the dynamic handler must serve the URL list.
+	req, _ = http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	buf, _ = io.ReadAll(resp.Body)
+	body := string(buf)
+	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
+	require.NotEqual(t, "{{ unterminated", string(buf))
+}
+
+func TestSitemap_RemoveAndRecreate_ReinstallsHandler(t *testing.T) {
+	// Regression for review finding #4: removing then recreating
+	// public/sitemap.xml must reinstall the dynamic handler. The
+	// auto-handler closure does a runtime viewer lookup, so after
+	// recreation the new viewer is picked up automatically.
+	fsys := fstest.MapFS{
+		"index.tpl":          {Data: []byte(indexTpl)},
+		"content/post.md":    {Data: []byte("# P")},
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate), ModTime: time.Now()},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithWatch())
+	app.Start()
+	defer app.Close()
+
+	// Remove → 404.
+	delete(fsys, "public/sitemap.xml")
+	reload(app, fsnotify.Event{Name: "public/sitemap.xml", Op: fsnotify.Remove})
+
+	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	// Recreate → dynamic handler serves URLs again.
+	fsys["public/sitemap.xml"] = &fstest.MapFile{
+		Data:    []byte(plainSitemapTemplate),
+		ModTime: time.Now(),
+	}
+	reload(app, fsnotify.Event{Name: "public/sitemap.xml", Op: fsnotify.Create})
+
+	req, _ = http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err = client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	buf, _ := io.ReadAll(resp.Body)
+	body := string(buf)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
+}
+
 func TestSitemap_ViewerExposedAndUsable(t *testing.T) {
 	fsys := fstest.MapFS{
 		"content/post.md":     &fstest.MapFile{Data: []byte("# P")},
