@@ -182,6 +182,62 @@ A text view is UI that is referenced in `context.View` to render the view with a
 	})
 ```
 
+### Sitemap for blogs
+Drop a `public/sitemap.xml` template next to your other static assets and the
+framework auto-registers `GET /sitemap.xml` to render it with the URLs derived
+from your content engine. No `text/sitemap.xml` indirection, no extra handler.
+
+```
+└── app
+    └── public
+        └── sitemap.xml
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{{ range .Data -}}
+  <url>
+    <loc>{{ .Loc }}</loc>
+    <lastmod>{{ .LastMod }}</lastmod>
+  </url>
+{{ end -}}
+</urlset>
+```
+
+`.Data` is `[]xun.SitemapURL{Loc, LastMod}` projected from the `contentViews`
+loaded by `WithContent` (default `content/`). `LastMod` is the .md file's mtime
+formatted as RFC3339. If a `.md` has no stat-able mtime, `LastMod` is empty —
+guard with `{{ if .LastMod }}`.
+
+#### Filtering drafts
+Add a sidecar `Params["draft"]` to `.yaml` (already wired by the content
+engine) and drop them via `WithSitemap`:
+
+```go
+app := xun.New(
+    xun.WithFsys(fsys),
+    xun.WithSitemap(xun.Sitemap{
+        Filter: func(cv *xun.ContentView) bool {
+            return cv.Params == nil || cv.Params["draft"] != true
+        },
+    }),
+)
+```
+
+#### Taking over the route
+If you call `app.Get("/sitemap.xml", h)` first, the framework's auto-handler
+steps aside — your handler wins. The `TextViewer` is still exposed as
+`app.viewers["sitemap.xml"]`, so you can reuse it:
+
+```go
+app.Get("/sitemap.xml", func(c *xun.Context) error {
+    return c.View(c.App.SitemapURLs(xun.SitemapOptions{}, c), "sitemap.xml")
+})
+```
+
+Or write your own rendering entirely and ignore the viewer — the file is yours.
+
 > curl --header "Accept: application/xml, text/xml,text/plain, */*" -v http://127.0.0.1/sitemap.xml
 
 ```bash

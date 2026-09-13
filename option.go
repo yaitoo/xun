@@ -218,3 +218,27 @@ func WithContentRenderer(
 		}
 	}
 }
+
+// Sitemap configures the public/sitemap.xml mechanism.
+//
+// Filter, when non-nil, drops ContentViews from App.SitemapURLs by
+// returning false. Typical use is to skip drafts:
+//   xun.Sitemap{Filter: func(cv *xun.ContentView) bool {
+//       return cv.Params == nil || cv.Params["draft"] != true
+//   }}
+//
+// Without a public/sitemap.xml file, WithSitemap has no effect — the
+// whole mechanism is opt-in via the file's presence. The Filter is
+// also consulted by user-authored sitemap templates that call
+// c.App.SitemapURLs(...), so a single Filter covers both paths.
+type Sitemap struct {
+	Filter func(*ContentView) bool
+}
+
+// WithSitemap records the sitemap configuration on the App. See the
+// Sitemap struct for details.
+func WithSitemap(s Sitemap) Option {
+	return func(app *App) {
+		app.sitemapFilter = s.Filter
+	}
+}
