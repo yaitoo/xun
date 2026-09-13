@@ -182,6 +182,72 @@ A text view is UI that is referenced in `context.View` to render the view with a
 	})
 ```
 
+### Sitemap for blogs
+Drop a `public/sitemap.xml` template next to your other static assets and the
+framework auto-registers `GET /sitemap.xml` to render it with the URLs derived
+from your content engine. No `text/sitemap.xml` indirection, no extra handler.
+
+```
+└── app
+    └── public
+        └── sitemap.xml
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{{ range .Data -}}
+  <url>
+    <loc>https://example.com{{ .Loc }}</loc>
+    {{ if .LastMod }}<lastmod>{{ .LastMod }}</lastmod>{{ end }}
+  </url>
+{{ end -}}
+</urlset>
+```
+
+`.Data` is `[]xun.SitemapURL{Loc, LastMod}` projected from `app.contentViews`
+only. The scope is intentionally narrow:
+
+| Source | `Loc` | `LastMod` |
+|--------|-------|-----------|
+| `content/*.md` (with bubble-up template) | e.g. `content/post.md` → `/content/post` | file mtime (RFC3339) |
+| `content/<dir>/index.md` | e.g. `content/blog/index.md` → `/blog/` (canonical trailing slash) | file mtime (RFC3339) |
+
+Out of scope (by design — see `content_sitemap.go` doc comments for the
+rationale):
+
+- `pages/*.html` and `public/*.html` — user-authored, no mtime metadata
+  in the framework; add them to the sitemap by hand if needed.
+- `app.Get` routes — classified as user handlers, not pages.
+- Static assets in `public/` (CSS, JS, images, fonts, feeds).
+- `.md` files without a bubble-up template (orphan entries — no route
+  to point crawlers at).
+
+`Loc` is a URL path only (e.g. `/content/post`) — the framework does
+not know which scheme + host your site is deployed under, so the
+template prepends the host itself. Guard `LastMod` with
+`{{ if .LastMod }}` (always safe; content views always carry a mtime
+unless the source file lacks one).
+
+#### Filtering
+There is no `WithSitemap` option. Filtering happens in your `sitemap.xml`
+template: drop entries by whatever signal is convenient in `Loc` /
+`LastMod`, or write a custom handler that inspects `*ContentView` directly
+via `app.contentViews`.
+
+#### Taking over the route
+If you call `app.Get("/sitemap.xml", h)` first, the framework's auto-handler
+steps aside — your handler wins. The `TextViewer` is still exposed as
+`app.viewers["sitemap.xml"]`, so you can reuse it:
+
+```go
+app.Get("/sitemap.xml", func(c *xun.Context) error {
+    return c.View(c.App.SitemapURLs(), "sitemap.xml")
+})
+```
+
+Or write your own rendering entirely and ignore the viewer — the file is yours.
+
 > curl --header "Accept: application/xml, text/xml,text/plain, */*" -v http://127.0.0.1/sitemap.xml
 
 ```bash

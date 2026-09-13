@@ -330,7 +330,7 @@ func TestBuildContentViewFromPath(t *testing.T) {
 	require.Equal(t, "content/hello.md", cv.Path)
 	require.Equal(t, "hello", cv.Slug)
 	require.Equal(t, "Hello", cv.Title)
-	require.Equal(t, date, cv.Date)
+	require.Equal(t, date, cv.LastMod)
 	require.Equal(t, template.HTML("<p>body</p>"), cv.Body)
 }
 
@@ -358,7 +358,7 @@ func TestBuildContentViewEmptyTitleWhenAbsent(t *testing.T) {
 func TestBuildContentViewNilFileInfo(t *testing.T) {
 	cv := buildContentView("content/x.md", nil, "content", "X", "", template.HTML(""))
 
-	require.True(t, cv.Date.IsZero())
+	require.True(t, cv.LastMod.IsZero())
 }
 
 func TestBuildContentViewNoContentDir(t *testing.T) {
