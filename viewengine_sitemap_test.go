@@ -26,8 +26,17 @@ const plainSitemapTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 {{ end -}}
 </urlset>`
 
+// indexTpl is the catch-all bubble-up template used by every test fsys
+// that holds .md files under content/. Without it, loadContentFile warns
+// "no bubble-up template" and the route never registers — which makes
+// SitemapURLs skip the orphan entry, leaving the sitemap empty.
+const indexTpl = `{{ define "layout" -}}
+<!doctype html><html><body>{{ template "content" . }}</body></html>
+{{- end }}`
+
 func TestSitemap_RendersFromContent(t *testing.T) {
 	fsys := fstest.MapFS{
+		"index.tpl": {Data: []byte(indexTpl)},
 		"content/post.md": &fstest.MapFile{
 			Data:    []byte("# Hello"),
 			ModTime: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
@@ -65,9 +74,10 @@ func TestSitemap_RendersFromContent(t *testing.T) {
 	require.NoError(t, err)
 	body := string(buf)
 
-	// Both posts present, with the test server's host:port
-	require.Contains(t, body, "<loc>"+srv.URL+"/older</loc>")
-	require.Contains(t, body, "<loc>"+srv.URL+"/post</loc>")
+	// Both posts present, with the test server's host:port and the
+	// content-dir prefix that the route actually carries.
+	require.Contains(t, body, "<loc>"+srv.URL+"/content/older</loc>")
+	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
 	require.Contains(t, body, "<lastmod>2025-12-01T00:00:00Z</lastmod>")
 	require.Contains(t, body, "<lastmod>2026-09-01T00:00:00Z</lastmod>")
 
@@ -75,6 +85,89 @@ func TestSitemap_RendersFromContent(t *testing.T) {
 	olderIdx := strings.Index(body, "/older")
 	postIdx := strings.Index(body, "/post")
 	require.Less(t, olderIdx, postIdx, "expected older before post in stable sort order")
+}
+
+func TestSitemap_OrphanContentViewIsSkipped(t *testing.T) {
+	// Regression for review finding #2: loadContentFile writes the .md's
+	// ContentView into app.contentViews BEFORE checking for a bubble-up
+	// template. Without a template, no route is registered, but the
+	// ContentView persists — and would emit a sitemap URL that 404s.
+	//
+	// Setup: only routed.md has a sibling .tpl; orphan.md has neither
+	// a sibling .tpl nor any ancestor index.tpl in the fsys. The fsys
+	// intentionally has no root index.tpl so the bubble-up lookup fails
+	// for orphan.md.
+	fsys := fstest.MapFS{
+		"content/routed.md":  {Data: []byte("# R")},
+		"content/routed.tpl": {Data: []byte(`{{ define "layout" }}R{{ end }}`)},
+		"content/orphan.md":  {Data: []byte("# O")},
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys))
+	app.Start()
+	defer app.Close()
+
+	// Sanity check: both contentViews entries exist (orphan is still
+	// stored — it's used by breadcrumb / .Data.Content — even without a
+	// route).
+	_, hasRouted := app.contentViews["GET /content/routed"]
+	_, hasOrphan := app.contentViews["GET /content/orphan"]
+	require.True(t, hasRouted)
+	require.True(t, hasOrphan, "orphan contentView should still be present (used by breadcrumb etc.)")
+
+	// Only routed got a route.
+	_, routedRoute := app.routes["GET /content/routed"]
+	_, orphanRoute := app.routes["GET /content/orphan"]
+	require.True(t, routedRoute)
+	require.False(t, orphanRoute, "orphan should have no registered route")
+
+	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	buf, _ := io.ReadAll(resp.Body)
+	body := string(buf)
+
+	require.Contains(t, body, "<loc>"+srv.URL+"/content/routed</loc>")
+	require.NotContains(t, body, "<loc>"+srv.URL+"/content/orphan</loc>")
+}
+
+func TestSitemap_CustomContentDir_PathIncludesPrefix(t *testing.T) {
+	// Regression for review finding #1: cv.Slug strips the content-dir
+	// prefix (e.g. "post" for blog/post.md), but the route URL keeps it
+	// (e.g. /blog/post). SitemapURLs must derive the URL from the route
+	// pattern, not from cv.Slug — otherwise every loc 404s.
+	fsys := fstest.MapFS{
+		"index.tpl":    {Data: []byte(indexTpl)},
+		"blog/post.md": {Data: []byte("# P")},
+		"public/sitemap.xml": &fstest.MapFile{Data: []byte(plainSitemapTemplate)},
+	}
+
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	app := New(WithMux(mux), WithFsys(fsys), WithContent("blog"))
+	app.Start()
+	defer app.Close()
+
+	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	buf, _ := io.ReadAll(resp.Body)
+	body := string(buf)
+
+	// The URL must include the /blog/ prefix, not just /post.
+	require.Contains(t, body, "<loc>"+srv.URL+"/blog/post</loc>")
+	require.NotContains(t, body, "<loc>"+srv.URL+"/post</loc>")
 }
 
 func TestSitemap_ViewerExposedAndUsable(t *testing.T) {
@@ -101,6 +194,7 @@ func TestSitemap_ViewerExposedAndUsable(t *testing.T) {
 
 func TestSitemap_UserHandlerOverridesAutoRegistration(t *testing.T) {
 	fsys := fstest.MapFS{
+		"index.tpl":          {Data: []byte(indexTpl)},
 		"content/post.md":    &fstest.MapFile{Data: []byte("# P")},
 		"public/sitemap.xml": &fstest.MapFile{Data: []byte(plainSitemapTemplate)},
 	}
@@ -132,7 +226,7 @@ func TestSitemap_UserHandlerOverridesAutoRegistration(t *testing.T) {
 
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(buf), "<loc>"+srv.URL+"/post</loc>")
+	require.Contains(t, string(buf), "<loc>"+srv.URL+"/content/post</loc>")
 }
 
 func TestSitemap_NoFile_404FromMux(t *testing.T) {
@@ -191,6 +285,7 @@ func TestSitemap_ParseFailure_FallsBackToFileViewer(t *testing.T) {
 
 func TestSitemap_FilterDropsEntries(t *testing.T) {
 	fsys := fstest.MapFS{
+		"index.tpl": {Data: []byte(indexTpl)},
 		"content/post.md": &fstest.MapFile{
 			Data:    []byte("# P"),
 			ModTime: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
@@ -233,12 +328,13 @@ func TestSitemap_FilterDropsEntries(t *testing.T) {
 	require.NoError(t, err)
 	body := string(buf)
 
-	require.Contains(t, body, "<loc>"+srv.URL+"/post</loc>")
-	require.NotContains(t, body, "<loc>"+srv.URL+"/draft</loc>")
+	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
+	require.NotContains(t, body, "<loc>"+srv.URL+"/content/draft</loc>")
 }
 
 func TestSitemap_FileChanged_Reloads(t *testing.T) {
 	fsys := fstest.MapFS{
+		"index.tpl": {Data: []byte(indexTpl)},
 		"content/post.md": &fstest.MapFile{
 			Data:    []byte("# P"),
 			ModTime: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
@@ -264,7 +360,7 @@ func TestSitemap_FileChanged_Reloads(t *testing.T) {
 	buf, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	first := string(buf)
-	require.Contains(t, first, "<loc>"+srv.URL+"/post</loc>")
+	require.Contains(t, first, "<loc>"+srv.URL+"/content/post</loc>")
 
 	// Mutate the file on disk and deliver a Write event by hand. The poll
 	// loop is parked (see TestMain), so we can race neither.
@@ -291,7 +387,7 @@ func TestSitemap_FileChanged_Reloads(t *testing.T) {
 	// New template renders the sentinel, confirming the route handler was
 	// re-bound to a freshly-parsed template.
 	require.Contains(t, second, "HANDOFF")
-	require.Contains(t, second, "<loc>"+srv.URL+"/post</loc>")
+	require.Contains(t, second, "<loc>"+srv.URL+"/content/post</loc>")
 }
 
 func TestSitemap_FileChanged_Remove_ResetsToNotFound(t *testing.T) {

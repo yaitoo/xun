@@ -32,15 +32,40 @@ type SitemapOptions struct {
 // This is the single source of truth for "what URLs does this site
 // expose?". Both the default sitemap handler (registered by
 // StaticViewEngine for public/sitemap.xml) and user-authored sitemap
-// templates (via c.View(data, "public/sitemap.xml")) call this —
+// templates (via c.View(data, "sitemap.xml")) call this —
 // they cannot drift.
+//
+// Two corrections keep the URLs honest:
+//
+//   - The URL path is derived from the routes-map pattern key (e.g.
+//     "GET /blog/post"), NOT from cv.Slug. cv.Slug is path-relative
+//     to the content directory; the actual route includes the content-dir
+//     prefix. With WithContent("blog") and blog/post.md, the route is
+//     /blog/post, but cv.Slug would be "post" — emitting /post 404s.
+//
+//   - Entries without a registered route are skipped. loadContentFile
+//     writes to contentViews before checking for a bubble-up template,
+//     so orphan entries exist when a .md has no .tpl sibling / ancestor.
+//     A sitemap URL for an unrouted page is worse than no URL.
 func (app *App) SitemapURLs(opts SitemapOptions, c *Context) []SitemapURL {
 	out := make([]SitemapURL, 0, len(app.contentViews))
-	for _, cv := range app.contentViews {
+	for pattern, cv := range app.contentViews {
+		// Skip orphans: .md with no bubble-up template never gets a route.
+		if _, hasRoute := app.routes[pattern]; !hasRoute {
+			continue
+		}
 		if opts.Filter != nil && !opts.Filter(cv) {
 			continue
 		}
-		u := SitemapURL{Loc: buildSitemapLoc(c, cv)}
+		// pattern is e.g. "GET /blog/post" or "GET /blog/{$}" for index.md.
+		// Strip method prefix and /{$} suffix to get a concrete URL path.
+		// Skip patterns containing '{' / '}' — no concrete URL is possible.
+		p := strings.TrimPrefix(pattern, "GET ")
+		p = strings.TrimSuffix(p, "/{$}")
+		if strings.ContainsAny(p, "{}") {
+			continue
+		}
+		u := SitemapURL{Loc: buildSitemapLoc(c, p)}
 		if !cv.Date.IsZero() {
 			u.LastMod = cv.Date.UTC().Format(time.RFC3339)
 		}
@@ -50,16 +75,16 @@ func (app *App) SitemapURLs(opts SitemapOptions, c *Context) []SitemapURL {
 	return out
 }
 
-// buildSitemapLoc resolves the absolute URL for a ContentView from the
-// current request. Falls back to a root-relative path when no request
-// context is available (e.g., background callers).
-func buildSitemapLoc(c *Context, cv *ContentView) string {
+// buildSitemapLoc resolves an absolute URL from a URL path and the current
+// request. Falls back to a root-relative path when no request context is
+// available (e.g., background callers).
+func buildSitemapLoc(c *Context, path string) string {
 	if c == nil || c.Request == nil {
-		return "/" + strings.TrimLeft(cv.Slug, "/")
+		return path
 	}
 	scheme := "http"
 	if c.Request.TLS != nil {
 		scheme = "https"
 	}
-	return scheme + "://" + c.Request.Host + "/" + strings.TrimLeft(cv.Slug, "/")
+	return scheme + "://" + c.Request.Host + path
 }

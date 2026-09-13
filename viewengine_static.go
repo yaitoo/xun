@@ -68,6 +68,14 @@ func (ve *StaticViewEngine) FileChanged(fsys fs.FS, app *App, event fsnotify.Eve
 	if event.Name == sitemapPath {
 		switch {
 		case event.Has(fsnotify.Remove):
+			// Replace the handler with a 404 instead of delete(app.routes, ...):
+			// http.ServeMux does not support unregistering patterns, and the
+			// closure captured by mux holds `r` by pointer — deleting the
+			// routes-map entry would still leave the mux closure live, so a
+			// subsequent createHandler on the same pattern would panic on
+			// duplicate registration. The residual routes-map entry is a
+			// debuggability nit (app.Routes() still lists GET /sitemap.xml),
+			// but the served behavior is correct: notFoundHandler runs.
 			if r, ok := app.routes[sitemapKey]; ok {
 				r.Handle = notFoundHandler
 				r.Viewers = nil
