@@ -13,17 +13,13 @@ import (
 // and Google has publicly stated they ignore them. If you need them,
 // add them at the template layer by extending SitemapURL in your own code
 // or by post-processing App.SitemapURLs output.
+//
+// Filtering is intentionally not exposed here: drop entries in your
+// sitemap.xml template by checking whatever fields you encode on SitemapURL
+// or by inspecting cv.Params via a custom viewer/helper.
 type SitemapURL struct {
 	Loc     string
 	LastMod string // RFC3339; empty when the source file has no mtime
-}
-
-// SitemapOptions controls how App.SitemapURLs derives URL entries from
-// the loaded contentViews map. The zero value is usable.
-type SitemapOptions struct {
-	// Filter lets callers drop ContentViews (typical use: skip drafts).
-	// Returning false excludes the entry. Default (nil) keeps every entry.
-	Filter func(*ContentView) bool
 }
 
 // SitemapURLs returns the URL entries derived from app.contentViews,
@@ -52,24 +48,11 @@ type SitemapOptions struct {
 //     writes to contentViews before checking for a bubble-up template,
 //     so orphan entries exist when a .md has no .tpl sibling / ancestor.
 //     A sitemap URL for an unrouted page is worse than no URL.
-//
-// opts.Filter takes precedence; when nil, the WithSitemap-configured
-// app.sitemapFilter is used so a single Filter covers both the framework
-// handler and a user-taken-over route that calls SitemapURLs with
-// SitemapOptions{}.
-func (app *App) SitemapURLs(opts SitemapOptions, c *Context) []SitemapURL {
-	filter := opts.Filter
-	if filter == nil {
-		filter = app.sitemapFilter
-	}
-
+func (app *App) SitemapURLs(c *Context) []SitemapURL {
 	out := make([]SitemapURL, 0, len(app.contentViews))
 	for pattern, cv := range app.contentViews {
 		// Skip orphans: .md with no bubble-up template never gets a route.
 		if _, hasRoute := app.routes[pattern]; !hasRoute {
-			continue
-		}
-		if filter != nil && !filter(cv) {
 			continue
 		}
 		// pattern is e.g. "GET /blog/post" or "GET /blog/{$}" for index.md.

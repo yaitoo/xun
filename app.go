@@ -53,12 +53,6 @@ type App struct {
 	// contentViews maps route patterns (e.g. "GET /2026/deeper") to the
 	// ContentView produced from a .md file at load time.
 	contentViews map[string]*ContentView
-
-	// sitemapFilter drops ContentViews from App.SitemapURLs. Set via
-	// WithSitemap. Nil means keep every entry. Only consulted when a
-	// public/sitemap.xml template is in play; without that file the
-	// filter is dormant.
-	sitemapFilter func(*ContentView) bool
 }
 
 // New allocates an App instance and loads all view engines.

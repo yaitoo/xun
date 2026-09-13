@@ -204,54 +204,6 @@ func TestSitemap_IndexPageHasTrailingSlash(t *testing.T) {
 	require.NotContains(t, body, "<loc>"+srv.URL+"/blog</loc>")
 }
 
-func TestSitemap_FilterAppliesOnUserTakenOverRoute(t *testing.T) {
-	// Regression for review finding #1 (filter-fallback half): a user
-	// handler that calls SitemapURLs with empty options must still
-	// honor the WithSitemap-configured Filter. Otherwise drafts leak
-	// through silently when the user has registered their own handler.
-	fsys := fstest.MapFS{
-		"index.tpl": {Data: []byte(indexTpl)},
-		"content/post.md":    {Data: []byte("# P")},
-		"content/draft.md":   {Data: []byte("# D")},
-		"content/draft.yaml": {Data: []byte("draft: true\n")},
-		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
-	}
-
-	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	app := New(
-		WithMux(mux),
-		WithFsys(fsys),
-		WithSitemap(Sitemap{
-			Filter: func(cv *ContentView) bool {
-				return cv.Params == nil || cv.Params["draft"] != true
-			},
-		}),
-	)
-
-	// User handler takes over the route, but with empty SitemapOptions.
-	app.Get("/sitemap.xml", func(c *Context) error {
-		return c.View(c.App.SitemapURLs(SitemapOptions{}, c), sitemapName)
-	})
-
-	app.Start()
-	defer app.Close()
-
-	req, _ := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	buf, _ := io.ReadAll(resp.Body)
-	body := string(buf)
-
-	// Filter from WithSitemap must apply even though opts.Filter is nil.
-	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
-	require.NotContains(t, body, "<loc>"+srv.URL+"/content/draft</loc>")
-}
-
 func TestSitemap_RemovePreservesUserHandler(t *testing.T) {
 	// Regression for review finding #2: removing public/sitemap.xml
 	// must not clobber a handler the user registered via app.Get.
@@ -433,7 +385,7 @@ func TestSitemap_UserHandlerOverridesAutoRegistration(t *testing.T) {
 	// User takes over the route BEFORE engines load. handleSitemap must
 	// yield to this registration but still expose the viewer.
 	app.Get("/sitemap.xml", func(c *Context) error {
-		return c.View(c.App.SitemapURLs(SitemapOptions{}, c), sitemapName)
+		return c.View(c.App.SitemapURLs(c), sitemapName)
 	})
 
 	app.Start()
@@ -506,55 +458,6 @@ func TestSitemap_ParseFailure_FallsBackToFileViewer(t *testing.T) {
 	buf, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, "{{ unterminated", string(buf))
-}
-
-func TestSitemap_FilterDropsEntries(t *testing.T) {
-	fsys := fstest.MapFS{
-		"index.tpl": {Data: []byte(indexTpl)},
-		"content/post.md": &fstest.MapFile{
-			Data:    []byte("# P"),
-			ModTime: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
-		},
-		"content/draft.md": &fstest.MapFile{
-			Data:    []byte("# D"),
-			ModTime: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC),
-		},
-		"content/draft.yaml": &fstest.MapFile{Data: []byte("draft: true\n")},
-		"public/sitemap.xml": &fstest.MapFile{Data: []byte(plainSitemapTemplate)},
-	}
-
-	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	app := New(
-		WithMux(mux),
-		WithFsys(fsys),
-		WithSitemap(Sitemap{
-			Filter: func(cv *ContentView) bool {
-				if cv.Params == nil {
-					return true
-				}
-				d, _ := cv.Params["draft"].(bool)
-				return !d
-			},
-		}),
-	)
-	app.Start()
-	defer app.Close()
-
-	req, err := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
-	require.NoError(t, err)
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	buf, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	body := string(buf)
-
-	require.Contains(t, body, "<loc>"+srv.URL+"/content/post</loc>")
-	require.NotContains(t, body, "<loc>"+srv.URL+"/content/draft</loc>")
 }
 
 func TestSitemap_FileChanged_Reloads(t *testing.T) {

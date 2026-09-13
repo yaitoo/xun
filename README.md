@@ -210,20 +210,11 @@ loaded by `WithContent` (default `content/`). `LastMod` is the .md file's mtime
 formatted as RFC3339. If a `.md` has no stat-able mtime, `LastMod` is empty —
 guard with `{{ if .LastMod }}`.
 
-#### Filtering drafts
-Add a sidecar `Params["draft"]` to `.yaml` (already wired by the content
-engine) and drop them via `WithSitemap`:
-
-```go
-app := xun.New(
-    xun.WithFsys(fsys),
-    xun.WithSitemap(xun.Sitemap{
-        Filter: func(cv *xun.ContentView) bool {
-            return cv.Params == nil || cv.Params["draft"] != true
-        },
-    }),
-)
-```
+#### Filtering
+There is no `WithSitemap` option. Filtering happens in your `sitemap.xml`
+template: drop entries by whatever signal is convenient in `Loc` /
+`LastMod`, or write a custom handler that inspects `*ContentView` directly
+via `app.contentViews`.
 
 #### Taking over the route
 If you call `app.Get("/sitemap.xml", h)` first, the framework's auto-handler
@@ -232,7 +223,7 @@ steps aside — your handler wins. The `TextViewer` is still exposed as
 
 ```go
 app.Get("/sitemap.xml", func(c *xun.Context) error {
-    return c.View(c.App.SitemapURLs(xun.SitemapOptions{}, c), "sitemap.xml")
+    return c.View(c.App.SitemapURLs(c), "sitemap.xml")
 })
 ```
 

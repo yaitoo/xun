@@ -182,9 +182,7 @@ func sitemapHandler(c *Context) error {
 		c.WriteStatus(http.StatusNotFound)
 		return nil
 	}
-	return v.Render(c, c.App.SitemapURLs(SitemapOptions{
-		Filter: c.App.sitemapFilter,
-	}, c))
+	return v.Render(c, c.App.SitemapURLs(c))
 }
 
 const cacheControl = "public, max-age=31536000, immutable"
