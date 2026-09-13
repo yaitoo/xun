@@ -299,6 +299,7 @@ func TestSitemap_RemovePreservesUserHandler(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.True(t, customCalled)
+	buf, _ = io.ReadAll(resp.Body)
 	require.Equal(t, "custom", string(buf))
 	require.Equal(t, "yes", resp.Header.Get("X-Custom"))
 }
