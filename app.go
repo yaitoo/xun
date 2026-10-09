@@ -140,6 +140,8 @@ func (app *App) Group(prefix string) Router {
 // Start initializes and starts the application by locking the mutex,
 // iterating through the routes, and logging the pattern and viewers
 // for each route. It ensures thread safety by using a mutex lock.
+// Route logging can be suppressed by passing [WithoutStartupLog] when
+// constructing the App.
 func (app *App) Start() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
