@@ -40,6 +40,7 @@ type App struct {
 	handlerViewers []Viewer
 	engines        []ViewEngine
 	logger         *slog.Logger
+	startupLog     bool
 	fsys           fs.FS
 	watch          bool
 	watcher        *fsnotify.Watcher
@@ -73,6 +74,7 @@ func New(opts ...Option) *App {
 			&HtmlViewEngine{contentDirs: []string{"content"}},
 			&TextViewEngine{},
 		},
+		startupLog: true,
 	}
 
 	for _, o := range opts {
@@ -142,15 +144,16 @@ func (app *App) Start() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
-	for _, r := range app.routes {
-		keys := make([]string, 0, len(r.Viewers))
-		for _, v := range r.Viewers {
-			keys = append(keys, v.MimeType().String())
+	if app.startupLog {
+		for _, r := range app.routes {
+			keys := make([]string, 0, len(r.Viewers))
+			for _, v := range r.Viewers {
+				keys = append(keys, v.MimeType().String())
+			}
+
+			app.logger.Info(r.Pattern, slog.String("viewer", strings.Join(keys, ",")))
 		}
-
-		app.logger.Info(r.Pattern, slog.String("viewer", strings.Join(keys, ",")))
 	}
-
 }
 
 // Close releases the resources the App itself owns. Concretely, it stops the

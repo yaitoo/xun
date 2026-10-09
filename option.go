@@ -18,6 +18,13 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// WithoutStartupLog sets the startup logging of registered routes to false
+func WithoutStartupLog() Option {
+	return func(app *App) {
+		app.startupLog = false
+	}
+}
+
 // WithMux sets the http.ServeMux for the App. If not set, it will use http.DefaultServeMux.
 func WithMux(mux *http.ServeMux) Option {
 	return func(app *App) {
