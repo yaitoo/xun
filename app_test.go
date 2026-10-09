@@ -1041,6 +1041,23 @@ func TestMux(t *testing.T) {
 	})
 }
 
+func TestWithoutStartupLog(t *testing.T) {
+	mux := http.NewServeMux()
+	w := bytes.NewBuffer(nil)
+	logger := slog.New(slog.NewTextHandler(w, nil))
+
+	app := New(WithMux(mux), WithLogger(logger), WithoutStartupLog())
+	defer app.Close()
+
+	app.Get("/a", func(c *Context) error { return nil })
+	app.Post("/b", func(c *Context) error { return nil })
+
+	app.Start()
+
+	// No route lines should have been written when WithoutStartupLog is set.
+	require.Empty(t, w.String())
+}
+
 func TestAppRoutes_Snapshot(t *testing.T) {
 	mux := http.NewServeMux()
 	app := New(WithMux(mux))
