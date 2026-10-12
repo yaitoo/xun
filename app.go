@@ -40,7 +40,7 @@ type App struct {
 	handlerViewers []Viewer
 	engines        []ViewEngine
 	logger         *slog.Logger
-	startupLog     bool
+	routesLog      bool
 	fsys           fs.FS
 	watch          bool
 	watcher        *fsnotify.Watcher
@@ -74,7 +74,6 @@ func New(opts ...Option) *App {
 			&HtmlViewEngine{contentDirs: []string{"content"}},
 			&TextViewEngine{},
 		},
-		startupLog: true,
 	}
 
 	for _, o := range opts {
@@ -140,13 +139,13 @@ func (app *App) Group(prefix string) Router {
 // Start initializes and starts the application by locking the mutex,
 // iterating through the routes, and logging the pattern and viewers
 // for each route. It ensures thread safety by using a mutex lock.
-// Route logging can be suppressed by passing [WithoutStartupLog] when
-// constructing the App.
+// Route logging is disabled by default; enable it by passing
+// [WithRoutesLog] when constructing the App.
 func (app *App) Start() {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
-	if app.startupLog {
+	if app.routesLog {
 		for _, r := range app.routes {
 			keys := make([]string, 0, len(r.Viewers))
 			for _, v := range r.Viewers {

@@ -18,10 +18,14 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
-// WithoutStartupLog sets the startup logging of registered routes to false
-func WithoutStartupLog() Option {
+// WithRoutesLog enables logging of every registered route when [App.Start]
+// is called. By default, App.Start is silent so that production runs don't
+// emit a flood of route-list lines through the configured logger. Pass
+// WithRoutesLog() during development (or whenever you want the route table
+// printed on startup).
+func WithRoutesLog() Option {
 	return func(app *App) {
-		app.startupLog = false
+		app.routesLog = true
 	}
 }
 
