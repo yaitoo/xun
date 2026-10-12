@@ -29,19 +29,6 @@ func WithRoutesLog() Option {
 	}
 }
 
-// WithoutStartupLog is a no-op kept for backward compatibility with code
-// written against earlier releases, where App.Start logged every registered
-// route by default and WithoutStartupLog was the opt-out.
-//
-// Route logging is now disabled by default, so the old opt-out is unnecessary.
-// To opt in to route logging, use [WithRoutesLog] instead.
-//
-// Deprecated: route logging is silent by default; use [WithRoutesLog] to
-// enable it. WithoutStartupLog will be removed in a future release.
-func WithoutStartupLog() Option {
-	return func(app *App) {}
-}
-
 // WithMux sets the http.ServeMux for the App. If not set, it will use http.DefaultServeMux.
 func WithMux(mux *http.ServeMux) Option {
 	return func(app *App) {

@@ -274,7 +274,7 @@ app.Mux().HandleFunc("GET /api/ws", wsHandler(hub))
 | Runs `group.Use` middleware | ✓ | **✗** |
 | Goes through viewer / content negotiation | ✓ | **✗** |
 | Logs `X-Log-Id` | ✓ | **✗** |
-| Listed in `app.Start()` startup log | ✓ | **✗** |
+| Listed in `app.Start()` startup log (requires `WithRoutesLog`) | ✓ | **✗** |
 | Error → status mapping by xun | ✓ | **✗** |
 | Auth (session, CSRF, etc.) | automatic | **must be re-implemented on the raw request** |
 
