@@ -112,6 +112,25 @@ app.Get("/{$}", handleLanding)
 
 The same rule applies to `pages/<group>/index.html` inside `app.Group(...)`.
 
+#### Sitemap
+`app.Sitemap(fn)` registers `GET /sitemap.xml` and renders the viewer named `sitemap.xml` (the `public/sitemap.xml` template, parsed as `text/template`). `fn` is a `func(c *xun.Context) ([]xun.SitemapURL, error)` that assembles the entries per request:
+
+```go
+app.Sitemap(func(c *xun.Context) ([]xun.SitemapURL, error) {
+    return []xun.SitemapURL{{Loc: "/blog/hello"}}, nil
+})
+```
+
+- No builder → the content engine's entries (`app.SitemapURLs()`).
+- Several builders → concatenated in order, de-duplicated by `Loc` (first wins), not re-sorted.
+- A builder error → 500 + `X-Log-Id` (standard error mapping); the entries are collected before the viewer is looked up, so the error is not masked by the 404.
+- `.Data` in the template is the collected `[]SitemapURL`; `c.Set(...)` values are `{{ .TempData.<key> }}`.
+- The template is `text/template` — it does not escape. Escape values in the template (e.g. via `WithTemplateFunc`).
+- The framework registers the route itself during `New()` when a fsys is configured; the route answers 404 until `public/sitemap.xml` exists. Registration is skipped (with a warning) when the mux already serves `GET /sitemap.xml`.
+- A page registered for the same route takes it over — at startup (`pages/sitemap.xml.html`) and when hot-added under `WithWatch`.
+- Last registration wins: `app.Get("/sitemap.xml", h)` after `app.Sitemap(fn)` replaces it (and vice versa — replacing a user-owned route logs a warning).
+- More than 50,000 URLs in one sitemap → a warning; the framework does not truncate or split.
+
 ## 5) Middleware order
 - App.Use applies globally; Group.Use applies to that group only.
 - Construction is inside-out; execution is outer to inner; handler last.
@@ -280,7 +299,7 @@ app.Mux().HandleFunc("GET /api/ws", wsHandler(hub))
 
 ### Footguns
 - **Always pass `WithMux(http.NewServeMux())`** to `xun.New`. If you skip it, `app.Mux()` falls back to `http.DefaultServeMux` and you pollute global state.
-- Patterns auto-registered by xun (e.g. `GET /{$}` from `pages/index.html`) **cannot** be re-registered through `app.Mux()` — `ServeMux` panics on duplicate patterns.
+- Patterns auto-registered by xun (e.g. `GET /{$}` from `pages/index.html`, and `GET /sitemap.xml` — registered whenever a file system is configured) **cannot** be re-registered through `app.Mux()` — `ServeMux` panics on duplicate patterns. Take the sitemap route over with `app.Get("/sitemap.xml", h)` or `app.Sitemap(fn)` instead.
 - Registering on `app.Mux()` from multiple goroutines concurrently panics. Do all registration before serving starts.
 - If the native handler needs the same auth as the rest of the app, replicate the session/cookie check on the raw `*http.Request`. There's no compile-time check that native and xun-managed auth agree — keep them in sync.
 
@@ -333,6 +352,7 @@ app.Get("/api/ws", func(c *xun.Context) error {
 | Compression | `xun.WithCompressor(&xun.GzipCompressor{}, &xun.DeflateCompressor{})` |
 | Markdown content | `xun.WithContent("blog", "docs")` + `.md` files in those dirs |
 | Custom Markdown renderer | `xun.WithContentRenderer(fn)` |
+| Sitemap entries | `app.Sitemap(fn)` — `fn(c) ([]xun.SitemapURL, error)`; serves `GET /sitemap.xml` |
 | **Escape hatch for raw handlers** | `app.Mux().HandleFunc(pattern, h)` — bypasses all middleware |
 | Hijack conn (WebSocket / SSE) | `app.HandleFunc(...)` + `c.Response.Hijack()` — runs middleware |
 | Flush streaming response | `c.Response.Flush()` (SSE, chunked transfer) |

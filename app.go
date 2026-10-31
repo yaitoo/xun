@@ -54,6 +54,13 @@ type App struct {
 	// contentViews maps route patterns (e.g. "GET /2026/deeper") to the
 	// ContentView produced from a .md file at load time.
 	contentViews map[string]*ContentView
+
+	// sitemapRouteOwned reports whether the route "GET /sitemap.xml" is
+	// currently served by the framework's sitemap handler. It is cleared
+	// when the user registers that route through HandleFunc (app.Get and
+	// friends), so App.Sitemap can warn before replacing a user-owned
+	// handler.
+	sitemapRouteOwned bool
 }
 
 // New allocates an App instance and loads all view engines.
@@ -92,6 +99,26 @@ func New(opts ...Option) *App {
 
 		for _, ve := range app.engines {
 			ve.Load(app.fsys, app)
+		}
+
+		// Register the framework's default sitemap route. Its handler
+		// resolves the viewer named "sitemap.xml" per request, so the route
+		// does not depend on public/sitemap.xml existing at registration
+		// time — it answers 404 until the template is published.
+		//
+		// The route is skipped when something else already owns it: a
+		// route registered from the file system (e.g. a page registered
+		// from pages/sitemap.xml.html), or a pattern the mux itself
+		// already serves — registering that pattern again would panic
+		// with ServeMux's duplicate-pattern panic.
+		if _, ok := app.routes[sitemapKey]; !ok {
+			if muxHasPattern(app.mux, http.MethodGet, "/sitemap.xml") {
+				app.logger.Warn("xun: sitemap route not registered",
+					slog.String("route", sitemapKey),
+					slog.String("reason", "the mux already serves this pattern"))
+			} else {
+				app.Sitemap()
+			}
 		}
 
 		if app.watch {
@@ -241,9 +268,10 @@ func (app *App) HasRoute(method, pattern string) bool {
 //     to keep registrations local.
 //
 //   - Patterns auto-registered by xun (notably "GET /{$}" from
-//     pages/index.html) cannot be re-registered via Mux — ServeMux panics
-//     on duplicate patterns. Use "/" as a lower-precedence catch-all
-//     instead.
+//     pages/index.html, and "GET /sitemap.xml", which is registered
+//     whenever a file system is configured) cannot be re-registered via
+//     Mux — ServeMux panics on duplicate patterns. Use "/" as a
+//     lower-precedence catch-all instead.
 //
 //   - Concurrent registration of the SAME pattern from multiple
 //     goroutines panics. Serialize registration, or register before
@@ -380,6 +408,19 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	r, ok := app.routes[pattern]
 	if ok {
 		r.Viewers = append(r.Viewers, v)
+
+		if pattern == sitemapKey && app.sitemapRouteOwned {
+			// A user-authored page (e.g. pages/sitemap.xml.html added
+			// while watching) takes the route over from the framework.
+			// This is the same precedence the page gets at startup, where
+			// New() leaves an existing route alone.
+			r.Handle = func(c *Context) error {
+				return v.Render(c, nil)
+			}
+			r.chain = app
+			app.sitemapRouteOwned = false
+		}
+
 		return
 	}
 
@@ -465,6 +506,15 @@ func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseW
 // see the WithWatch doc. In production, registration should complete before
 // the *http.Server begins serving requests.
 func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
+	if pattern == sitemapKey {
+		// The route is (re)registered by something other than the sitemap
+		// machinery, so it belongs to the user now; App.Sitemap warns
+		// before it replaces it. The check lives here — not in
+		// App.HandleFunc — so that every registration path (app.Get,
+		// group.Get, ...) is covered.
+		app.sitemapRouteOwned = false
+	}
+
 	ro := &RoutingOptions{
 		viewers: app.handlerViewers,
 	}
