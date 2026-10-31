@@ -850,6 +850,8 @@ app.Get("/api/ws", func(c *xun.Context) error {
 
 Bypasses everything xun-managed — middleware, content negotiation, error-to-status mapping, access logs, even `X-Log-Id`. If the handler needs the same auth as the rest of the app, you must replicate it on the raw request. If you skip `WithMux(http.NewServeMux())` and fall back to `http.DefaultServeMux`, you pollute global state — always pass your own mux to `xun.New`.
 
+Patterns that xun registers itself cannot be re-registered through `app.Mux()` — `ServeMux` panics on a duplicate registration. That includes `GET /{$}` (from `pages/index.html`) and `GET /sitemap.xml` (registered whenever a file system is configured). Take the sitemap route over with `app.Get("/sitemap.xml", h)` or `app.Sitemap(fn)` instead.
+
 ### Extensions
 #### GZip/Deflate handler
 Set up the compression extension to interpret and respond to `Accept-Encoding` headers in client requests, supporting both GZip and Deflate compression methods.

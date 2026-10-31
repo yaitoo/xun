@@ -107,7 +107,7 @@ func New(opts ...Option) *App {
 		// time — it answers 404 until the template is published.
 		//
 		// A route that already answers GET /sitemap.xml (e.g. a page
-		// registered from pages/sitemap.html) is left alone: the
+		// registered from pages/sitemap.xml.html) is left alone: the
 		// framework's default must not clobber a user's route.
 		if _, ok := app.routes[sitemapKey]; !ok {
 			app.Sitemap()
@@ -260,9 +260,10 @@ func (app *App) HasRoute(method, pattern string) bool {
 //     to keep registrations local.
 //
 //   - Patterns auto-registered by xun (notably "GET /{$}" from
-//     pages/index.html) cannot be re-registered via Mux — ServeMux panics
-//     on duplicate patterns. Use "/" as a lower-precedence catch-all
-//     instead.
+//     pages/index.html, and "GET /sitemap.xml", which is registered
+//     whenever a file system is configured) cannot be re-registered via
+//     Mux — ServeMux panics on duplicate patterns. Use "/" as a
+//     lower-precedence catch-all instead.
 //
 //   - Concurrent registration of the SAME pattern from multiple
 //     goroutines panics. Serialize registration, or register before
@@ -456,12 +457,6 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 // used to customize the route. See the RoutingOption type for more
 // information.
 func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
-	if pattern == sitemapKey {
-		// The route belongs to the user now; App.Sitemap warns before it
-		// replaces it.
-		app.sitemapRouteOwned = false
-	}
-
 	app.createHandler(pattern, hf, opts, app)
 }
 
@@ -490,6 +485,15 @@ func (app *App) createWriter(req *http.Request, w http.ResponseWriter) ResponseW
 // see the WithWatch doc. In production, registration should complete before
 // the *http.Server begins serving requests.
 func (app *App) createHandler(pattern string, hf HandleFunc, opts []RoutingOption, c chain) {
+	if pattern == sitemapKey {
+		// The route is (re)registered by something other than the sitemap
+		// machinery, so it belongs to the user now; App.Sitemap warns
+		// before it replaces it. The check lives here — not in
+		// App.HandleFunc — so that every registration path (app.Get,
+		// group.Get, ...) is covered.
+		app.sitemapRouteOwned = false
+	}
+
 	ro := &RoutingOptions{
 		viewers: app.handlerViewers,
 	}

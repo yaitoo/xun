@@ -296,7 +296,7 @@ app.Mux().HandleFunc("GET /api/ws", wsHandler(hub))
 
 ### Footguns
 - **Always pass `WithMux(http.NewServeMux())`** to `xun.New`. If you skip it, `app.Mux()` falls back to `http.DefaultServeMux` and you pollute global state.
-- Patterns auto-registered by xun (e.g. `GET /{$}` from `pages/index.html`) **cannot** be re-registered through `app.Mux()` — `ServeMux` panics on duplicate patterns.
+- Patterns auto-registered by xun (e.g. `GET /{$}` from `pages/index.html`, and `GET /sitemap.xml` — registered whenever a file system is configured) **cannot** be re-registered through `app.Mux()` — `ServeMux` panics on duplicate patterns. Take the sitemap route over with `app.Get("/sitemap.xml", h)` or `app.Sitemap(fn)` instead.
 - Registering on `app.Mux()` from multiple goroutines concurrently panics. Do all registration before serving starts.
 - If the native handler needs the same auth as the rest of the app, replicate the session/cookie check on the raw `*http.Request`. There's no compile-time check that native and xun-managed auth agree — keep them in sync.
 

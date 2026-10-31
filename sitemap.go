@@ -1,6 +1,7 @@
 package xun
 
 import (
+	"fmt"
 	"net/http"
 )
 
@@ -58,7 +59,20 @@ type SitemapBuilder func(c *Context) ([]SitemapURL, error)
 //
 // The route answers 404 until a viewer named "sitemap.xml" is published —
 // app.Sitemap does not require public/sitemap.xml to exist.
+//
+// A nil builder panics at registration: it is a programming error, and
+// failing here keeps the stack trace pointing at the call site instead of
+// at a request goroutine.
 func (app *App) Sitemap(builders ...SitemapBuilder) {
+	for i, b := range builders {
+		if b == nil {
+			// Fail at registration: a nil builder would otherwise panic
+			// inside the request goroutine, where the stack trace points
+			// at the framework instead of the call site.
+			panic(fmt.Sprintf("xun: Sitemap: nil builder at index %d", i))
+		}
+	}
+
 	if len(builders) == 0 {
 		builders = []SitemapBuilder{defaultSitemapBuilder}
 	}
@@ -68,10 +82,13 @@ func (app *App) Sitemap(builders ...SitemapBuilder) {
 			" registered outside the sitemap machinery")
 	}
 
+	// WithViewer() with no arguments clears the app's default handler
+	// viewers: this route renders the named "sitemap.xml" viewer, it does
+	// not negotiate one.
 	app.createHandler(sitemapKey, sitemapHandler(builders), []RoutingOption{WithViewer()}, app)
 
 	// The route is ours now; a later app.Get("/sitemap.xml", ...) hands
-	// ownership back to the user (see App.HandleFunc).
+	// ownership back to the user (see App.createHandler).
 	app.sitemapRouteOwned = true
 }
 

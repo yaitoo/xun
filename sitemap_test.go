@@ -397,6 +397,54 @@ func TestSitemapApp_BuilderError_Returns500(t *testing.T) {
 	require.NotContains(t, body, "<urlset")
 }
 
+func TestSitemapApp_GroupRouteIsUserOwned(t *testing.T) {
+	h := &captureHandler{}
+	fsys := fstest.MapFS{
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	app, _ := newSitemapTestApp(t, fsys, WithLogger(slog.New(h)))
+
+	// A group registers through app.createHandler, not app.HandleFunc —
+	// the ownership hand-off must cover it too.
+	app.Group("").Get("/sitemap.xml", func(c *Context) error {
+		return c.View(c.App.SitemapURLs(), sitemapName)
+	})
+
+	app.Sitemap(func(c *Context) ([]SitemapURL, error) { return nil, nil })
+
+	require.True(t, h.contains("GET /sitemap.xml"),
+		"expected a warning: the group-owned route is being replaced")
+}
+
+func TestSitemapApp_NilBuilder_PanicsAtRegistration(t *testing.T) {
+	fsys := fstest.MapFS{
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	app, _ := newSitemapTestApp(t, fsys)
+
+	// A nil builder must fail at registration, not inside the request
+	// goroutine where the stack trace points at the framework.
+	require.PanicsWithValue(t, "xun: Sitemap: nil builder at index 0", func() {
+		app.Sitemap(nil)
+	})
+}
+
+func TestSitemapApp_MuxPatternOwnedByFramework(t *testing.T) {
+	mux := http.NewServeMux()
+	app := New(WithMux(mux), WithFsys(fstest.MapFS{}))
+	defer app.Close()
+
+	// The framework registers "GET /sitemap.xml" on the mux whenever a
+	// file system is configured, so the raw escape hatch cannot claim that
+	// pattern — ServeMux panics on a duplicate registration. Users take
+	// the route over with app.Get / app.Sitemap instead.
+	require.Panics(t, func() {
+		app.Mux().HandleFunc("GET /sitemap.xml", func(w http.ResponseWriter, r *http.Request) {})
+	})
+}
+
 func TestSitemapApp_StaticEnginePublishesViewerWithoutRoute(t *testing.T) {
 	fsys := fstest.MapFS{
 		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
