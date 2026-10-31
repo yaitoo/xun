@@ -54,6 +54,13 @@ type App struct {
 	// contentViews maps route patterns (e.g. "GET /2026/deeper") to the
 	// ContentView produced from a .md file at load time.
 	contentViews map[string]*ContentView
+
+	// sitemapRouteOwned reports whether the route "GET /sitemap.xml" is
+	// currently served by the framework's sitemap handler. It is cleared
+	// when the user registers that route through HandleFunc (app.Get and
+	// friends), so App.Sitemap can warn before replacing a user-owned
+	// handler.
+	sitemapRouteOwned bool
 }
 
 // New allocates an App instance and loads all view engines.
@@ -92,6 +99,18 @@ func New(opts ...Option) *App {
 
 		for _, ve := range app.engines {
 			ve.Load(app.fsys, app)
+		}
+
+		// Register the framework's default sitemap route. Its handler
+		// resolves the viewer named "sitemap.xml" per request, so the route
+		// does not depend on public/sitemap.xml existing at registration
+		// time — it answers 404 until the template is published.
+		//
+		// A route that already answers GET /sitemap.xml (e.g. a page
+		// registered from pages/sitemap.html) is left alone: the
+		// framework's default must not clobber a user's route.
+		if _, ok := app.routes[sitemapKey]; !ok {
+			app.Sitemap()
 		}
 
 		if app.watch {
@@ -437,6 +456,12 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 // used to customize the route. See the RoutingOption type for more
 // information.
 func (app *App) HandleFunc(pattern string, hf HandleFunc, opts ...RoutingOption) {
+	if pattern == sitemapKey {
+		// The route belongs to the user now; App.Sitemap warns before it
+		// replaces it.
+		app.sitemapRouteOwned = false
+	}
+
 	app.createHandler(pattern, hf, opts, app)
 }
 

@@ -112,6 +112,22 @@ app.Get("/{$}", handleLanding)
 
 The same rule applies to `pages/<group>/index.html` inside `app.Group(...)`.
 
+#### Sitemap
+`app.Sitemap(fn)` registers `GET /sitemap.xml` and renders the viewer named `sitemap.xml` (the `public/sitemap.xml` template, parsed as `text/template`). `fn` is a `func(c *xun.Context) ([]xun.SitemapURL, error)` that assembles the entries per request:
+
+```go
+app.Sitemap(func(c *xun.Context) ([]xun.SitemapURL, error) {
+    return []xun.SitemapURL{{Loc: "/blog/hello"}}, nil
+})
+```
+
+- No builder → the content engine's entries (`app.SitemapURLs()`).
+- Several builders → concatenated in order, de-duplicated by `Loc` (first wins), not re-sorted.
+- A builder error → 500 + `X-Log-Id` (standard error mapping).
+- `.Data` in the template is the collected `[]SitemapURL`; `c.Set(...)` values are `{{ .TempData.<key> }}`.
+- The framework registers the route itself during `New()` when a fsys is configured; the route answers 404 until `public/sitemap.xml` exists.
+- Last registration wins: `app.Get("/sitemap.xml", h)` after `app.Sitemap(fn)` replaces it (and vice versa — replacing a user-owned route logs a warning).
+
 ## 5) Middleware order
 - App.Use applies globally; Group.Use applies to that group only.
 - Construction is inside-out; execution is outer to inner; handler last.
@@ -333,6 +349,7 @@ app.Get("/api/ws", func(c *xun.Context) error {
 | Compression | `xun.WithCompressor(&xun.GzipCompressor{}, &xun.DeflateCompressor{})` |
 | Markdown content | `xun.WithContent("blog", "docs")` + `.md` files in those dirs |
 | Custom Markdown renderer | `xun.WithContentRenderer(fn)` |
+| Sitemap entries | `app.Sitemap(fn)` — `fn(c) ([]xun.SitemapURL, error)`; serves `GET /sitemap.xml` |
 | **Escape hatch for raw handlers** | `app.Mux().HandleFunc(pattern, h)` — bypasses all middleware |
 | Hijack conn (WebSocket / SSE) | `app.HandleFunc(...)` + `c.Response.Hijack()` — runs middleware |
 | Flush streaming response | `c.Response.Flush()` (SSE, chunked transfer) |

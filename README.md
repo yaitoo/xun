@@ -184,8 +184,8 @@ A text view is UI that is referenced in `context.View` to render the view with a
 
 ### Sitemap for blogs
 Drop a `public/sitemap.xml` template next to your other static assets and the
-framework auto-registers `GET /sitemap.xml` to render it with the URLs derived
-from your content engine. No `text/sitemap.xml` indirection, no extra handler.
+framework serves `GET /sitemap.xml` with the URLs derived from your content
+engine. No `text/sitemap.xml` indirection, no extra handler.
 
 ```
 └── app
@@ -205,8 +205,8 @@ from your content engine. No `text/sitemap.xml` indirection, no extra handler.
 </urlset>
 ```
 
-`.Data` is `[]xun.SitemapURL{Loc, LastMod}` projected from `app.contentViews`
-only. The scope is intentionally narrow:
+`.Data` is `[]xun.SitemapURL{Loc, LastMod}` — by default projected from
+`app.contentViews` only. The scope is intentionally narrow:
 
 | Source | `Loc` | `LastMod` |
 |--------|-------|-----------|
@@ -235,16 +235,60 @@ template: drop entries by whatever signal is convenient in `Loc` /
 `LastMod`, or write a custom handler that inspects `*ContentView` directly
 via `app.contentViews`.
 
+#### Adding your own URLs
+`app.Sitemap(fn)` registers `GET /sitemap.xml` with your own builder — a
+function that returns the entries to render. It runs per request, so it can
+read a database, call another service, or depend on the request:
+
+```go
+app.Sitemap(func(c *xun.Context) ([]xun.SitemapURL, error) {
+    rows, err := db.QueryContext(c.Request.Context(), "SELECT slug, updated_at FROM posts")
+    if err != nil {
+        return nil, err
+    }
+
+    urls := make([]xun.SitemapURL, 0, len(rows))
+    for _, r := range rows {
+        urls = append(urls, xun.SitemapURL{Loc: "/blog/" + r.Slug, LastMod: r.UpdatedAt})
+    }
+    return urls, nil
+})
+```
+
+Several builders can be passed; their entries are concatenated in builder
+order and de-duplicated by `Loc` (first occurrence wins). The order is not
+re-sorted:
+
+```go
+app.Sitemap(contentBuilder, dbBuilder)
+```
+
+A builder that returns an error aborts the request with the framework's
+standard error mapping (500 + `X-Log-Id`): a sitemap that silently misses
+half of its URLs is worse than an error a crawler can retry.
+
+Entries are passed through unchanged — the framework never resolves a host
+or normalizes a path, so an absolute URL (`https://other.example/p/1`) is
+rendered verbatim.
+
+The route answers 404 until a `public/sitemap.xml` template is published:
+`app.Sitemap` does not require the file to exist.
+
 #### Taking over the route
-If you call `app.Get("/sitemap.xml", h)` first, the framework's auto-handler
-steps aside — your handler wins. The `TextViewer` is still exposed as
-`app.viewers["sitemap.xml"]`, so you can reuse it:
+The framework registers `GET /sitemap.xml` itself, so a route you register
+afterwards wins — either your own handler:
 
 ```go
 app.Get("/sitemap.xml", func(c *xun.Context) error {
     return c.View(c.App.SitemapURLs(), "sitemap.xml")
 })
 ```
+
+or `app.Sitemap(fn)` with your own builder. Replacing a route the framework
+does not own (one registered through `app.Get` / `app.HandleFunc`) logs a
+warning. The `TextViewer` is still exposed as `app.viewers["sitemap.xml"]`,
+so you can reuse it — `c.View(data, "sitemap.xml")` renders the same
+template with your own data.
 
 Or write your own rendering entirely and ignore the viewer — the file is yours.
 
