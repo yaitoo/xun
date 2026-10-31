@@ -249,7 +249,10 @@ app.Sitemap(func(c *xun.Context) ([]xun.SitemapURL, error) {
 
     urls := make([]xun.SitemapURL, 0, len(rows))
     for _, r := range rows {
-        urls = append(urls, xun.SitemapURL{Loc: "/blog/" + r.Slug, LastMod: r.UpdatedAt})
+        urls = append(urls, xun.SitemapURL{
+            Loc:     "/blog/" + r.Slug,
+            LastMod: r.UpdatedAt.Format(time.RFC3339), // LastMod is a string
+        })
     }
     return urls, nil
 })
@@ -270,6 +273,17 @@ half of its URLs is worse than an error a crawler can retry.
 Entries are passed through unchanged — the framework never resolves a host
 or normalizes a path, so an absolute URL (`https://other.example/p/1`) is
 rendered verbatim.
+
+The template is parsed with `text/template`, which does **not** escape: a
+`Loc` containing `&` or `<` lands in the document raw. Escape the values in
+your template — or register an escaping helper with
+`xun.WithTemplateFunc("xml", xml.EscapeText)` and call it from the template.
+
+A sitemap file may hold at most 50,000 URLs. The framework logs a warning
+when a builder exceeds that; it does not truncate the result (silently
+dropping URLs is worse than a sitemap a crawler rejects) and it does not
+split the entries across several files — the builder owns the data, so
+splitting is yours to arrange.
 
 The route answers 404 until a `public/sitemap.xml` template is published:
 `app.Sitemap` does not require the file to exist.

@@ -3,6 +3,7 @@ package xun
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -59,10 +60,10 @@ func sitemapGet(t *testing.T, srv *httptest.Server, header http.Header) (*http.R
 	return resp, string(buf)
 }
 
-// captureHandler records slog messages so a test can assert on them.
+// captureHandler records slog records so a test can assert on them.
 type captureHandler struct {
-	mu       sync.Mutex
-	messages []string
+	mu      sync.Mutex
+	records []slog.Record
 }
 
 func (h *captureHandler) Enabled(context.Context, slog.Level) bool { return true }
@@ -70,7 +71,7 @@ func (h *captureHandler) Enabled(context.Context, slog.Level) bool { return true
 func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.messages = append(h.messages, r.Message)
+	h.records = append(h.records, r.Clone())
 	return nil
 }
 
@@ -78,13 +79,15 @@ func (h *captureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 
 func (h *captureHandler) WithGroup(string) slog.Handler { return h }
 
-// contains reports whether any recorded message contains substr.
-func (h *captureHandler) contains(substr string) bool {
+// contains reports whether a record logged at the given level has a message
+// containing substr. The level matters: a message logged at Info is not a
+// warning.
+func (h *captureHandler) contains(level slog.Level, substr string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for _, m := range h.messages {
-		if strings.Contains(m, substr) {
+	for _, r := range h.records {
+		if r.Level == level && strings.Contains(r.Message, substr) {
 			return true
 		}
 	}
@@ -169,10 +172,16 @@ func TestSitemapApp_MultipleBuildersConcatenatedAndDeduped(t *testing.T) {
 
 	app.Sitemap(
 		func(c *Context) ([]SitemapURL, error) {
-			return []SitemapURL{{Loc: "/a"}, {Loc: "/b"}}, nil
+			return []SitemapURL{
+				{Loc: "/c"},
+				{Loc: "/b", LastMod: "2026-01-01T00:00:00Z"},
+			}, nil
 		},
 		func(c *Context) ([]SitemapURL, error) {
-			return []SitemapURL{{Loc: "/b"}, {Loc: "/c"}}, nil
+			return []SitemapURL{
+				{Loc: "/a"},
+				{Loc: "/b", LastMod: "2026-06-06T00:00:00Z"},
+			}, nil
 		},
 	)
 
@@ -183,9 +192,13 @@ func TestSitemapApp_MultipleBuildersConcatenatedAndDeduped(t *testing.T) {
 	require.Equal(t, 1, strings.Count(body, "<loc>/b</loc>"),
 		"a duplicated Loc must be rendered exactly once")
 
-	// The order is the builders' order, not sorted.
-	require.Less(t, strings.Index(body, "/a"), strings.Index(body, "/b"))
-	require.Less(t, strings.Index(body, "/b"), strings.Index(body, "/c"))
+	// The first occurrence wins, so the first builder's values survive.
+	require.Contains(t, body, "<lastmod>2026-01-01T00:00:00Z</lastmod>")
+	require.NotContains(t, body, "2026-06-06T00:00:00Z")
+
+	// The order is the builders' order (c, b, a), not sorted (a, b, c).
+	require.Less(t, strings.Index(body, "/c"), strings.Index(body, "/b"))
+	require.Less(t, strings.Index(body, "/b"), strings.Index(body, "/a"))
 }
 
 func TestSitemapApp_TempDataFromBuilderAvailableToTemplate(t *testing.T) {
@@ -318,12 +331,12 @@ func TestSitemapApp_WarnsWhenReplacingUserRoute(t *testing.T) {
 		return c.View(c.App.SitemapURLs(), sitemapName)
 	})
 
-	require.False(t, h.contains("GET /sitemap.xml"),
+	require.False(t, h.contains(slog.LevelWarn, "GET /sitemap.xml"),
 		"registering a route must not warn on its own")
 
 	app.Sitemap(func(c *Context) ([]SitemapURL, error) { return nil, nil })
 
-	require.True(t, h.contains("GET /sitemap.xml"),
+	require.True(t, h.contains(slog.LevelWarn, "GET /sitemap.xml"),
 		"expected a warning mentioning GET /sitemap.xml")
 }
 
@@ -338,7 +351,7 @@ func TestSitemapApp_RepeatedSitemapCallDoesNotWarn(t *testing.T) {
 	app.Sitemap()
 	app.Sitemap()
 
-	require.False(t, h.contains("GET /sitemap.xml"),
+	require.False(t, h.contains(slog.LevelWarn, "GET /sitemap.xml"),
 		"the sitemap route is owned by the framework; replacing it is not a warning")
 }
 
@@ -413,7 +426,7 @@ func TestSitemapApp_GroupRouteIsUserOwned(t *testing.T) {
 
 	app.Sitemap(func(c *Context) ([]SitemapURL, error) { return nil, nil })
 
-	require.True(t, h.contains("GET /sitemap.xml"),
+	require.True(t, h.contains(slog.LevelWarn, "GET /sitemap.xml"),
 		"expected a warning: the group-owned route is being replaced")
 }
 
@@ -443,6 +456,80 @@ func TestSitemapApp_MuxPatternOwnedByFramework(t *testing.T) {
 	require.Panics(t, func() {
 		app.Mux().HandleFunc("GET /sitemap.xml", func(w http.ResponseWriter, r *http.Request) {})
 	})
+}
+
+func TestSitemapApp_MuxAlreadyOwnsPattern(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /sitemap.xml", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("raw"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// The mux already serves the pattern: New must neither register it
+	// again (ServeMux panics on a duplicate pattern) nor clobber the
+	// existing handler.
+	app := New(WithMux(mux), WithFsys(fstest.MapFS{}))
+	defer app.Close()
+
+	require.False(t, app.HasRoute("GET", "/sitemap.xml"))
+
+	req, err := http.NewRequest("GET", srv.URL+"/sitemap.xml", nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "raw", string(buf))
+}
+
+func TestSitemapApp_HotAddedPageTakesOver(t *testing.T) {
+	fsys := fstest.MapFS{
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	app, srv := newSitemapTestApp(t, fsys, WithWatch())
+
+	_, body := sitemapGet(t, srv, nil)
+	require.Contains(t, body, "<urlset")
+
+	// A page registered for the same route takes it over — the same
+	// precedence the page gets at startup, where New() leaves an existing
+	// route alone.
+	fsys["pages/sitemap.xml.html"] = &fstest.MapFile{
+		Data:    []byte("<h1>Page</h1>"),
+		ModTime: time.Now(),
+	}
+	reload(app, fsnotify.Event{Name: "pages/sitemap.xml.html", Op: fsnotify.Create})
+
+	_, body = sitemapGet(t, srv, nil)
+	require.Contains(t, body, "<h1>Page</h1>")
+}
+
+func TestSitemapApp_TooManyURLs_Warns(t *testing.T) {
+	h := &captureHandler{}
+	fsys := fstest.MapFS{
+		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
+	}
+
+	app, srv := newSitemapTestApp(t, fsys, WithLogger(slog.New(h)))
+
+	app.Sitemap(func(c *Context) ([]SitemapURL, error) {
+		urls := make([]SitemapURL, 0, sitemapMaxURLs+1)
+		for i := 0; i <= sitemapMaxURLs; i++ {
+			urls = append(urls, SitemapURL{Loc: fmt.Sprintf("/p/%d", i)})
+		}
+		return urls, nil
+	})
+
+	_, _ = sitemapGet(t, srv, nil)
+
+	// A sitemap file must not hold more than 50,000 URLs — crawlers reject
+	// one that does. The framework warns instead of truncating.
+	require.True(t, h.contains(slog.LevelWarn, "sitemap exceeds"),
+		"expected a warning about the 50,000 URL limit")
 }
 
 func TestSitemapApp_StaticEnginePublishesViewerWithoutRoute(t *testing.T) {

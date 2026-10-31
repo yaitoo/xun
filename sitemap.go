@@ -2,8 +2,19 @@ package xun
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 )
+
+// sitemapMaxURLs is the protocol limit for a single sitemap file: a sitemap
+// must not contain more than 50,000 URLs
+// (https://www.sitemaps.org/protocol.html). The framework does not split
+// oversized sitemaps into a sitemap index — the builder owns the data — but
+// it warns, because a crawler rejects a sitemap that exceeds the limit.
+const sitemapMaxURLs = 50000
 
 // Sitemap convention: a public/sitemap.xml file is parsed as a text/template
 // (via TextTemplate) and rendered through a TextViewer. The viewer is always
@@ -99,6 +110,10 @@ func (app *App) Sitemap(builders ...SitemapBuilder) {
 // route was registered is picked up without re-registering the route. When
 // no viewer is published the route answers 404.
 //
+// The entries are collected before the viewer is looked up: a builder that
+// fails is a server-side failure (500 + X-Log-Id) even when no template is
+// published yet, so the error is not masked by the 404.
+//
 // The named viewer is rendered directly rather than through c.View: c.View
 // falls back to Accept-header negotiation over the route's viewers, which
 // would answer a JSON request with JSON instead of the sitemap.
@@ -119,12 +134,44 @@ func sitemapHandler(builders []SitemapBuilder) HandleFunc {
 	}
 }
 
+// muxHasPattern reports whether the mux already serves the given method and
+// path with a pattern of its own. Registering such a pattern again panics
+// with ServeMux's duplicate-pattern panic, so the framework checks before it
+// registers the sitemap route.
+//
+// A catch-all pattern ("GET /") does not count: the framework's more
+// specific pattern can live next to it.
+func muxHasPattern(mux *http.ServeMux, method, path string) bool {
+	req := &http.Request{
+		Method: method,
+		URL:    &url.URL{Path: path},
+		Host:   "localhost",
+	}
+
+	_, pattern := mux.Handler(req)
+	if pattern == "" {
+		return false
+	}
+
+	// A pattern reads "METHOD PATH", "HOST PATH" or "PATH"; only the path
+	// decides whether it collides with the framework's route.
+	if i := strings.IndexAny(pattern, " \t"); i >= 0 {
+		pattern = pattern[i+1:]
+	}
+
+	return pattern == path
+}
+
 // collectSitemapURLs runs the builders in order and merges their entries.
 //
 // The entries are concatenated in builder order and de-duplicated by the
 // exact Loc string, keeping the first occurrence. The result is not
 // re-sorted: a builder's ordering is a contract — the default builder's
 // order is the sorted order of App.SitemapURLs.
+//
+// A sitemap file must not hold more than 50,000 URLs; an oversized result is
+// logged, not truncated — dropping URLs silently would be worse than a
+// sitemap a crawler rejects.
 func collectSitemapURLs(c *Context, builders []SitemapBuilder) ([]SitemapURL, error) {
 	var out []SitemapURL
 	seen := make(map[string]struct{})
@@ -142,6 +189,12 @@ func collectSitemapURLs(c *Context, builders []SitemapBuilder) ([]SitemapURL, er
 			seen[u.Loc] = struct{}{}
 			out = append(out, u)
 		}
+	}
+
+	if len(out) > sitemapMaxURLs {
+		c.App.logger.Warn("xun: sitemap exceeds the "+strconv.Itoa(sitemapMaxURLs)+" URL limit",
+			slog.Int("urls", len(out)),
+			slog.String("hint", "split the entries across several sitemap files and link them from a sitemap index"))
 	}
 
 	return out, nil

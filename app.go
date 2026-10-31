@@ -106,11 +106,19 @@ func New(opts ...Option) *App {
 		// does not depend on public/sitemap.xml existing at registration
 		// time — it answers 404 until the template is published.
 		//
-		// A route that already answers GET /sitemap.xml (e.g. a page
-		// registered from pages/sitemap.xml.html) is left alone: the
-		// framework's default must not clobber a user's route.
+		// The route is skipped when something else already owns it: a
+		// route registered from the file system (e.g. a page registered
+		// from pages/sitemap.xml.html), or a pattern the mux itself
+		// already serves — registering that pattern again would panic
+		// with ServeMux's duplicate-pattern panic.
 		if _, ok := app.routes[sitemapKey]; !ok {
-			app.Sitemap()
+			if muxHasPattern(app.mux, http.MethodGet, "/sitemap.xml") {
+				app.logger.Warn("xun: sitemap route not registered",
+					slog.String("route", sitemapKey),
+					slog.String("reason", "the mux already serves this pattern"))
+			} else {
+				app.Sitemap()
+			}
 		}
 
 		if app.watch {
@@ -400,6 +408,19 @@ func (app *App) HandlePage(pattern string, viewName string, v Viewer) {
 	r, ok := app.routes[pattern]
 	if ok {
 		r.Viewers = append(r.Viewers, v)
+
+		if pattern == sitemapKey && app.sitemapRouteOwned {
+			// A user-authored page (e.g. pages/sitemap.xml.html added
+			// while watching) takes the route over from the framework.
+			// This is the same precedence the page gets at startup, where
+			// New() leaves an existing route alone.
+			r.Handle = func(c *Context) error {
+				return v.Render(c, nil)
+			}
+			r.chain = app
+			app.sitemapRouteOwned = false
+		}
+
 		return
 	}
 
