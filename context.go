@@ -25,6 +25,12 @@ type Context struct {
 	acceptsDone   bool
 	languages     []string
 	languagesDone bool
+
+	// sitemapGroup holds the sitemap group name the current request asks
+	// for; it is empty while the sitemap index document is rendered. It is
+	// kept out of TempData so it stays out of the templates — see
+	// SitemapGroupName.
+	sitemapGroup string
 }
 
 // WriteStatus sets the HTTP status code for the response.

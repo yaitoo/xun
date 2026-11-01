@@ -11,10 +11,21 @@ import (
 
 // sitemapMaxURLs is the protocol limit for a single sitemap file: a sitemap
 // must not contain more than 50,000 URLs
-// (https://www.sitemaps.org/protocol.html). The framework does not split
-// oversized sitemaps into a sitemap index — the builder owns the data — but
-// it warns, because a crawler rejects a sitemap that exceeds the limit.
+// (https://www.sitemaps.org/protocol.html).
 const sitemapMaxURLs = 50000
+
+// sitemapEffectiveURLs is the effective cap the framework enforces on every
+// document it serves: 40,000 URLs, 80% of the protocol limit.
+//
+// A crawler rejects an oversized document as a whole, so serving one loses
+// every URL in it — not just the ones past the limit. The framework
+// therefore truncates at the effective cap and logs the drop, which keeps
+// the first 40,000 URLs indexable.
+//
+// The headroom exists to stay clear of the protocol limit, not to keep
+// serving close to it: the warning and the truncation trigger at the same
+// threshold.
+const sitemapEffectiveURLs = sitemapMaxURLs * 4 / 5
 
 // Sitemap convention: a public/sitemap.xml file is parsed as a text/template
 // (via TextTemplate) and rendered through a TextViewer. The viewer is always
@@ -50,6 +61,13 @@ type SitemapBuilder func(c *Context) ([]SitemapURL, error)
 // App.SitemapURLs returns). With several builders their entries are
 // concatenated in builder order, de-duplicated by Loc (first occurrence
 // wins), and not re-sorted.
+//
+// The served document is capped: the framework renders at most 40,000 URLs
+// (80% of the protocol's 50,000 URL limit) and logs the entries it drops.
+// A crawler rejects an oversized document as a whole, so every URL in it
+// would be lost — truncating keeps the first ones indexable. To publish
+// more than 40,000 URLs, split them across several groups and register
+// App.SitemapIndex, which renders one child sitemap file per group.
 //
 //	app.Sitemap(func(c *xun.Context) ([]xun.SitemapURL, error) {
 //		rows, err := db.QueryContext(c.Request.Context(), "SELECT slug FROM posts")
@@ -162,6 +180,71 @@ func muxHasPattern(mux *http.ServeMux, method, path string) bool {
 	return pattern == path
 }
 
+// muxHasRoutePattern reports whether the mux already serves the given method
+// and path pattern, wildcards included.
+//
+// muxHasPattern compares the matched pattern with a literal path, so it
+// cannot see a wildcard collision: a mux serving "GET /sitemaps/{name}"
+// matches the request "/sitemaps/x" with the pattern
+// "GET /sitemaps/{name}", which muxHasPattern compares against the path and
+// reports as "no collision". Registering such a pattern again panics with
+// ServeMux's conflict panic, so the framework compares the whole pattern —
+// wildcard names included — instead.
+//
+// A pattern without a method serves every method, but it is less specific
+// than a method-specific one, so ServeMux accepts both: it is not reported
+// as a collision.
+func muxHasRoutePattern(mux *http.ServeMux, method, path string) bool {
+	req := &http.Request{
+		Method: method,
+		URL:    &url.URL{Path: path},
+		Host:   "localhost",
+	}
+
+	_, pattern := mux.Handler(req)
+	if pattern == "" {
+		return false
+	}
+
+	// A pattern reads "METHOD PATH", "HOST PATH" or "PATH". Only a pattern
+	// with the same method can conflict with the framework's route; a
+	// host-specific pattern is a different, more specific match.
+	i := strings.IndexAny(pattern, " \t")
+	if i < 0 || pattern[:i] != method {
+		return false
+	}
+
+	return normalizeWildcardPattern(pattern[i+1:]) == normalizeWildcardPattern(path)
+}
+
+// normalizeWildcardPattern replaces the wildcard names in a ServeMux pattern
+// with a fixed placeholder, so two patterns matching the same requests
+// compare equal: "GET /sitemaps/{name}" and "GET /sitemaps/{id}" both
+// normalize to "GET /sitemaps/{}".
+func normalizeWildcardPattern(pattern string) string {
+	var b strings.Builder
+	b.Grow(len(pattern))
+
+	for i := 0; i < len(pattern); {
+		if pattern[i] != '{' {
+			b.WriteByte(pattern[i])
+			i++
+			continue
+		}
+
+		j := strings.IndexByte(pattern[i:], '}')
+		if j < 0 {
+			b.WriteString(pattern[i:])
+			break
+		}
+
+		b.WriteString("{}")
+		i += j + 1
+	}
+
+	return b.String()
+}
+
 // collectSitemapURLs runs the builders in order and merges their entries.
 //
 // The entries are concatenated in builder order and de-duplicated by the
@@ -169,9 +252,8 @@ func muxHasPattern(mux *http.ServeMux, method, path string) bool {
 // re-sorted: a builder's ordering is a contract — the default builder's
 // order is the sorted order of App.SitemapURLs.
 //
-// A sitemap file must not hold more than 50,000 URLs; an oversized result is
-// logged, not truncated — dropping URLs silently would be worse than a
-// sitemap a crawler rejects.
+// The result is truncated to the effective cap (see truncateSitemapURLs):
+// the framework never serves a document a crawler would reject as a whole.
 func collectSitemapURLs(c *Context, builders []SitemapBuilder) ([]SitemapURL, error) {
 	var out []SitemapURL
 	seen := make(map[string]struct{})
@@ -182,22 +264,56 @@ func collectSitemapURLs(c *Context, builders []SitemapBuilder) ([]SitemapURL, er
 			return nil, err
 		}
 
-		for _, u := range urls {
-			if _, ok := seen[u.Loc]; ok {
-				continue
-			}
-			seen[u.Loc] = struct{}{}
-			out = append(out, u)
+		out = dedupSitemapURLs(out, seen, urls)
+	}
+
+	return truncateSitemapURLs(c, "sitemap", out), nil
+}
+
+// dedupSitemapURLs appends the entries whose Loc was not seen yet to out and
+// returns the result. The first occurrence of a Loc wins; the later ones are
+// dropped.
+//
+// The seen map is owned by the caller, so the same Loc can be de-duplicated
+// across several builders (the single-document mode) or per group (the index
+// mode).
+func dedupSitemapURLs(out []SitemapURL, seen map[string]struct{}, urls []SitemapURL) []SitemapURL {
+	for _, u := range urls {
+		if _, ok := seen[u.Loc]; ok {
+			continue
 		}
+		seen[u.Loc] = struct{}{}
+		out = append(out, u)
 	}
 
-	if len(out) > sitemapMaxURLs {
-		c.App.logger.Warn("xun: sitemap exceeds the "+strconv.Itoa(sitemapMaxURLs)+" URL limit",
-			slog.Int("urls", len(out)),
-			slog.String("hint", "split the entries across several sitemap files and link them from a sitemap index"))
+	return out
+}
+
+// truncateSitemapURLs cuts urls down to the effective cap.
+//
+// A crawler rejects an oversized document as a whole, so every URL in it is
+// lost — serving one is worse than serving a truncated document. The
+// framework therefore keeps the first sitemapEffectiveURLs URLs and logs
+// the total, the cap and the number of dropped entries.
+//
+// scope names the document the entries belong to ("sitemap", "sitemap
+// index", "sitemap group <name>").
+func truncateSitemapURLs(c *Context, scope string, urls []SitemapURL) []SitemapURL {
+	if len(urls) <= sitemapEffectiveURLs {
+		return urls
 	}
 
-	return out, nil
+	total := len(urls)
+	dropped := total - sitemapEffectiveURLs
+
+	c.App.logger.Warn("xun: sitemap exceeds the "+strconv.Itoa(sitemapEffectiveURLs)+" URL limit: "+
+		strconv.Itoa(total)+" URLs collected, "+strconv.Itoa(dropped)+" dropped",
+		slog.String("scope", scope),
+		slog.Int("urls", total),
+		slog.Int("limit", sitemapEffectiveURLs),
+		slog.Int("dropped", dropped))
+
+	return urls[:sitemapEffectiveURLs]
 }
 
 // defaultSitemapBuilder returns the content engine's entries — the same

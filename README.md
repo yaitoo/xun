@@ -279,11 +279,17 @@ The template is parsed with `text/template`, which does **not** escape: a
 your template — or register an escaping helper with
 `xun.WithTemplateFunc("xml", xml.EscapeText)` and call it from the template.
 
-A sitemap file may hold at most 50,000 URLs. The framework logs a warning
-when a builder exceeds that; it does not truncate the result (silently
-dropping URLs is worse than a sitemap a crawler rejects) and it does not
-split the entries across several files — the builder owns the data, so
-splitting is yours to arrange.
+A sitemap file may hold at most 50,000 URLs (the protocol limit). The
+framework enforces an effective cap of **40,000 URLs** — 80% of the limit —
+on every document it serves: an over-cap document is truncated to the cap
+and the dropped entries are logged with the total, the cap and the dropped
+count.
+
+Truncating is deliberate: a crawler rejects an oversized document *as a
+whole*, so serving one loses every URL in it, not just the ones past the
+limit. Keeping the first 40,000 keeps them indexable. The framework never
+splits a document across several files — the builder owns the data, so
+splitting is yours to arrange (see the sitemap index below).
 
 The route answers 404 until a `public/sitemap.xml` template is published:
 `app.Sitemap` does not require the file to exist.
@@ -335,6 +341,149 @@ Or write your own rendering entirely and ignore the viewer — the file is yours
 ```
 
 
+
+### Sitemap index
+The protocol caps a document at 50,000 URLs. Anything larger is published as
+a **sitemap index**: a `<sitemapindex>` document listing child sitemap files,
+each of which stays within the limit.
+
+`app.SitemapIndex(fn)` registers `GET /sitemap.xml` as the index document and
+`GET /sitemaps/{name}` for the child files. `fn` is a
+`func(c *xun.Context) ([]xun.SitemapGroup, error)` that returns the groups —
+one named collection of URLs per child file:
+
+```go
+app.SitemapIndex(func(c *xun.Context) ([]xun.SitemapGroup, error) {
+    rows, err := db.QueryContext(c.Request.Context(),
+        "SELECT category, slug, updated_at FROM products ORDER BY category, id")
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var out []xun.SitemapGroup
+    idx := map[string]int{}
+    for rows.Next() {
+        var cat, slug string
+        var updated time.Time
+        if err := rows.Scan(&cat, &slug, &updated); err != nil {
+            return nil, err
+        }
+        i, ok := idx[cat]
+        if !ok {
+            i = len(out)
+            idx[cat] = i
+            out = append(out, xun.SitemapGroup{Name: cat + ".xml"})
+        }
+        out[i].URLs = append(out[i].URLs, xun.SitemapURL{
+            Loc:     "/p/" + slug,
+            LastMod: updated.UTC().Format(time.RFC3339),
+        })
+    }
+    return out, rows.Err()
+})
+```
+
+This publishes `GET /sitemap.xml` listing `/sitemaps/shoes.xml`,
+`/sitemaps/dresses.xml`, … and `GET /sitemaps/shoes.xml` serving that
+category's URLs.
+
+#### Templates
+The index document is rendered from `public/sitemap-index.xml`, published as
+the viewer `sitemap-index.xml` (parsed as `text/template`, like
+`public/sitemap.xml`):
+
+```
+└── app
+    └── public
+        ├── sitemap.xml
+        └── sitemap-index.xml
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{{ range .Data -}}
+  <sitemap>
+    <loc>https://example.com{{ .Loc }}</loc>
+    {{ if .LastMod }}<lastmod>{{ .LastMod }}</lastmod>{{ end }}
+  </sitemap>
+{{ end -}}
+</sitemapindex>
+```
+
+`.Data` is `[]xun.SitemapURL` — one row per group:
+
+| Field | Value |
+|-------|-------|
+| `Loc` | the child's path: `/sitemaps/` + the URL-escaped group name |
+| `LastMod` | the most recent `LastMod` among the group's URLs (empty when none carries one) |
+
+The child files are rendered by the **existing** `public/sitemap.xml`
+template — a child file is an ordinary `<urlset>` document, so no second
+urlset template is needed:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{{ range .Data -}}
+  <url>
+    <loc>https://example.com{{ .Loc }}</loc>
+    {{ if .LastMod }}<lastmod>{{ .LastMod }}</lastmod>{{ end }}
+  </url>
+{{ end -}}
+</urlset>
+```
+
+As in the single-document mode, the template owns the scheme and host — the
+framework does not know which host your site is deployed under.
+
+#### Group names
+The group name is the child file's name; the framework appends no extension
+and no sequence number. The child file is served at `/sitemaps/` plus the
+URL-escaped name, so a group named `女鞋` is listed as
+`/sitemaps/%E5%A5%B3%E9%9E%8B` and served by that URL.
+
+#### Collecting only the requested group
+The builders run on every request — for the index document and for each child
+file. `xun.SitemapGroupName(c)` tells the builder which group was asked for
+(it is empty while the index document is rendered), so a builder can query
+one group per request:
+
+```go
+app.SitemapIndex(func(c *xun.Context) ([]xun.SitemapGroup, error) {
+    name := xun.SitemapGroupName(c)
+    if name == "" {
+        // The index document: collect every group.
+    }
+    // ...
+})
+```
+
+The hint is an optimization, not a contract: the framework always selects
+the group by name, so a builder that ignores it still produces a correct
+response — it only pays for the extra work.
+
+#### Rules
+- No builder → the content engine's entries (`app.SitemapURLs()`) as one
+  group named `content.xml`.
+- Several builders → the groups are concatenated in builder order and
+  de-duplicated by name (first occurrence wins; a duplicate logs a warning).
+- Each group's URLs are de-duplicated by `Loc` (first occurrence wins). The
+  de-duplication is per group: the same `Loc` in two groups is published in
+  both files.
+- The 40,000-entry cap applies to each group and to the index's row count;
+  over-cap content is truncated and logged.
+- A builder error aborts the request with the framework's standard error
+  mapping (500 + `X-Log-Id`).
+- The index route answers 404 until `public/sitemap-index.xml` is published;
+  the child route answers 404 until `public/sitemap.xml` is published, and
+  for a name no group matches.
+- `public/sitemap-index.xml` is published as a template, not as a static
+  file, and hot-reloads like `public/sitemap.xml`.
+- `app.SitemapIndex` and `app.Sitemap` are not meant to be combined: the
+  later registration wins `GET /sitemap.xml`, and the index mode's child
+  routes stay registered (`http.ServeMux` cannot unregister a route).
 
 ### Content
 The Content engine turns Markdown files into pages without introducing a new `Viewer` or a second template engine. Drop a `.md` file into `content/` and it auto-registers as `GET /<slug>`; drop a `.tpl` next to it (or any ancestor `index.tpl`) to control how the rendered Markdown is wrapped.

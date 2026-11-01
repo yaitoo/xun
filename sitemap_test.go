@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -508,7 +509,7 @@ func TestSitemapApp_HotAddedPageTakesOver(t *testing.T) {
 	require.Contains(t, body, "<h1>Page</h1>")
 }
 
-func TestSitemapApp_TooManyURLs_Warns(t *testing.T) {
+func TestSitemapApp_TooManyURLs_WarnsAndTruncates(t *testing.T) {
 	h := &captureHandler{}
 	fsys := fstest.MapFS{
 		"public/sitemap.xml": {Data: []byte(plainSitemapTemplate)},
@@ -517,19 +518,30 @@ func TestSitemapApp_TooManyURLs_Warns(t *testing.T) {
 	app, srv := newSitemapTestApp(t, fsys, WithLogger(slog.New(h)))
 
 	app.Sitemap(func(c *Context) ([]SitemapURL, error) {
-		urls := make([]SitemapURL, 0, sitemapMaxURLs+1)
-		for i := 0; i <= sitemapMaxURLs; i++ {
+		urls := make([]SitemapURL, 0, sitemapEffectiveURLs+1)
+		for i := 0; i <= sitemapEffectiveURLs; i++ {
 			urls = append(urls, SitemapURL{Loc: fmt.Sprintf("/p/%d", i)})
 		}
 		return urls, nil
 	})
 
-	_, _ = sitemapGet(t, srv, nil)
+	_, body := sitemapGet(t, srv, nil)
 
-	// A sitemap file must not hold more than 50,000 URLs — crawlers reject
-	// one that does. The framework warns instead of truncating.
+	// A crawler rejects a sitemap that exceeds the limit as a whole, so
+	// every URL in it would be lost. The framework truncates at the
+	// effective cap and logs what it dropped.
+	require.Equal(t, sitemapEffectiveURLs, strings.Count(body, "<loc>"),
+		"the served document must not exceed the effective cap")
+	require.NotContains(t, body, fmt.Sprintf("/p/%d", sitemapEffectiveURLs))
+
 	require.True(t, h.contains(slog.LevelWarn, "sitemap exceeds"),
-		"expected a warning about the 50,000 URL limit")
+		"expected a warning about the URL limit")
+	require.True(t, h.contains(slog.LevelWarn, strconv.Itoa(sitemapEffectiveURLs+1)),
+		"expected the warning to carry the total")
+	require.True(t, h.contains(slog.LevelWarn, strconv.Itoa(sitemapEffectiveURLs)),
+		"expected the warning to carry the cap")
+	require.True(t, h.contains(slog.LevelWarn, "1 dropped"),
+		"expected the warning to carry the dropped count")
 }
 
 func TestSitemapApp_StaticEnginePublishesViewerWithoutRoute(t *testing.T) {

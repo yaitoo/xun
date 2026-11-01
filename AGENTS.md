@@ -129,7 +129,32 @@ app.Sitemap(func(c *xun.Context) ([]xun.SitemapURL, error) {
 - The framework registers the route itself during `New()` when a fsys is configured; the route answers 404 until `public/sitemap.xml` exists. Registration is skipped (with a warning) when the mux already serves `GET /sitemap.xml`.
 - A page registered for the same route takes it over — at startup (`pages/sitemap.xml.html`) and when hot-added under `WithWatch`.
 - Last registration wins: `app.Get("/sitemap.xml", h)` after `app.Sitemap(fn)` replaces it (and vice versa — replacing a user-owned route logs a warning).
-- More than 50,000 URLs in one sitemap → a warning; the framework does not truncate or split.
+- More than 40,000 URLs in one document → the document is truncated to 40,000 and a warning carries the total, the cap and the dropped count. The framework never serves an oversized document (a crawler rejects it as a whole) and never splits it — use `app.SitemapIndex` for that.
+
+#### Sitemap index
+`app.SitemapIndex(fn)` publishes `GET /sitemap.xml` as a `<sitemapindex>` document and one child sitemap file per group under `GET /sitemaps/{name}`. `fn` is a `func(c *xun.Context) ([]xun.SitemapGroup, error)` that assembles the groups per request:
+
+```go
+app.SitemapIndex(func(c *xun.Context) ([]xun.SitemapGroup, error) {
+    return []xun.SitemapGroup{
+        {Name: "shoes.xml", URLs: []xun.SitemapURL{{Loc: "/p/shoe/1"}}},
+    }, nil
+})
+```
+
+- `SitemapGroup{Name, URLs}` — one named collection of URLs rendered as one child sitemap file. The framework appends no extension and no sequence number: the name is the file name the application chose.
+- `SitemapIndexBuilder` — `func(c *xun.Context) ([]SitemapGroup, error)`; a builder error → 500 + `X-Log-Id`.
+- `SitemapGroupName(c)` — the group name the request asks for; empty while the index document is rendered. It is a hint: the framework always selects the group by name, so a builder that ignores it stays correct.
+- Index route → viewer `sitemap-index.xml` (the `public/sitemap-index.xml` template); `.Data` is `[]SitemapURL`, one row per group: `Loc` = the child's path (`/sitemaps/` + the URL-escaped group name), `LastMod` = the most recent `LastMod` among the group's URLs.
+- Child route → viewer `sitemap.xml` (the `public/sitemap.xml` template); `.Data` is the group's URLs.
+- The child path is `/sitemaps/` + the URL-escaped group name; `PathValue("name")` is the unescaped name, so `/sitemaps/%E5%A5%B3%E9%9E%8B` serves the group named `女鞋`.
+- No builder → the content engine's entries as one group named `content.xml`. Several builders → concatenated in order, de-duplicated by group name (first wins, the duplicate logs a warning), not re-sorted.
+- Each group's URLs are de-duplicated by `Loc` (first wins), per group — the same `Loc` in two groups is published in both files.
+- The 40,000-entry cap applies to each group and to the index's row count; over-cap content is truncated with a warning.
+- `public/sitemap-index.xml` is published as a template, not as a static file, and hot-reloads like `public/sitemap.xml`.
+- The index route answers 404 until `public/sitemap-index.xml` is published; the child route answers 404 until `public/sitemap.xml` is published, and for a name no group matches.
+- Registering the child route never panics: when the mux already serves `GET /sitemaps/{name}`, the route is skipped with a warning.
+- `app.SitemapIndex` and `app.Sitemap` are not meant to be combined: the later registration wins `GET /sitemap.xml`, and the index mode's child routes stay registered (`ServeMux` cannot unregister).
 
 ## 5) Middleware order
 - App.Use applies globally; Group.Use applies to that group only.
@@ -299,7 +324,7 @@ app.Mux().HandleFunc("GET /api/ws", wsHandler(hub))
 
 ### Footguns
 - **Always pass `WithMux(http.NewServeMux())`** to `xun.New`. If you skip it, `app.Mux()` falls back to `http.DefaultServeMux` and you pollute global state.
-- Patterns auto-registered by xun (e.g. `GET /{$}` from `pages/index.html`, and `GET /sitemap.xml` — registered whenever a file system is configured) **cannot** be re-registered through `app.Mux()` — `ServeMux` panics on duplicate patterns. Take the sitemap route over with `app.Get("/sitemap.xml", h)` or `app.Sitemap(fn)` instead.
+- Patterns auto-registered by xun (e.g. `GET /{$}` from `pages/index.html`, and `GET /sitemap.xml` — registered whenever a file system is configured) **cannot** be re-registered through `app.Mux()` — `ServeMux` panics on duplicate patterns. Take the sitemap route over with `app.Get("/sitemap.xml", h)` or `app.Sitemap(fn)` instead. `GET /sitemaps/{name}` is registered by `app.SitemapIndex`; when the mux already serves it, the route is skipped with a warning instead of panicking.
 - Registering on `app.Mux()` from multiple goroutines concurrently panics. Do all registration before serving starts.
 - If the native handler needs the same auth as the rest of the app, replicate the session/cookie check on the raw `*http.Request`. There's no compile-time check that native and xun-managed auth agree — keep them in sync.
 
@@ -353,6 +378,8 @@ app.Get("/api/ws", func(c *xun.Context) error {
 | Markdown content | `xun.WithContent("blog", "docs")` + `.md` files in those dirs |
 | Custom Markdown renderer | `xun.WithContentRenderer(fn)` |
 | Sitemap entries | `app.Sitemap(fn)` — `fn(c) ([]xun.SitemapURL, error)`; serves `GET /sitemap.xml` |
+| Sitemap index | `app.SitemapIndex(fn)` — `fn(c) ([]xun.SitemapGroup, error)`; serves `GET /sitemap.xml` + `GET /sitemaps/{name}` |
+| Requested sitemap group | `xun.SitemapGroupName(c)` — the group name of a child-file request; empty for the index |
 | **Escape hatch for raw handlers** | `app.Mux().HandleFunc(pattern, h)` — bypasses all middleware |
 | Hijack conn (WebSocket / SSE) | `app.HandleFunc(...)` + `c.Response.Hijack()` — runs middleware |
 | Flush streaming response | `c.Response.Flush()` (SSE, chunked transfer) |
