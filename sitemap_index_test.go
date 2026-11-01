@@ -424,6 +424,129 @@ func TestSitemapIndex_MuxAlreadyServesIndexPattern(t *testing.T) {
 		"expected a warning mentioning the index route")
 }
 
+func TestSitemapIndex_MuxPatternOverlappingChildRoute(t *testing.T) {
+	h := &captureHandler{}
+
+	// A pattern the framework cannot see by probing: the wildcard is in the
+	// first segment and a literal in the second. Registering
+	// "GET /sitemaps/{name}" next to it conflicts, and the framework must
+	// not crash — a page at pages/{lang}/about.html registers exactly this
+	// shape.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{a}/foo", func(w http.ResponseWriter, r *http.Request) {})
+
+	app := New(WithMux(mux), WithFsys(fstest.MapFS{
+		"public/sitemap.xml":       {Data: []byte(plainSitemapTemplate)},
+		"public/sitemap-index.xml": {Data: []byte(plainSitemapIndexTemplate)},
+	}), WithLogger(slog.New(h)))
+	defer app.Close()
+
+	require.NotPanics(t, func() {
+		app.SitemapIndex(func(c *Context) ([]SitemapGroup, error) {
+			return []SitemapGroup{{Name: "a.xml"}}, nil
+		})
+	})
+
+	require.False(t, app.HasRoute("GET", "/sitemaps/{name}"),
+		"the child route must not be registered next to a conflicting pattern")
+	require.True(t, h.contains(slog.LevelWarn, "GET /sitemaps/{name}"),
+		"expected a warning mentioning the child route")
+}
+
+func TestSitemapIndex_MuxMethodLessPatternUnderChildRoute(t *testing.T) {
+	h := &captureHandler{}
+
+	// A method-less pattern under /sitemaps/ conflicts with the child
+	// route too: the framework's pattern matches fewer methods but has a
+	// more general path.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/sitemaps/foo", func(w http.ResponseWriter, r *http.Request) {})
+
+	app := New(WithMux(mux), WithFsys(fstest.MapFS{
+		"public/sitemap.xml":       {Data: []byte(plainSitemapTemplate)},
+		"public/sitemap-index.xml": {Data: []byte(plainSitemapIndexTemplate)},
+	}), WithLogger(slog.New(h)))
+	defer app.Close()
+
+	require.NotPanics(t, func() {
+		app.SitemapIndex(func(c *Context) ([]SitemapGroup, error) {
+			return []SitemapGroup{{Name: "a.xml"}}, nil
+		})
+	})
+
+	require.False(t, app.HasRoute("GET", "/sitemaps/{name}"))
+	require.True(t, h.contains(slog.LevelWarn, "GET /sitemaps/{name}"))
+}
+
+func TestSitemapIndex_MuxRestWildcardUnderChildRoute(t *testing.T) {
+	h := &captureHandler{}
+
+	// A rest wildcard under /sitemaps/ does NOT conflict with the child
+	// route: the single-segment pattern is more specific. The framework
+	// must register the child route instead of skipping it.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /sitemaps/{path...}", func(w http.ResponseWriter, r *http.Request) {})
+
+	app := New(WithMux(mux), WithFsys(fstest.MapFS{
+		"public/sitemap.xml":       {Data: []byte(plainSitemapTemplate)},
+		"public/sitemap-index.xml": {Data: []byte(plainSitemapIndexTemplate)},
+	}), WithLogger(slog.New(h)))
+	defer app.Close()
+
+	app.SitemapIndex(func(c *Context) ([]SitemapGroup, error) {
+		return []SitemapGroup{{Name: "a.xml", URLs: []SitemapURL{{Loc: "/1"}}}}, nil
+	})
+
+	require.True(t, app.HasRoute("GET", "/sitemaps/{name}"),
+		"a non-conflicting pattern must not stop the child route from being registered")
+	require.False(t, h.contains(slog.LevelWarn, "GET /sitemaps/{name}"),
+		"no warning is due when the pattern does not conflict")
+}
+
+func TestSitemapIndex_DotGroupNamesAreAddressable(t *testing.T) {
+	app, srv := indexTestApp(t)
+
+	app.SitemapIndex(func(c *Context) ([]SitemapGroup, error) {
+		return []SitemapGroup{
+			{Name: ".", URLs: []SitemapURL{{Loc: "/dot"}}},
+			{Name: "..", URLs: []SitemapURL{{Loc: "/dotdot"}}},
+		}, nil
+	})
+
+	// "." and ".." are path segments the server resolves away, so their
+	// dots must be escaped for the listed URL to reach the child route.
+	_, body := sitemapPathGet(t, srv, "/sitemap.xml")
+	require.Contains(t, body, "<loc>/sitemaps/%2E</loc>")
+	require.Contains(t, body, "<loc>/sitemaps/%2E%2E</loc>")
+
+	resp, body := sitemapPathGet(t, srv, "/sitemaps/%2E")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, body, "<loc>/dot</loc>")
+
+	resp, body = sitemapPathGet(t, srv, "/sitemaps/%2E%2E")
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, body, "<loc>/dotdot</loc>")
+}
+
+func TestSitemapIndex_GroupWithoutNameIsSkipped(t *testing.T) {
+	h := &captureHandler{}
+	app, srv := indexTestApp(t, WithLogger(slog.New(h)))
+
+	app.SitemapIndex(func(c *Context) ([]SitemapGroup, error) {
+		return []SitemapGroup{
+			{Name: "", URLs: []SitemapURL{{Loc: "/nowhere"}}},
+			{Name: "a.xml", URLs: []SitemapURL{{Loc: "/1"}}},
+		}, nil
+	})
+
+	_, body := sitemapPathGet(t, srv, "/sitemap.xml")
+	require.NotContains(t, body, "<loc>/sitemaps/</loc>",
+		"a group without a name has no addressable path")
+	require.Equal(t, 1, strings.Count(body, "<sitemap>"))
+	require.True(t, h.contains(slog.LevelWarn, "without a name"),
+		"expected a warning about the nameless group")
+}
+
 func TestSitemapIndex_MiddlewareRunsAndAcceptIsNotNegotiated(t *testing.T) {
 	app, srv := indexTestApp(t)
 

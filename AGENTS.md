@@ -147,13 +147,13 @@ app.SitemapIndex(func(c *xun.Context) ([]xun.SitemapGroup, error) {
 - `SitemapGroupName(c)` — the group name the request asks for; empty while the index document is rendered. It is a hint: the framework always selects the group by name, so a builder that ignores it stays correct.
 - Index route → viewer `sitemap-index.xml` (the `public/sitemap-index.xml` template); `.Data` is `[]SitemapURL`, one row per group: `Loc` = the child's path (`/sitemaps/` + the URL-escaped group name), `LastMod` = the most recent `LastMod` among the group's URLs.
 - Child route → viewer `sitemap.xml` (the `public/sitemap.xml` template); `.Data` is the group's URLs.
-- The child path is `/sitemaps/` + the URL-escaped group name; `PathValue("name")` is the unescaped name, so `/sitemaps/%E5%A5%B3%E9%9E%8B` serves the group named `女鞋`.
+- The child path is `/sitemaps/` + the URL-escaped group name; `PathValue("name")` is the unescaped name, so `/sitemaps/%E5%A5%B3%E9%9E%8B` serves the group named `女鞋`. The names `.` and `..` are escaped dot by dot (`%2E`, `%2E%2E`) — the server resolves those segments away before routing. A group without a name is skipped with a warning.
 - No builder → the content engine's entries as one group named `content.xml`. Several builders → concatenated in order, de-duplicated by group name (first wins, the duplicate logs a warning), not re-sorted.
 - Each group's URLs are de-duplicated by `Loc` (first wins), per group — the same `Loc` in two groups is published in both files.
 - The 40,000-entry cap applies to each group and to the index's row count; over-cap content is truncated with a warning.
 - `public/sitemap-index.xml` is published as a template, not as a static file, and hot-reloads like `public/sitemap.xml`.
 - The index route answers 404 until `public/sitemap-index.xml` is published; the child route answers 404 until `public/sitemap.xml` is published, and for a name no group matches.
-- Registering the child route never panics: when the mux already serves `GET /sitemaps/{name}`, the route is skipped with a warning.
+- Registering the routes never panics: `http.ServeMux` panics on a conflicting pattern, and the conflict rules are not exposed (a page at `pages/{lang}/about.html` registers `GET /{lang}/about`, which conflicts with the child route). The registration is defensive: a conflict skips the route and logs a warning.
 - `app.SitemapIndex` and `app.Sitemap` are not meant to be combined: the later registration wins `GET /sitemap.xml`, and the index mode's child routes stay registered (`ServeMux` cannot unregister).
 
 ## 5) Middleware order

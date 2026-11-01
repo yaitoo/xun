@@ -26,9 +26,6 @@ const (
 	// "/sitemaps/shoes.xml" and "/sitemaps/%E5%A5%B3%E9%9E%8B" both match.
 	sitemapChildPattern = "GET /sitemaps/{name}"
 
-	// sitemapChildPath is the path part of sitemapChildPattern.
-	sitemapChildPath = "/sitemaps/{name}"
-
 	// sitemapChildPrefix is the URL prefix of a child sitemap file. The
 	// group name follows it, URL-escaped.
 	sitemapChildPrefix = "/sitemaps/"
@@ -179,38 +176,63 @@ func (app *App) SitemapIndex(builders ...SitemapIndexBuilder) {
 	// WithViewer() with no arguments clears the app's default handler
 	// viewers: this route renders the named "sitemap-index.xml" viewer, it
 	// does not negotiate one.
-	//
-	// When the route is not registered yet — no file system is configured,
-	// or the framework's default registration was skipped because the mux
-	// already serves the pattern — registering it again would panic with
-	// ServeMux's duplicate-pattern panic.
-	if _, ok := app.routes[sitemapKey]; !ok &&
-		muxHasPattern(app.mux, http.MethodGet, "/sitemap.xml") {
-		app.logger.Warn("xun: sitemap index route "+sitemapKey+" not registered",
-			slog.String("route", sitemapKey),
-			slog.String("reason", "the mux already serves this pattern"))
-	} else {
-		app.createHandler(sitemapKey, sitemapIndexHandler(builders), []RoutingOption{WithViewer()}, app)
-
+	if app.registerSitemapRoute(sitemapKey, sitemapIndexHandler(builders)) {
 		// The route is ours now; a later app.Get("/sitemap.xml", ...) hands
 		// ownership back to the user (see App.createHandler).
 		app.sitemapRouteOwned = true
 	}
 
-	// The child route serves one <urlset> per group. http.ServeMux panics
-	// on a conflicting pattern, so the mux is checked before the route is
-	// registered. The check is skipped when the route is already ours:
-	// createHandler then updates the handler without touching the mux.
-	if _, ok := app.routes[sitemapChildPattern]; !ok {
-		if muxHasRoutePattern(app.mux, http.MethodGet, sitemapChildPath) {
-			app.logger.Warn("xun: sitemap child route "+sitemapChildPattern+" not registered",
-				slog.String("route", sitemapChildPattern),
-				slog.String("reason", "the mux already serves this pattern"))
+	// The child route serves one <urlset> per group.
+	app.registerSitemapRoute(sitemapChildPattern, sitemapChildHandler(builders))
+}
+
+// registerSitemapRoute registers a sitemap route on the app and reports
+// whether it was registered.
+//
+// http.ServeMux panics when a pattern conflicts with one the mux already
+// serves — including patterns the framework cannot see, like the
+// "GET /{lang}/about" a page with a {lang} segment registers, or the
+// method-less "/sitemaps/foo" a raw mux handler installs. net/http does
+// not expose its conflict rules and the mux does not list its patterns,
+// so the framework cannot enumerate them: the registration is done
+// defensively and a conflict becomes a warning instead of a crash.
+//
+// Only ServeMux's conflict panic is handled — it carries an error value.
+// Any other panic is passed on.
+//
+// A conflicting registration leaves the mux untouched (ServeMux detects the
+// conflict before it changes its tree), so only the route entry the
+// framework added has to be rolled back.
+func (app *App) registerSitemapRoute(pattern string, hf HandleFunc) (registered bool) {
+	_, existed := app.routes[pattern]
+
+	defer func() {
+		r := recover()
+		if r == nil {
 			return
 		}
-	}
 
-	app.createHandler(sitemapChildPattern, sitemapChildHandler(builders), []RoutingOption{WithViewer()}, app)
+		err, ok := r.(error)
+		if !ok {
+			panic(r)
+		}
+
+		app.logger.Warn("xun: sitemap route "+pattern+" not registered",
+			slog.String("route", pattern),
+			slog.String("reason", err.Error()))
+
+		if !existed {
+			// The route was added to app.routes before the mux was asked
+			// to serve it: roll the half-registered route back.
+			delete(app.routes, pattern)
+		}
+
+		registered = false
+	}()
+
+	app.createHandler(pattern, hf, []RoutingOption{WithViewer()}, app)
+
+	return true
 }
 
 // sitemapIndexHandler returns the handler serving GET /sitemap.xml as a
@@ -238,7 +260,7 @@ func sitemapIndexHandler(builders []SitemapIndexBuilder) HandleFunc {
 		rows := make([]SitemapURL, 0, len(groups))
 		for _, g := range groups {
 			rows = append(rows, SitemapURL{
-				Loc:     sitemapChildPrefix + url.PathEscape(g.Name),
+				Loc:     sitemapChildURL(g.Name),
 				LastMod: newestSitemapLastMod(g.URLs),
 			})
 		}
@@ -303,6 +325,28 @@ func sitemapChildHandler(builders []SitemapIndexBuilder) HandleFunc {
 	}
 }
 
+// sitemapChildURL returns the URL path of a group's child sitemap file.
+//
+// The group name is URL-escaped so it stays inside one path segment. Two
+// names need more than escaping: "." and ".." are path segments the server
+// resolves away before routing (http.cleanPath), so a request for them
+// would never reach the child route — their dots are escaped instead.
+//
+// A group without a name has no addressable path and is skipped by
+// collectSitemapGroups.
+func sitemapChildURL(name string) string {
+	escaped := url.PathEscape(name)
+
+	switch escaped {
+	case ".":
+		escaped = "%2E"
+	case "..":
+		escaped = "%2E%2E"
+	}
+
+	return sitemapChildPrefix + escaped
+}
+
 // collectSitemapGroups runs the builders in order and merges their groups.
 //
 // The groups are concatenated in builder order and de-duplicated by name,
@@ -324,6 +368,13 @@ func collectSitemapGroups(c *Context, builders []SitemapIndexBuilder) ([]Sitemap
 		}
 
 		for _, g := range groups {
+			if g.Name == "" {
+				// A group without a name has no addressable path: the child
+				// route matches a non-empty path segment.
+				c.App.logger.Warn("xun: sitemap index: group without a name, skipped")
+				continue
+			}
+
 			if _, ok := seen[g.Name]; ok {
 				c.App.logger.Warn("xun: sitemap index: duplicate group name "+g.Name+", the first group wins",
 					slog.String("name", g.Name))

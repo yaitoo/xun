@@ -444,6 +444,11 @@ and no sequence number. The child file is served at `/sitemaps/` plus the
 URL-escaped name, so a group named `女鞋` is listed as
 `/sitemaps/%E5%A5%B3%E9%9E%8B` and served by that URL.
 
+Two names need more than escaping: `.` and `..` are path segments the
+server resolves away before routing, so their dots are escaped instead
+(`/sitemaps/%2E`, `/sitemaps/%2E%2E`). A group without a name has no
+addressable path and is skipped with a warning.
+
 #### Collecting only the requested group
 The builders run on every request — for the index document and for each child
 file. `xun.SitemapGroupName(c)` tells the builder which group was asked for
@@ -484,6 +489,11 @@ response — it only pays for the extra work.
 - `app.SitemapIndex` and `app.Sitemap` are not meant to be combined: the
   later registration wins `GET /sitemap.xml`, and the index mode's child
   routes stay registered (`http.ServeMux` cannot unregister a route).
+- Registering the routes never panics. `http.ServeMux` panics on a
+  conflicting pattern, and its conflict rules are not exposed — a page at
+  `pages/{lang}/about.html` registers `GET /{lang}/about`, which conflicts
+  with the child route. The registration is defensive: a conflict skips the
+  route and logs a warning.
 
 ### Content
 The Content engine turns Markdown files into pages without introducing a new `Viewer` or a second template engine. Drop a `.md` file into `content/` and it auto-registers as `GET /<slug>`; drop a `.tpl` next to it (or any ancestor `index.tpl`) to control how the rendered Markdown is wrapped.
