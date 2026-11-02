@@ -348,9 +348,9 @@ a **sitemap index**: a `<sitemapindex>` document listing child sitemap files,
 each of which stays within the limit.
 
 `app.SitemapIndex(fn)` registers `GET /sitemap.xml` as the index document and
-`GET /sitemaps/{name}` for the child files. `fn` is a
-`func(c *xun.Context) ([]xun.SitemapGroup, error)` that returns the groups —
-one named collection of URLs per child file:
+`GET /sitemaps/{name}` for the child files. `fn` is a `xun.SitemapIndexBuilder`
+— a `func(c *xun.Context) ([]xun.SitemapGroup, error)` that returns the
+groups, one named collection of URLs per child file:
 
 ```go
 app.SitemapIndex(func(c *xun.Context) ([]xun.SitemapGroup, error) {

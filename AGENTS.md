@@ -132,7 +132,7 @@ app.Sitemap(func(c *xun.Context) ([]xun.SitemapURL, error) {
 - More than 40,000 URLs in one document → truncated to 40,000, with a warning carrying the total, the cap and the dropped count. The framework never serves an oversized document and never splits it — use `app.SitemapIndex` for that.
 
 #### Sitemap index
-`app.SitemapIndex(fn)` publishes `GET /sitemap.xml` as a `<sitemapindex>` document and one child sitemap file per group under `GET /sitemaps/{name}`. `fn` is a `func(c *xun.Context) ([]xun.SitemapGroup, error)`.
+`app.SitemapIndex(fn)` publishes `GET /sitemap.xml` as a `<sitemapindex>` document and one child sitemap file per group under `GET /sitemaps/{name}`. `fn` is a `SitemapIndexBuilder` — `func(c *xun.Context) ([]xun.SitemapGroup, error)`.
 
 - `SitemapGroup{Name, URLs}` — one named group of URLs = one child file. The name is the file name: no extension and no sequence number is appended, and a group without a name is skipped.
 - `SitemapGroupName(c)` — the requested group name; empty while the index renders. A hint only: the framework selects the group by name regardless.
