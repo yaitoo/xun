@@ -129,6 +129,51 @@ func TestSitemapIndex_IndexRowCarriesNewestLastMod(t *testing.T) {
 		"a group without a LastMod contributes an empty one")
 }
 
+func TestSitemapIndex_IndexRowLastModSurvivesGroupTruncation(t *testing.T) {
+	app, srv := indexTestApp(t)
+
+	app.SitemapIndex(func(c *Context) ([]SitemapGroup, error) {
+		urls := make([]SitemapURL, 0, sitemapEffectiveURLs+1)
+		for i := 0; i < sitemapEffectiveURLs; i++ {
+			urls = append(urls, SitemapURL{
+				Loc:     fmt.Sprintf("/p/%d", i),
+				LastMod: "2026-01-01T00:00:00Z",
+			})
+		}
+		// The group's newest entry is the one the effective cap drops from
+		// the child file. The index row describes the group, so it must
+		// still carry the newest LastMod.
+		urls = append(urls, SitemapURL{Loc: "/p/newest", LastMod: "2026-06-01T00:00:00Z"})
+
+		return []SitemapGroup{{Name: "big.xml", URLs: urls}}, nil
+	})
+
+	_, body := sitemapPathGet(t, srv, "/sitemap.xml")
+	require.Contains(t, body, "<lastmod>2026-06-01T00:00:00Z</lastmod>",
+		"the index row carries the group's newest LastMod, even when that entry is dropped from the child file")
+
+	_, body = sitemapPathGet(t, srv, "/sitemaps/big.xml")
+	require.NotContains(t, body, "2026-06-01T00:00:00Z",
+		"the dropped entry is not published in the child file")
+}
+
+func TestSitemapIndex_IndexRowCarriesNewestNotLastLastMod(t *testing.T) {
+	app, srv := indexTestApp(t)
+
+	app.SitemapIndex(func(c *Context) ([]SitemapGroup, error) {
+		return []SitemapGroup{
+			{Name: "a.xml", URLs: []SitemapURL{
+				{Loc: "/1", LastMod: "2026-02-01T00:00:00Z"},
+				{Loc: "/2", LastMod: "2026-01-01T00:00:00Z"},
+			}},
+		}, nil
+	})
+
+	_, body := sitemapPathGet(t, srv, "/sitemap.xml")
+	require.Contains(t, body, "<lastmod>2026-02-01T00:00:00Z</lastmod>",
+		"the newest LastMod wins, not the last one in the group")
+}
+
 func TestSitemapIndex_GroupNameIsEscaped(t *testing.T) {
 	app, srv := indexTestApp(t)
 

@@ -260,8 +260,8 @@ func sitemapIndexHandler(builders []SitemapIndexBuilder) HandleFunc {
 		rows := make([]SitemapURL, 0, len(groups))
 		for _, g := range groups {
 			rows = append(rows, SitemapURL{
-				Loc:     sitemapChildURL(g.Name),
-				LastMod: newestSitemapLastMod(g.URLs),
+				Loc:     sitemapChildURL(g.group.Name),
+				LastMod: g.lastMod,
 			})
 		}
 
@@ -303,8 +303,8 @@ func sitemapChildHandler(builders []SitemapIndexBuilder) HandleFunc {
 		var urls []SitemapURL
 		found := false
 		for _, g := range groups {
-			if g.Name == name {
-				urls = g.URLs
+			if g.group.Name == name {
+				urls = g.group.URLs
 				found = true
 				break
 			}
@@ -323,6 +323,18 @@ func sitemapChildHandler(builders []SitemapIndexBuilder) HandleFunc {
 
 		return v.Render(c, urls)
 	}
+}
+
+// sitemapGroupEntry is a collected group plus the metadata the index row
+// needs.
+//
+// The group's newest LastMod is kept next to the group instead of being
+// derived from its URLs on demand: the group's URLs are truncated to the
+// effective cap, and the index row must carry the newest LastMod among all
+// the group's URLs — not only the ones the child file keeps.
+type sitemapGroupEntry struct {
+	group   SitemapGroup
+	lastMod string
 }
 
 // sitemapChildURL returns the URL path of a group's child sitemap file.
@@ -357,8 +369,8 @@ func sitemapChildURL(name string) string {
 // Each group's URLs are de-duplicated by the exact Loc string, keeping the
 // first occurrence, and truncated to the effective cap. The de-duplication
 // is per group: the same Loc in two groups is published in both files.
-func collectSitemapGroups(c *Context, builders []SitemapIndexBuilder) ([]SitemapGroup, error) {
-	var out []SitemapGroup
+func collectSitemapGroups(c *Context, builders []SitemapIndexBuilder) ([]sitemapGroupEntry, error) {
+	var out []sitemapGroupEntry
 	seen := make(map[string]struct{})
 
 	for _, b := range builders {
@@ -383,9 +395,15 @@ func collectSitemapGroups(c *Context, builders []SitemapIndexBuilder) ([]Sitemap
 			seen[g.Name] = struct{}{}
 
 			urls := dedupSitemapURLs(nil, make(map[string]struct{}, len(g.URLs)), g.URLs)
+
+			// The newest LastMod is taken over all the group's URLs, before
+			// the group is truncated: the index row describes the group,
+			// not the truncated child file.
+			lastMod := newestSitemapLastMod(urls)
+
 			g.URLs = truncateSitemapURLs(c, "sitemap group "+g.Name, urls)
 
-			out = append(out, g)
+			out = append(out, sitemapGroupEntry{group: g, lastMod: lastMod})
 		}
 	}
 
