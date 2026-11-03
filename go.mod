@@ -6,7 +6,7 @@ require (
 	github.com/go-playground/form/v4 v4.5.0
 	github.com/go-playground/locales v0.14.2
 	github.com/go-playground/universal-translator v0.18.2
-	github.com/go-playground/validator/v10 v10.30.5
+	github.com/go-playground/validator/v10 v10.30.6
 	github.com/stretchr/testify v1.12.1
 	github.com/yaitoo/async v1.0.4
 	github.com/yuin/goldmark v1.8.7
@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.16 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/net v0.60.0 // indirect
